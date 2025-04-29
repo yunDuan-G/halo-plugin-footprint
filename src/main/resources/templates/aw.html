@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+    <title>事件系统</title>
+    <link rel="stylesheet" href="https://a.amap.com/jsapi_demos/static/demo-center/css/demo-center.css"/>
+
+    <style>
+        html,
+        body,
+        #container {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+<div id="container"></div>
+<div class="info">
+    <h4 id="text"></h4>
+    <p>当前级别：<span id="map-zoom">15</span></p>
+</div>
+<div class="input-card" style="width:16rem">
+    <h4>地图缩放相关事件</h4>
+    <div>
+        <div class="input-item">
+            <button id="zoomOn" class="btn" style="margin-right:1rem;">绑定事件</button>
+            <button id="zoomOff" class="btn">解绑事件</button>
+            <button id="panTo" class="btn">移动</button>
+        </div>
+    </div>
+</div>
+<div id="tip"></div>
+<script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=9618e4f2ebbbcbac8cdae50c795901d1"></script>
+<script src="https://a.amap.com/jsapi_demos/static/demo-center/js/demoutils.js"></script>
+<script type="text/javascript">
+    //初始化地图对象，加载地图
+    var map = new AMap.Map("container", {
+        zoom: 11
+    });
+
+
+    var logMapinfo = function () {
+        var zoom = map.getZoom(); //获取当前地图级别
+        document.querySelector("#map-zoom").innerText = zoom;
+    };
+    logMapinfo();
+
+    function mapZoomstart() {
+        document.querySelector("#text").innerText = '缩放开始';
+    }
+
+    function mapZoom() {
+        logMapinfo();
+        document.querySelector("#text").innerText = '正在缩放';
+    }
+
+    function mapZoomend() {
+        document.querySelector("#text").innerText = '缩放结束';
+        console.log(123)
+    }
+
+    // 事件绑定
+    function zoomOn() {
+        log.success("绑定事件!");
+        map.on('zoomstart', mapZoomstart);
+        map.on('zoomchange', mapZoom);
+        map.on('zoomend', mapZoomend);
+    }
+
+    // 解绑事件
+    function zoomOff() {
+        log.success("解除事件绑定!");
+        map.off('zoomstart', mapZoomstart);
+        map.off('zoomchange', mapZoom);
+        map.off('zoomend', mapZoomend);
+    }
+
+    function panTo() {
+        console.log(123)
+        moveToLocation(map, [116.397428, 39.90923], 15).then(() => {
+            console.log(456)
+        });
+    }
+
+    // 给按钮绑定事件
+    document.getElementById("zoomOn").onclick = zoomOn;
+    document.getElementById("zoomOff").onclick = zoomOff;
+    document.getElementById("panTo").onclick = panTo;
+
+    const moveToLocation = (map, position, Zoom) => {
+        return new Promise((resolve) => {
+            // 启用动画
+            map.setStatus({animateEnable: true});
+
+            // 设置缩放级别
+            map.setZoom(Zoom);
+
+            // 平移到目标位置
+            map.panTo(position);
+
+            // 等待动画完成
+            const checkAnimation = () => {
+                if (!map.isMoving && !map.isZooming) {
+                    resolve();
+                } else {
+                    requestAnimationFrame(checkAnimation);
+                }
+            };
+            checkAnimation();
+        });
+    };
+
+</script>
+</body>
+</html>

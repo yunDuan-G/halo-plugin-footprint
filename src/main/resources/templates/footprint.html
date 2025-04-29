@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${settings.title}">足迹 - 记录生活的每一步</title>
+    <!-- 引入高德地图API -->
+    <script type="text/javascript">
+        window._AMapSecurityConfig = {
+            securityJsCode: /*[[${settings.gaoDeKey}]]*/''
+        }
+    </script>
+    <!--    <script type="text/javascript" th:src="|https://webapi.amap.com/maps?v=2.0&key=${settings.gaoDeKey}|"></script>-->
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=9618e4f2ebbbcbac8cdae50c795901d1"></script>
+    <!-- 引入jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <link rel="stylesheet" href="../static/css/footprint.css" type="text/css">
+    <script type="text/javascript" src="../static/js/footprint.js"></script>
+
+    <!-- 注入配置信息 -->
+    <script th:inline="javascript">
+        window.FOOTPRINT_CONFIG = {
+            amapKey: /*[[${settings.gaoDeKey}]]*/ '9618e4f2ebbbcbac8cdae50c795901d1',
+            footprints: /*[[${footprints}]]*/ [
+                {
+                    "spec": {
+                        "name": "黄山",
+                        "description": "“登黄山，天下无山，观止矣 ”",
+                        "longitude": 118.161927,
+                        "latitude": 30.138115,
+                        "address": "黄山市黄山风景区",
+                        "footprintType": "旅游",
+                        "image": "http://tc.yunduan019.com/2025/04/07/IMG_4854.jpg!w100",
+                        "article": "/archives/huang-shan-zhi-xing",
+                        "createTime": "2025-04-04T22:52:00Z"
+                    },
+                    "apiVersion": "footprint.lik.cc/v1alpha1",
+                    "kind": "Footprint",
+                    "metadata": {
+                        "generateName": "footprint-",
+                        "finalizers": null,
+                        "name": "footprint-ZwdpC",
+                        "labels": null,
+                        "annotations": null,
+                        "version": 6,
+                        "creationTimestamp": "2025-04-24T05:50:25.688090118Z",
+                        "deletionTimestamp": null
+                    }
+                },
+                {
+                    "spec": {
+                        "name": "莫愁路",
+                        "description": "“听说南京有一条莫愁路，后来，我一个人去了”",
+                        "longitude": 118.771818,
+                        "latitude": 32.029528,
+                        "address": "南京市莫愁咖啡·花植·空间",
+                        "footprintType": "旅游",
+                        "image": "http://tc.yunduan019.com/2025/04/07/IMG_20250404_100123.jpg!w100",
+                        "article": "",
+                        "createTime": "2025-04-04T08:03:00Z"
+                    },
+                    "apiVersion": "footprint.lik.cc/v1alpha1",
+                    "kind": "Footprint",
+                    "metadata": {
+                        "generateName": "footprint-",
+                        "finalizers": null,
+                        "name": "footprint-fdCKV",
+                        "labels": null,
+                        "annotations": null,
+                        "version": 5,
+                        "creationTimestamp": "2025-04-24T17:05:14.668842563Z",
+                        "deletionTimestamp": null
+                    }
+                },
+                {
+                    "spec": {
+                        "name": "天空之城",
+                        "description": "“她是”",
+                        "longitude": 112.405232,
+                        "latitude": 34.667393,
+                        "address": "洛阳市天空之城(东方文创园店)",
+                        "footprintType": "旅游",
+                        "image": "http://tc.yunduan019.com/2025/03/08/IMG_4457.jpg!w100",
+                        "article": "",
+                        "createTime": "2025-02-15T10:33:00Z"
+                    },
+                    "apiVersion": "footprint.lik.cc/v1alpha1",
+                    "kind": "Footprint",
+                    "metadata": {
+                        "generateName": "footprint-",
+                        "finalizers": null,
+                        "name": "footprint-TPaXW",
+                        "labels": null,
+                        "annotations": null,
+                        "version": 2,
+                        "creationTimestamp": "2025-04-24T17:36:08.132992920Z",
+                        "deletionTimestamp": null
+                    }
+                },
+                {
+                    "spec": {
+                        "name": "莫愁路",
+                        "description": "“听说南京有一条莫愁路，后来，我一个人去了”",
+                        "longitude": 118.771818,
+                        "latitude": 32.029528,
+                        "address": "南京市莫愁咖啡·花植·空间",
+                        "footprintType": "旅游",
+                        "image": "http://tc.yunduan019.com/2025/04/07/IMG_20250404_100123.jpg!w100",
+                        "article": "",
+                        "createTime": "2025-04-04T08:03:00Z"
+                    },
+                    "apiVersion": "footprint.lik.cc/v1alpha1",
+                    "kind": "Footprint",
+                    "metadata": {
+                        "generateName": "footprint-",
+                        "finalizers": null,
+                        "name": "footprint-fdCKV",
+                        "labels": null,
+                        "annotations": null,
+                        "version": 5,
+                        "creationTimestamp": "2025-04-24T17:05:14.668842563Z",
+                        "deletionTimestamp": null
+                    }
+                },
+                {
+                    "spec": {
+                        "name": "莫愁路",
+                        "description": "“听说南京有一条莫愁路，后来，我一个人去了”",
+                        "longitude": 118.771818,
+                        "latitude": 32.029528,
+                        "address": "南京市莫愁咖啡·花植·空间",
+                        "footprintType": "旅游",
+                        "image": "http://tc.yunduan019.com/2025/04/07/IMG_20250404_100123.jpg!w100",
+                        "article": "",
+                        "createTime": "2025-04-04T08:03:00Z"
+                    },
+                    "apiVersion": "footprint.lik.cc/v1alpha1",
+                    "kind": "Footprint",
+                    "metadata": {
+                        "generateName": "footprint-",
+                        "finalizers": null,
+                        "name": "footprint-fdCKV",
+                        "labels": null,
+                        "annotations": null,
+                        "version": 5,
+                        "creationTimestamp": "2025-04-24T17:05:14.668842563Z",
+                        "deletionTimestamp": null
+                    }
+                }
+            ],
+            title: /*[[${settings.title}]]*/ '足迹',
+            logoName: /*[[${settings.logoName}]]*/ '足迹',
+            describe: /*[[${settings.describe}]]*/ '描述',
+            hsla: /*[[${settings.hsla}]]*/ '200, 100%, 50%',
+            mapStyle: /*[[${settings.mapStyle}]]*/ 'amap://styles/normal'
+        };
+        console.log('Footprint Config:', window.FOOTPRINT_CONFIG);
+    </script>
+</head>
+<body id="footprint-page">
+<canvas id="canvas"></canvas>
+<div class="footprint-container">
+    <!-- 地图容器 -->
+    <div id="footprint-map"></div>
+
+    <!-- 左下角Logo和文字 -->
+    <div class="logo-container">
+        <h1 class="footprint-logo" th:text="${settings.logoName}">足迹<span class="logo-version">2024</span></h1>
+        <p class="footprint-slogan" th:text="${settings.describe}">
+            每一处足迹都充满了故事，那是对人生的思考和无限的风光。</p>
+    </div>
+
+    <!-- 底部控制栏 -->
+    <div class="map-controls">
+        <div id="timeline-btn">时间线</div>
+
+        <!--            <div class="button-group">
+                        <button class="control-btn active" data-type="normal">标准图层</button>
+                        <button class="control-btn" data-type="satellite">卫星图</button>
+                    </div>
+                    <div class="button-group">
+                        <label class="plane-switch">
+                            <input type="checkbox" data-type="road">
+                            <div>
+                                <div>
+                                    <svg viewBox="0 0 13 13">
+                                        <path d="M1.55989957,5.41666667 L5.51582215,5.41666667 L4.47015462,0.108333333 L4.47015462,0.108333333 C4.47015462,0.0634601974 4.49708054,0.0249592654 4.5354546,0.00851337035 L4.57707145,0 L5.36229752,0 C5.43359776,0 5.50087375,0.028779451 5.55026392,0.0782711996 L5.59317877,0.134368264 L7.13659662,2.81558333 L8.29565964,2.81666667 C8.53185377,2.81666667 8.72332694,3.01067661 8.72332694,3.25 C8.72332694,3.48932339 8.53185377,3.68333333 8.29565964,3.68333333 L7.63589819,3.68225 L8.63450135,5.41666667 L11.9308317,5.41666667 C12.5213171,5.41666667 13,5.90169152 13,6.5 C13,7.09830848 12.5213171,7.58333333 11.9308317,7.58333333 L8.63450135,7.58333333 L7.63589819,9.31666667 L8.29565964,9.31666667 C8.53185377,9.31666667 8.72332694,9.51067661 8.72332694,9.75 C8.72332694,9.98932339 8.53185377,10.1833333 8.29565964,10.1833333 L7.13659662,10.1833333 L5.59317877,12.8656317 C5.55725264,12.9280353 5.49882018,12.9724157 5.43174295,12.9907056 L5.36229752,13 L4.57707145,13 L4.55610333,12.9978962 C4.51267695,12.9890959 4.48069792,12.9547924 4.47230803,12.9134397 L4.47223088,12.8704208 L5.51582215,7.58333333 L1.55989957,7.58333333 L0.891288881,8.55114605 C0.853775374,8.60544678 0.798421006,8.64327676 0.73629202,8.65879796 L0.672314689,8.66666667 L0.106844414,8.66666667 L0.0715243949,8.66058466 L0.0715243949,8.66058466 C0.0297243066,8.6457608 0.00275502199,8.60729104 0,8.5651586 L0.00593007386,8.52254537 L0.580855011,6.85813984 C0.64492547,6.67265611 0.6577034,6.47392717 0.619193545,6.28316421 L0.580694768,6.14191703 L0.00601851064,4.48064746 C0.00203480725,4.4691314 0,4.45701613 0,4.44481314 C0,4.39994001 0.0269259152,4.36143908 0.0652999725,4.34499318 L0.106916826,4.33647981 L0.672546853,4.33647981 C0.737865848,4.33647981 0.80011301,4.36066329 0.848265401,4.40322477 L0.89131128,4.45169723 L1.55989957,5.41666667 Z" fill="currentColor"></path>
+                                    </svg>
+                                </div>
+                                <span class="street-middle"></span>
+                                <span class="cloud"></span>
+                                <span class="cloud two"></span>
+                            </div>
+                            <span class="switch-text">路网</span>
+                        </label>
+                        <label class="plane-switch">
+                            <input type="checkbox" data-type="traffic">
+                            <div>
+                                <div>
+                                    <svg viewBox="0 0 13 13">
+                                        <path d="M1.55989957,5.41666667 L5.51582215,5.41666667 L4.47015462,0.108333333 L4.47015462,0.108333333 C4.47015462,0.0634601974 4.49708054,0.0249592654 4.5354546,0.00851337035 L4.57707145,0 L5.36229752,0 C5.43359776,0 5.50087375,0.028779451 5.55026392,0.0782711996 L5.59317877,0.134368264 L7.13659662,2.81558333 L8.29565964,2.81666667 C8.53185377,2.81666667 8.72332694,3.01067661 8.72332694,3.25 C8.72332694,3.48932339 8.53185377,3.68333333 8.29565964,3.68333333 L7.63589819,3.68225 L8.63450135,5.41666667 L11.9308317,5.41666667 C12.5213171,5.41666667 13,5.90169152 13,6.5 C13,7.09830848 12.5213171,7.58333333 11.9308317,7.58333333 L8.63450135,7.58333333 L7.63589819,9.31666667 L8.29565964,9.31666667 C8.53185377,9.31666667 8.72332694,9.51067661 8.72332694,9.75 C8.72332694,9.98932339 8.53185377,10.1833333 8.29565964,10.1833333 L7.13659662,10.1833333 L5.59317877,12.8656317 C5.55725264,12.9280353 5.49882018,12.9724157 5.43174295,12.9907056 L5.36229752,13 L4.57707145,13 L4.55610333,12.9978962 C4.51267695,12.9890959 4.48069792,12.9547924 4.47230803,12.9134397 L4.47223088,12.8704208 L5.51582215,7.58333333 L1.55989957,7.58333333 L0.891288881,8.55114605 C0.853775374,8.60544678 0.798421006,8.64327676 0.73629202,8.65879796 L0.672314689,8.66666667 L0.106844414,8.66666667 L0.0715243949,8.66058466 L0.0715243949,8.66058466 C0.0297243066,8.6457608 0.00275502199,8.60729104 0,8.5651586 L0.00593007386,8.52254537 L0.580855011,6.85813984 C0.64492547,6.67265611 0.6577034,6.47392717 0.619193545,6.28316421 L0.580694768,6.14191703 L0.00601851064,4.48064746 C0.00203480725,4.4691314 0,4.45701613 0,4.44481314 C0,4.39994001 0.0269259152,4.36143908 0.0652999725,4.34499318 L0.106916826,4.33647981 L0.672546853,4.33647981 C0.737865848,4.33647981 0.80011301,4.36066329 0.848265401,4.40322477 L0.89131128,4.45169723 L1.55989957,5.41666667 Z" fill="currentColor"></path>
+                                    </svg>
+                                </div>
+                                <span class="street-middle"></span>
+                                <span class="cloud"></span>
+                                <span class="cloud two"></span>
+                            </div>
+                            <span class="switch-text">路况</span>
+                        </label>
+                    </div>-->
+        <div class="zoom-buttons">
+            <button class="zoom-btn" id="zoom-in">+</button>
+            <button class="zoom-btn" id="zoom-out">−</button>
+        </div>
+        <button id="zoom-restore">中国地图</button>
+        <div class="amap-scale-text">1000 公里</div>
+    </div>
+    <div id="timeline-drawer" class="drawer">
+        <div class="drawer-content">
+            <h2>时间线</h2>
+            <div id="timeline-container"></div>
+            <button id="close-drawer">X</button>
+        </div>
+    </div>
+</div>
+</body>
+</html>
