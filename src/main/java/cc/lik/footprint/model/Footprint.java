@@ -8,6 +8,7 @@ import run.halo.app.extension.AbstractExtension;
 import run.halo.app.extension.GVK;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * 足迹数据模型
@@ -15,10 +16,10 @@ import java.time.Instant;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
-@GVK(group = "footprint.lik.cc", 
-     version = "v1alpha1", 
-     kind = "Footprint", 
-     plural = "footprints", 
+@GVK(group = "footprint.lik.cc",
+     version = "v1alpha1",
+     kind = "Footprint",
+     plural = "footprints",
      singular = "footprint")
 public class Footprint extends AbstractExtension {
 
@@ -76,9 +77,15 @@ public class Footprint extends AbstractExtension {
         private String article;
 
         /**
+         * 关联足迹列表
+         */
+        @Schema(description = "关联足迹列表")
+        private List<String> metadataNames;
+
+        /**
          * 创建时间
          */
         @Schema(description = "创建时间")
         private Instant createTime;
     }
-} 
+}

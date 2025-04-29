@@ -417,6 +417,26 @@ onMounted(async () => {
           ></FormKit>
 
           <FormKit
+            v-model="formState.spec.metadataNames"
+            type="select"
+            name="metadataNames"
+            label="关联足迹"
+            :multiple="true"
+            clearable
+            searchable
+            action="/apis/api.footprint.lik.cc/v1alpha1/footprints"
+            :request-option="{
+              method: 'GET',
+              pageField: 'page',
+              sizeField: 'size',
+              totalField: 'total',
+              itemsField: 'items',
+              labelField: 'spec.name',
+              valueField: 'metadata.name',
+            }"
+          ></FormKit>
+
+          <FormKit
             v-model="createTime"
             type="datetime-local"
             min="0000-01-01T00:00"

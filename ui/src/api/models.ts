@@ -56,6 +56,11 @@ export interface FootprintSpec {
   article?: string;
 
   /**
+   * 关联足迹
+   */
+  metadataNames?: [];
+
+  /**
    * 创建时间
    */
   createTime?: string;
