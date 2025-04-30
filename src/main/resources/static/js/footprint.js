@@ -151,14 +151,17 @@ const loadParabolaAnimation = (card) => {
         ctx.rotate(angle);
 
         // 箭头形状
+        const arrowSize = 20; // 箭头大小
+        const arrowWidth = 10; // 箭头宽度
+
+        // 绘制实心三角形箭头
         ctx.beginPath();
         ctx.moveTo(0, 0);
-        ctx.lineTo(-15, -8);
-        ctx.moveTo(0, 0);
-        ctx.lineTo(-15, 8);
-        ctx.strokeStyle = '#42b98';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        ctx.lineTo(-arrowSize, -arrowWidth);
+        ctx.lineTo(-arrowSize, arrowWidth);
+        ctx.closePath();
+        ctx.fillStyle = '#000000';
+        ctx.fill();
 
         ctx.restore();
     }
@@ -184,7 +187,7 @@ const loadParabolaAnimation = (card) => {
         ctx.quadraticCurveTo(controlPoint.x, controlPoint.y, endPoint.x, endPoint.y);
 
         ctx.setLineDash([6, 4]); // 虚线模式: 5px实线，3px空白
-        ctx.strokeStyle = '#42b98';
+        ctx.strokeStyle = '#000000';
         ctx.lineWidth = 2;
         // ctx.stroke();
         // ctx.setLineDash([]); // 重置为实线
@@ -248,7 +251,7 @@ const loadParabolaAnimation = (card) => {
                 }
             }
 
-            ctx.strokeStyle = '#42b983';
+            ctx.strokeStyle = '#000000';
             ctx.lineWidth = 2;
             ctx.stroke();
         });
