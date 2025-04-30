@@ -359,9 +359,16 @@ const populateTimeline = async (map) => {
     // 为每个卡片绑定鼠标悬停事件，使用防抖优化
     timelineCards.forEach(card => {
         let debounceTimer;
+        let isProcessing = false;
 
         const handleEnter = async () => {
+            // 如果正在处理其他卡片，等待处理完成
+            if (isProcessing) {
+                return;
+            }
+
             try {
+                isProcessing = true;
                 // 设置当前激活的卡片
                 activeCard = card;
 
@@ -384,25 +391,24 @@ const populateTimeline = async (map) => {
                 // 如果距离超过1公里或缩放级别不够，需要移动地图
                 const needsMovement = distance > 1000 || currentZoom < 13;
 
-                // if (needsMovement) {
                 const metadataNames = footprint.spec.metadataNames;
                 if (metadataNames) {
                     // 如果有 metadataNames，筛选出对应的数据
                     const positions = metadataNames
-                            .map(metadataName => window.FOOTPRINT_CONFIG.footprints.find(
-                                    f => f.metadata.name === metadataName
-                            ))
-                            .filter(Boolean); // 过滤掉未找到的值
+                        .map(metadataName => window.FOOTPRINT_CONFIG.footprints.find(
+                            f => f.metadata.name === metadataName
+                        ))
+                        .filter(Boolean); // 过滤掉未找到的值
 
                     // 获取地图所有覆盖物
                     const allOverlays = map.getAllOverlays();
 
                     // 筛选出符合条件的覆盖物
                     const newOverlays = positions
-                            .map(value => allOverlays.find(
-                                    f => f._position.lng === value.spec.longitude && f._position.lat === value.spec.latitude
-                            ))
-                            .filter(Boolean); // 过滤掉未找到的覆盖物
+                        .map(value => allOverlays.find(
+                            f => f._position.lng === value.spec.longitude && f._position.lat === value.spec.latitude
+                        ))
+                        .filter(Boolean); // 过滤掉未找到的覆盖物
                     // [0,0,0,0]) 四周边距，上、下、左、右
                     // 根据覆盖物获取地图的最优的缩放级别和中心点
                     const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [150, 120, 60, 100]);
@@ -411,13 +417,8 @@ const populateTimeline = async (map) => {
 
                     await moveToLocation(map, newposition, byOverlays[0]);
                 } else {
-                    moveToLocation(map, position2, zoom);
+                    await moveToLocation(map, position2, zoom);
                 }
-                /*} else {
-                    console.log(456)
-                    // 如果不需要移动地图，直接加载动画
-                    loadParabolaAnimation(card);
-                }*/
             } catch (error) {
                 console.error('处理卡片悬停时发生错误:', error);
                 // 重置状态
@@ -426,27 +427,36 @@ const populateTimeline = async (map) => {
                     cancelAnimationFrame(card.currentAnimationId);
                     card.currentAnimationId = null;
                 }
+            } finally {
+                isProcessing = false;
             }
         };
 
         const handleLeave = () => {
-            debounceTimer = setTimeout(() => {
-                // 如果离开的是当前激活的卡片，则清除激活状态
-                if (activeCard === card) {
-                    activeCard = null;
-                }
-                zoomOff(map);
-                if (card.currentAnimationId) {
-                    cancelAnimationFrame(card.currentAnimationId);
-                    card.currentAnimationId = null;
-                    const canvas = document.getElementById('canvas');
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                }
-            }, 100);
+            return new Promise((resolve) => {
+                debounceTimer = setTimeout(() => {
+                    // 如果离开的是当前激活的卡片，则清除激活状态
+                    if (activeCard === card) {
+                        activeCard = null;
+                    }
+                    zoomOff(map);
+                    if (card.currentAnimationId) {
+                        cancelAnimationFrame(card.currentAnimationId);
+                        card.currentAnimationId = null;
+                        const canvas = document.getElementById('canvas');
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    }
+                    resolve();
+                }, 100);
+            });
         };
 
-        card.addEventListener('mouseenter', handleEnter);
+        card.addEventListener('mouseenter', async () => {
+            // 等待之前的leave事件处理完成
+            await handleLeave();
+            handleEnter();
+        });
         card.addEventListener('mouseleave', handleLeave);
     });
 };
@@ -607,6 +617,11 @@ const moveToLocation = (map, position, Zoom) => {
         // 启用动画
         map.setStatus({animateEnable: true});
 
+        //防止缩放级别相同时，不执行抛物线问题
+        const currentZoom = map.getZoom();
+        if (currentZoom == Zoom) {
+            map.setZoom(Zoom + 1);
+        }
         // 设置缩放级别
         map.setZoom(Zoom);
 
