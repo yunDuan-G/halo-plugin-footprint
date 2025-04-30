@@ -16,11 +16,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 打印插件信息
     console.log(
-            '%c足迹插件%c🗺️ 记录生活轨迹，分享旅途故事\n%c作者 Handsome %cwww.lik.cc',
-            'background: #42b983; color: white; padding: 2px 4px; border-radius: 3px;',
-            'color: #42b983; padding: 2px 4px;',
-            'color: #666; padding: 2px 4px;',
-            'color: #42b983; text-decoration: underline; padding: 2px 4px;'
+        '%c足迹插件%c🗺️ 记录生活轨迹，分享旅途故事\n%c作者 Handsome %cwww.lik.cc',
+        'background: #42b983; color: white; padding: 2px 4px; border-radius: 3px;',
+        'color: #42b983; padding: 2px 4px;',
+        'color: #666; padding: 2px 4px;',
+        'color: #42b983; text-decoration: underline; padding: 2px 4px;'
     );
 
     // 等待AMap对象加载完成
@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initializeApp();
     };
     checkAMap();
+
 
     /* ---------------------- */
     // 初始化右侧时间线抽屉
@@ -84,25 +85,64 @@ const loadParabolaAnimation = (card) => {
         return;
     }
 
-    const mapRect = markerImage.getBoundingClientRect();
-    const mapCenterX = mapRect.left + mapRect.width / 2;
-    const mapCenterY = mapRect.top + mapRect.height / 2;
+    // 获取所有相关的标记点
+    const footprint = window.FOOTPRINT_CONFIG.footprints.find(
+        f => f.spec.name === cardHeaderContent
+    );
 
-    // 起点和终点
-    const startPoint = {x: cardCenterX, y: cardCenterY};
-    const endPoint = {x: mapCenterX, y: mapCenterY};
+    if (!footprint) {
+        console.warn('未找到对应的足迹数据');
+        return;
+    }
 
-    // 控制点，控制抛物线形状
-    const controlPoint = {
-        x: (startPoint.x + endPoint.x) / 2,
-        y: Math.min(startPoint.y, endPoint.y) - 150
-    };
+    // 获取所有相关的标记点
+    const markerImages = [];
+    if (footprint.spec.metadataNames) {
+        // 如果有 metadataNames，获取所有相关的标记点
+        footprint.spec.metadataNames.forEach(metadataName => {
+            const relatedFootprint = window.FOOTPRINT_CONFIG.footprints.find(
+                f => f.metadata.name === metadataName
+            );
+            if (relatedFootprint) {
+                const marker = document.querySelector(`.marker-image img[alt="${relatedFootprint.spec.name}"]`);
+                if (marker) {
+                    markerImages.push(marker);
+                }
+            }
+        });
+    } else {
+        // 如果没有 metadataNames，只使用当前标记点
+        markerImages.push(markerImage);
+    }
+
+    // 为每个标记点创建动画
+    const animations = markerImages.map(marker => {
+        const mapRect = marker.getBoundingClientRect();
+        const mapCenterX = mapRect.left + mapRect.width / 2;
+        const mapCenterY = mapRect.top + mapRect.height / 2;
+
+        // 起点和终点
+        const startPoint = {x: cardCenterX, y: cardCenterY};
+        const endPoint = {x: mapCenterX, y: mapCenterY};
+
+        // 控制点，控制抛物线形状
+        const controlPoint = {
+            x: (startPoint.x + endPoint.x) / 2,
+            y: Math.min(startPoint.y, endPoint.y) - 150
+        };
+
+        return {
+            startPoint,
+            endPoint,
+            controlPoint,
+            progress: 0,
+            startTime: null
+        };
+    });
 
     // 动画参数
-    let progress = 0;
     const duration = 500; // 动画持续时间(ms)
-    let startTime = null;
-    let isAnimating = true; // 添加动画状态标志
+    let isAnimating = true;
 
     // 绘制抛物线上的箭头
     function drawArrow(x, y, angle) {
@@ -138,7 +178,7 @@ const loadParabolaAnimation = (card) => {
     }
 
     // 绘制虚线抛物线
-    function drawDashedCurve() {
+    function drawDashedCurve(startPoint, controlPoint, endPoint) {
         ctx.beginPath();
         ctx.moveTo(startPoint.x, startPoint.y);
         ctx.quadraticCurveTo(controlPoint.x, controlPoint.y, endPoint.x, endPoint.y);
@@ -161,47 +201,63 @@ const loadParabolaAnimation = (card) => {
             return;
         }
 
-        if (!startTime) startTime = timestamp;
-        const elapsed = timestamp - startTime;
-        progress = Math.min(elapsed / duration, 1);
-
         // 清除画布
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 绘制完整的虚线抛物线
-        drawDashedCurve();
+        // 更新每个动画的进度
+        animations.forEach(animation => {
+            if (!animation.startTime) animation.startTime = timestamp;
+            const elapsed = timestamp - animation.startTime;
+            animation.progress = Math.min(elapsed / duration, 1);
 
-        // 计算当前动画点在曲线上的位置
-        const currentPoint = getQuadraticBezierPoint(progress, startPoint, controlPoint, endPoint);
+            // 绘制完整的虚线抛物线
+            drawDashedCurve(animation.startPoint, animation.controlPoint, animation.endPoint);
 
-        // 计算当前点的切线角度
-        const angle = getQuadraticBezierAngle(progress, startPoint, controlPoint, endPoint);
+            // 计算当前动画点在曲线上的位置
+            const currentPoint = getQuadraticBezierPoint(
+                animation.progress,
+                animation.startPoint,
+                animation.controlPoint,
+                animation.endPoint
+            );
 
-        // 绘制当前位置的箭头
-        drawArrow(currentPoint.x, currentPoint.y, angle);
+            // 计算当前点的切线角度
+            const angle = getQuadraticBezierAngle(
+                animation.progress,
+                animation.startPoint,
+                animation.controlPoint,
+                animation.endPoint
+            );
 
-        // 绘制从起点到当前点的实线部分
-        ctx.beginPath();
-        ctx.moveTo(startPoint.x, startPoint.y);
+            // 绘制当前位置的箭头
+            drawArrow(currentPoint.x, currentPoint.y, angle);
 
-        // 为了绘制实线部分，我们需要细分曲线
-        const segments = 50;
-        for (let i = 0; i <= segments * progress; i++) {
-            const t = i / segments;
-            const p = getQuadraticBezierPoint(t, startPoint, controlPoint, endPoint);
-            if (i === 0) {
-                ctx.moveTo(p.x, p.y);
-            } else {
-                ctx.lineTo(p.x, p.y);
+            // 绘制从起点到当前点的实线部分
+            ctx.beginPath();
+            ctx.moveTo(animation.startPoint.x, animation.startPoint.y);
+
+            // 为了绘制实线部分，我们需要细分曲线
+            const segments = 50;
+            for (let i = 0; i <= segments * animation.progress; i++) {
+                const t = i / segments;
+                const p = getQuadraticBezierPoint(t, animation.startPoint, animation.controlPoint, animation.endPoint);
+                if (i === 0) {
+                    ctx.moveTo(p.x, p.y);
+                } else {
+                    ctx.lineTo(p.x, p.y);
+                }
             }
-        }
 
-        ctx.strokeStyle = '#42b983';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+            ctx.strokeStyle = '#42b983';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        });
+
+        // 检查是否所有动画都完成
+        const allComplete = animations.every(animation => animation.progress >= 1);
 
         // 继续动画直到完成
-        if (progress < 1) {
+        if (!allComplete) {
             card.currentAnimationId = requestAnimationFrame(animate);
         } else {
             card.currentAnimationId = null; // 动画完成后清除 ID
@@ -210,7 +266,7 @@ const loadParabolaAnimation = (card) => {
     }
 
     // 开始动画
-    isAnimating = true; // 重置动画状态
+    isAnimating = true;
     card.currentAnimationId = requestAnimationFrame(animate);
 
     // 响应窗口大小变化
@@ -266,8 +322,8 @@ const populateTimeline = async (map) => {
         const time = document.createElement('div');
         time.className = 'card-time';
         time.textContent = footprint.spec.createTime
-                ? new Date(footprint.spec.createTime).toLocaleString('zh-CN')
-                : 'Unknown Time';
+            ? new Date(footprint.spec.createTime).toLocaleString('zh-CN')
+            : 'Unknown Time';
 
         const description = document.createElement('div');
         description.className = 'card-description';
@@ -312,13 +368,53 @@ const populateTimeline = async (map) => {
                 const cardHeader = card.querySelector('.card-header');
                 const cardHeaderContent = cardHeader.textContent;
                 const footprint = window.FOOTPRINT_CONFIG.footprints.find(
-                        f => f.spec.name === cardHeaderContent
+                    f => f.spec.name === cardHeaderContent
                 );
-                const position = new AMap.LngLat(118.161927, 30.138115);
                 const position2 = new AMap.LngLat(parseFloat(footprint.spec.longitude),
-                        parseFloat(footprint.spec.latitude));
-                // moveToLocation(map, position, 4);
-                moveToLocation(map, position2, zoom);
+                    parseFloat(footprint.spec.latitude));
+
+                // 检查是否需要移动地图
+                const currentPos = map.getCenter();
+                const distance = position2.distance(currentPos);
+                const currentZoom = map.getZoom();
+
+                // 如果距离超过1公里或缩放级别不够，需要移动地图
+                const needsMovement = distance > 1000 || currentZoom < 13;
+
+                // if (needsMovement) {
+                const metadataNames = footprint.spec.metadataNames;
+                if (metadataNames) {
+                    // 如果有 metadataNames，筛选出对应的数据
+                    const positions = metadataNames
+                            .map(metadataName => window.FOOTPRINT_CONFIG.footprints.find(
+                                    f => f.metadata.name === metadataName
+                            ))
+                            .filter(Boolean); // 过滤掉未找到的值
+
+                    // 获取地图所有覆盖物
+                    const allOverlays = map.getAllOverlays();
+
+                    // 筛选出符合条件的覆盖物
+                    const newOverlays = positions
+                            .map(value => allOverlays.find(
+                                    f => f._position.lng === value.spec.longitude && f._position.lat === value.spec.latitude
+                            ))
+                            .filter(Boolean); // 过滤掉未找到的覆盖物
+                    // [0,0,0,0]) 四周边距，上、下、左、右
+                    // 根据覆盖物获取地图的最优的缩放级别和中心点
+                    const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [150, 120, 60, 100]);
+
+                    const newposition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
+
+                    await moveToLocation(map, newposition, byOverlays[0]);
+                } else {
+                    moveToLocation(map, position2, zoom);
+                }
+                /*} else {
+                    console.log(456)
+                    // 如果不需要移动地图，直接加载动画
+                    loadParabolaAnimation(card);
+                }*/
             } catch (error) {
                 console.error('处理卡片悬停时发生错误:', error);
                 // 重置状态
@@ -927,23 +1023,6 @@ const AnimationState = {
     PAUSED: 'paused'
 };
 
-let currentState = AnimationState.IDLE;
-
-const updateAnimationState = (newState) => {
-    currentState = newState;
-    // 根据状态执行相应操作
-    switch (newState) {
-        case AnimationState.IDLE:
-            cleanup();
-            break;
-        case AnimationState.ANIMATING:
-            startAnimation();
-            break;
-        case AnimationState.PAUSED:
-            pauseAnimation();
-            break;
-    }
-};
 
 // 初始化应用
 const initializeApp = async () => {
@@ -990,6 +1069,30 @@ const initializeApp = async () => {
         document.querySelectorAll('.control-btn, .zoom-controls button').forEach(button => {
             addButtonAnimation(button);
         });
+
+
+        // map.setFitView(null, false, [150, 60, 100, 60]);
+        /*const allOverlays = map.getAllOverlays();
+        console.log(allOverlays)
+        allOverlays.forEach(overlay => {
+            console.log(overlay._position)
+        })
+        const newOverlays = [];
+        const Overlay = allOverlays.find(
+            f => f._position.lng === 118.161927
+        );
+        const Overlay2 = allOverlays.find(
+            f => f._position.lng === 118.771818
+        );
+        newOverlays.push(Overlay);
+        newOverlays.push(Overlay2);
+        console.log(newOverlays);
+        const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [150, 60, 100, 60]);
+        console.log(byOverlays);
+        console.log(byOverlays[1]);
+        const position = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
+        await moveToLocation(map, position, byOverlays[0]);
+*/
         populateTimeline(map)
     } catch (error) {
         console.error('初始化地图时发生错误:', error);
