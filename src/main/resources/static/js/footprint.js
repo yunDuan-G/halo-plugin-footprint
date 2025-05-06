@@ -1,5 +1,8 @@
 // 等待DOM加载完成
 document.addEventListener('DOMContentLoaded', () => {
+    // 判断是否为移动端
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
     // 判断当前路径是否为/footprints
     const currentPath = window.location.pathname;
     /*if (currentPath !== '/footprints') {
@@ -31,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         console.log('高德地图API加载成功');
-        initializeApp();
+        initializeApp(isMobile);
     };
     checkAMap();
 
@@ -828,9 +831,24 @@ const addFootprintMarkers = (map, footprintData) => {
 
     // 用于存储当前打开的标记
     let currentMarker = null;
+    let touchStartTime = 0;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const TOUCH_THRESHOLD = 10; // 触摸移动阈值
+    const TOUCH_TIME_THRESHOLD = 300; // 触摸时间阈值(ms)
+    let isMapMoving = false;
+    let isTouchStart = false;
+
+    // 监听地图移动状态
+    map.on('movestart', () => {
+        isMapMoving = true;
+    });
+
+    map.on('moveend', () => {
+        isMapMoving = false;
+    });
 
     // 添加全局点击事件监听器
-    // 添加点击地图事件监听器，用于关闭信息窗口
     map.on('click', () => {
         if (currentMarker) {
             infoWindow.close();
@@ -888,10 +906,12 @@ const addFootprintMarkers = (map, footprintData) => {
                     position: position,
                     content: createMarker(footprint.spec),
                     anchor: 'bottom-center',
-                    offset: new AMap.Pixel(0, 0)
+                    offset: new AMap.Pixel(0, 0),
+                    extData: footprint.spec // 存储额外数据
                 });
 
-                marker.on('click', async () => {
+                // 处理点击事件
+                const handleMarkerClick = async () => {
                     // 如果当前标记已经打开，则关闭它
                     if (currentMarker === marker) {
                         infoWindow.close();
@@ -922,7 +942,66 @@ const addFootprintMarkers = (map, footprintData) => {
                     // 打开信息窗口
                     openInfoWindow(position, content);
                     currentMarker = marker;
-                });
+                };
+
+                // 添加触摸事件处理
+                const handleTouchStart = (e) => {
+                    isTouchStart = true;
+                    touchStartTime = Date.now();
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                };
+
+                const handleTouchMove = (e) => {
+                    if (!isTouchStart) return;
+                    
+                    const touchMoveX = e.touches[0].clientX;
+                    const touchMoveY = e.touches[0].clientY;
+                    const deltaX = Math.abs(touchMoveX - touchStartX);
+                    const deltaY = Math.abs(touchMoveY - touchStartY);
+                    
+                    // 如果移动距离超过阈值，标记为地图移动
+                    if (deltaX > TOUCH_THRESHOLD || deltaY > TOUCH_THRESHOLD) {
+                        isMapMoving = true;
+                    }
+                };
+
+                const handleTouchEnd = (e) => {
+                    if (!isTouchStart) return;
+                    
+                    const touchEndTime = Date.now();
+                    const touchEndX = e.changedTouches[0].clientX;
+                    const touchEndY = e.changedTouches[0].clientY;
+                    
+                    // 计算触摸移动距离
+                    const deltaX = Math.abs(touchEndX - touchStartX);
+                    const deltaY = Math.abs(touchEndY - touchStartY);
+                    const touchDuration = touchEndTime - touchStartTime;
+
+                    // 重置触摸状态
+                    isTouchStart = false;
+
+                    // 如果触摸时间短且移动距离小，且地图没有移动，则认为是点击
+                    if (touchDuration < TOUCH_TIME_THRESHOLD && 
+                        deltaX < TOUCH_THRESHOLD && 
+                        deltaY < TOUCH_THRESHOLD &&
+                        !isMapMoving) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMarkerClick();
+                    }
+                };
+
+                // 添加事件监听器
+                marker.on('click', handleMarkerClick);
+                
+                // 为移动端添加触摸事件
+                const markerElement = marker.getContent();
+                if (markerElement) {
+                    markerElement.addEventListener('touchstart', handleTouchStart, { passive: true });
+                    markerElement.addEventListener('touchmove', handleTouchMove, { passive: true });
+                    markerElement.addEventListener('touchend', handleTouchEnd, { passive: false });
+                }
 
                 map.add(marker);
             } catch (error) {
@@ -932,11 +1011,11 @@ const addFootprintMarkers = (map, footprintData) => {
 
         currentIndex += batchSize;
         if (currentIndex < footprintData.length) {
-            requestIdleCallback(renderBatch);// 利用空闲时间渲染
+            requestIdleCallback(renderBatch);
         }
     };
 
-    renderBatch();// 启动首次渲染
+    renderBatch();
 
     document.getElementById('zoom-restore').addEventListener('click', () => {
         const timelineDrawer = document.getElementById('timeline-drawer');
@@ -1043,7 +1122,7 @@ const AnimationState = {
 
 
 // 初始化应用
-const initializeApp = async () => {
+const initializeApp = async (isMobile) => {
     try {
         // 创建地图实例
         const map = new AMap.Map('footprint-map', {
@@ -1054,8 +1133,7 @@ const initializeApp = async () => {
             pitch: 0,
             features: ['bg', 'road', 'building', 'point'],
             showBuildingBlock: true,
-            showIndoorMap: false,  // 关闭室内地图
-            animateEnable: false  // 初始禁用动画
+            resizeEnable: true     // 启用自动适应容器尺寸
         });
 
         // 等待地图加载完成
@@ -1080,15 +1158,6 @@ const initializeApp = async () => {
         // 添加足迹标记
         addFootprintMarkers(map, window.FOOTPRINT_CONFIG.footprints);
 
-        // 显示界面元素
-        showElements();
-
-        // 为所有控制按钮添加点击动画
-        document.querySelectorAll('.control-btn, .zoom-controls button').forEach(button => {
-            addButtonAnimation(button);
-        });
-
-
         // map.setFitView(null, false, [150, 60, 100, 60]);
         /*const allOverlays = map.getAllOverlays();
         console.log(allOverlays)
@@ -1111,11 +1180,19 @@ const initializeApp = async () => {
         const position = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
         await moveToLocation(map, position, byOverlays[0]);
 */
-        populateTimeline(map)
+
+        // 只在非移动端显示界面元素
+        if (!isMobile) {
+            showElements();
+            // 为所有控制按钮添加点击动画
+            document.querySelectorAll('.control-btn, .zoom-controls button').forEach(button => {
+                addButtonAnimation(button);
+            });
+            populateTimeline(map);
+        }
     } catch (error) {
         console.error('初始化地图时发生错误:', error);
     }
-
 };
 
 // 性能优化：将地图功能初始化封装为单独的函数
