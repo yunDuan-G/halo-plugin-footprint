@@ -231,7 +231,7 @@
     background: rgba(0, 0, 0, 0.03);
     border: none;
     border-radius: 20px;
-    color: #000000;
+    color: #ffffff;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
@@ -1312,9 +1312,8 @@
     flex-direction: column;
     gap: 20px;
     overflow-y: auto;
-    padding-right: 10px;
     margin-right: -10px;
-    margin-top: 10px;
+    padding: 10px 10px 0 10px;
 }
 
 #timeline-container::-webkit-scrollbar {
@@ -1348,6 +1347,7 @@
     overflow: hidden;
     min-height: 220px;
     cursor: pointer;
+    width: 300px;
 }
 
 .timeline-card::before {
