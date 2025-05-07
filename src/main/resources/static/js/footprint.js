@@ -343,9 +343,79 @@ const populateTimeline = async (map) => {
         description.className = 'card-description';
         description.textContent = footprint.spec.description || 'No description available.';
 
+        // 添加查看按钮
+        const viewButton = document.createElement('button');
+        viewButton.className = 'view-button';
+        viewButton.innerHTML = `
+            <span>查看详情</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+            </svg>
+        `;
+
+        // 添加点击事件处理
+        viewButton.addEventListener('click', async (e) => {
+            e.stopPropagation(); // 阻止事件冒泡
+
+            // 清除抛物线动画
+            if (card.currentAnimationId) {
+                cancelAnimationFrame(card.currentAnimationId);
+                card.currentAnimationId = null;
+            }
+
+            // 清除画布
+            const canvas = document.getElementById('canvas');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+
+            // 重置动画状态
+            isAnimating = false;
+            activeCard = null;
+
+            const cardHeader = card.querySelector('.card-header');
+            const cardHeaderContent = cardHeader.textContent;
+            const footprint = window.FOOTPRINT_CONFIG.footprints.find(
+                f => f.spec.name === cardHeaderContent
+            );
+
+            if (footprint) {
+                const position = new AMap.LngLat(
+                    parseFloat(footprint.spec.longitude),
+                    parseFloat(footprint.spec.latitude)
+                );
+
+                // 检查是否需要移动地图
+                const currentPos = map.getCenter();
+                const distance = position.distance(currentPos);
+                const currentZoom = map.getZoom();
+
+                // 如果距离超过1公里或缩放级别不够，需要移动地图
+                const needsMovement = distance > 1000 || currentZoom < 13;
+
+                if (needsMovement) {
+                    // 移动地图到目标位置
+                    await moveToLocation(map, position, 14);
+                }
+
+                // 查找并触发对应的标记点点击事件
+                const marker = map.getAllOverlays().find(
+                    m => m._position.lng === parseFloat(footprint.spec.longitude) &&
+                         m._position.lat === parseFloat(footprint.spec.latitude)
+                );
+
+                if (marker) {
+                    marker.emit('click');
+                }
+            }
+        });
+
         card.appendChild(header);
         card.appendChild(time);
         card.appendChild(description);
+        card.appendChild(viewButton);
 
         timelineContainer.appendChild(card);
     });
@@ -382,6 +452,14 @@ const populateTimeline = async (map) => {
                 isProcessing = true;
                 // 设置当前激活的卡片
                 activeCard = card;
+
+                // 关闭已打开的信息窗口
+                const allOverlays = map.getAllOverlays();
+                allOverlays.forEach(overlay => {
+                    if (overlay instanceof AMap.InfoWindow) {
+                        overlay.close();
+                    }
+                });
 
                 zoomOn(map, card);
                 const zoom = 14;
@@ -1055,7 +1133,6 @@ const addFootprintMarkers = (map, footprintData) => {
         moveToLocation(map, position, 4);
     });
 };
-
 // 优化图层切换
 const handleLayerChange = (btn, type, layerState, map, layers) => {
     btn.classList.add('btn-clicked');
@@ -1303,3 +1380,4 @@ const initializeMapFeatures = (map, layers) => {
     // 初始化图层状态
     updateLayers(layerState, layers);
 };
+
