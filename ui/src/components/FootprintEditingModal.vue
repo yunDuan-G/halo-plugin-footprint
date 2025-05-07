@@ -1,12 +1,12 @@
 <script lang="ts" setup>
-import { Toast, VButton, VModal, VSpace } from "@halo-dev/components";
-import { ref, computed, watch, onMounted } from "vue";
-import { footprintApiClient } from "@/api";
-import type { Footprint, Option } from "@/api/models";
-import { toDatetimeLocal, toISOString } from "@/utils/date";
-import { FormKit } from "@formkit/vue";
+import {Toast, VButton, VModal, VSpace} from "@halo-dev/components";
+import {ref, computed, watch, onMounted} from "vue";
+import {footprintApiClient} from "@/api";
+import type {Footprint, Option} from "@/api/models";
+import {toDatetimeLocal, toISOString} from "@/utils/date";
+import {FormKit} from "@formkit/vue";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { Teleport } from "vue";
+import {Teleport} from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -45,7 +45,7 @@ const initialFormState: Footprint = {
 };
 
 // 使用JSON.parse(JSON.stringify())进行深拷贝，替代lodash.clonedeep
-const deepClone = <T,>(obj: T): T => {
+const deepClone = <T, >(obj: T): T => {
   return JSON.parse(JSON.stringify(obj));
 };
 
@@ -248,9 +248,9 @@ const handleManualInput = () => {
       formState.value.metadata.name,
       formState.value
     ).then(() => {
-        Toast.success("更新成功");
-        onVisibleChange(false);
-      })
+      Toast.success("更新成功");
+      onVisibleChange(false);
+    })
       .catch((e) => {
         console.error("保存失败", e);
         Toast.error("保存失败，请重试");
@@ -312,7 +312,7 @@ onMounted(async () => {
           <VButton type="secondary" @click="showManualInput = false">
             取消
           </VButton>
-          <VButton type="primary" @click="handleManualInput"> 确定 </VButton>
+          <VButton type="primary" @click="handleManualInput"> 确定</VButton>
         </VSpace>
       </template>
     </VModal>
@@ -422,6 +422,8 @@ onMounted(async () => {
             name="metadataNames"
             label="关联足迹"
             :multiple="true"
+            :debounce="300"
+            :min-chars="1"
             clearable
             searchable
             action="/apis/api.footprint.lik.cc/v1alpha1/footprints"

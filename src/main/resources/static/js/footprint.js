@@ -2,7 +2,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // 判断是否为移动端
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    
+
     // 判断当前路径是否为/footprints
     const currentPath = window.location.pathname;
     /*if (currentPath !== '/footprints') {
@@ -19,11 +19,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 打印插件信息
     console.log(
-        '%c足迹插件%c🗺️ 记录生活轨迹，分享旅途故事\n%c作者 Handsome %cwww.lik.cc',
-        'background: #42b983; color: white; padding: 2px 4px; border-radius: 3px;',
-        'color: #42b983; padding: 2px 4px;',
-        'color: #666; padding: 2px 4px;',
-        'color: #42b983; text-decoration: underline; padding: 2px 4px;'
+            '%c足迹插件%c🗺️ 记录生活轨迹，分享旅途故事\n%c作者 Handsome %cwww.lik.cc',
+            'background: #42b983; color: white; padding: 2px 4px; border-radius: 3px;',
+            'color: #42b983; padding: 2px 4px;',
+            'color: #666; padding: 2px 4px;',
+            'color: #42b983; text-decoration: underline; padding: 2px 4px;'
     );
 
     // 等待AMap对象加载完成
@@ -90,7 +90,7 @@ const loadParabolaAnimation = (card) => {
 
     // 获取所有相关的标记点
     const footprint = window.FOOTPRINT_CONFIG.footprints.find(
-        f => f.spec.name === cardHeaderContent
+            f => f.spec.name === cardHeaderContent
     );
 
     if (!footprint) {
@@ -101,10 +101,18 @@ const loadParabolaAnimation = (card) => {
     // 获取所有相关的标记点
     const markerImages = [];
     if (footprint.spec.metadataNames) {
+        const name = footprint.metadata.name;
+
+        const metadataName = footprint.spec.metadataNames.includes(name);
+        // 如果没有当前的标记点，手动添加
+        if (!metadataName) {
+            console.log(123)
+            markerImages.push(markerImage);
+        }
         // 如果有 metadataNames，获取所有相关的标记点
         footprint.spec.metadataNames.forEach(metadataName => {
             const relatedFootprint = window.FOOTPRINT_CONFIG.footprints.find(
-                f => f.metadata.name === metadataName
+                    f => f.metadata.name === metadataName
             );
             if (relatedFootprint) {
                 const marker = document.querySelector(`.marker-image img[alt="${relatedFootprint.spec.name}"]`);
@@ -221,18 +229,18 @@ const loadParabolaAnimation = (card) => {
 
             // 计算当前动画点在曲线上的位置
             const currentPoint = getQuadraticBezierPoint(
-                animation.progress,
-                animation.startPoint,
-                animation.controlPoint,
-                animation.endPoint
+                    animation.progress,
+                    animation.startPoint,
+                    animation.controlPoint,
+                    animation.endPoint
             );
 
             // 计算当前点的切线角度
             const angle = getQuadraticBezierAngle(
-                animation.progress,
-                animation.startPoint,
-                animation.controlPoint,
-                animation.endPoint
+                    animation.progress,
+                    animation.startPoint,
+                    animation.controlPoint,
+                    animation.endPoint
             );
 
             // 绘制当前位置的箭头
@@ -328,8 +336,8 @@ const populateTimeline = async (map) => {
         const time = document.createElement('div');
         time.className = 'card-time';
         time.textContent = footprint.spec.createTime
-            ? new Date(footprint.spec.createTime).toLocaleString('zh-CN')
-            : 'Unknown Time';
+                ? new Date(footprint.spec.createTime).toLocaleString('zh-CN')
+                : 'Unknown Time';
 
         const description = document.createElement('div');
         description.className = 'card-description';
@@ -381,10 +389,10 @@ const populateTimeline = async (map) => {
                 const cardHeader = card.querySelector('.card-header');
                 const cardHeaderContent = cardHeader.textContent;
                 const footprint = window.FOOTPRINT_CONFIG.footprints.find(
-                    f => f.spec.name === cardHeaderContent
+                        f => f.spec.name === cardHeaderContent
                 );
                 const position2 = new AMap.LngLat(parseFloat(footprint.spec.longitude),
-                    parseFloat(footprint.spec.latitude));
+                        parseFloat(footprint.spec.latitude));
 
                 // 检查是否需要移动地图
                 const currentPos = map.getCenter();
@@ -396,31 +404,48 @@ const populateTimeline = async (map) => {
 
                 const metadataNames = footprint.spec.metadataNames;
                 if (metadataNames) {
+                    const name = footprint.metadata.name;
+
+                    const metadataName = footprint.spec.metadataNames.includes(name);
                     // 如果有 metadataNames，筛选出对应的数据
                     const positions = metadataNames
-                        .map(metadataName => window.FOOTPRINT_CONFIG.footprints.find(
-                            f => f.metadata.name === metadataName
-                        ))
-                        .filter(Boolean); // 过滤掉未找到的值
+                            .map(metadataName => window.FOOTPRINT_CONFIG.footprints.find(
+                                    f => f.metadata.name === metadataName
+                            ))
+                            .filter(Boolean); // 过滤掉未找到的值
+                    // 如果没有当前的标记点，手动添加
+                    if (!metadataName) {
+                        positions.push(footprint);
+                    }
 
                     // 获取地图所有覆盖物
                     const allOverlays = map.getAllOverlays();
 
                     // 筛选出符合条件的覆盖物
                     const newOverlays = positions
-                        .map(value => allOverlays.find(
-                            f => f._position.lng === value.spec.longitude && f._position.lat === value.spec.latitude
-                        ))
-                        .filter(Boolean); // 过滤掉未找到的覆盖物
+                            .map(value => allOverlays.find(
+                                    f => f._position.lng === value.spec.longitude && f._position.lat === value.spec.latitude
+                            ))
+                            .filter(Boolean); // 过滤掉未找到的覆盖物
                     // [0,0,0,0]) 四周边距，上、下、左、右
                     // 根据覆盖物获取地图的最优的缩放级别和中心点
                     const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [150, 120, 60, 100]);
 
                     const newposition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
 
-                    await moveToLocation(map, newposition, byOverlays[0]);
+                    //判断当前地图的缩放级别是否和byOverlays[0]一致
+                    if (!byOverlays[0].toString().startsWith(currentZoom)) {
+                        await moveToLocation(map, newposition, byOverlays[0]);
+                    } else {
+                        // 如果缩放级别一致，直接加载抛物线
+                        loadParabolaAnimation(card);
+                    }
                 } else {
-                    await moveToLocation(map, position2, zoom);
+                    if (needsMovement) {
+                        await moveToLocation(map, position2, zoom);
+                    } else {
+                        loadParabolaAnimation(card);
+                    }
                 }
             } catch (error) {
                 console.error('处理卡片悬停时发生错误:', error);
@@ -467,6 +492,7 @@ const populateTimeline = async (map) => {
 // 存储绑定的函数，方便解绑
 let boundZoomStart, boundZoom, boundZoomEnd;
 
+//绑定事件
 function zoomOn(map, card) {
     console.log("绑定事件!");
 
@@ -954,12 +980,12 @@ const addFootprintMarkers = (map, footprintData) => {
 
                 const handleTouchMove = (e) => {
                     if (!isTouchStart) return;
-                    
+
                     const touchMoveX = e.touches[0].clientX;
                     const touchMoveY = e.touches[0].clientY;
                     const deltaX = Math.abs(touchMoveX - touchStartX);
                     const deltaY = Math.abs(touchMoveY - touchStartY);
-                    
+
                     // 如果移动距离超过阈值，标记为地图移动
                     if (deltaX > TOUCH_THRESHOLD || deltaY > TOUCH_THRESHOLD) {
                         isMapMoving = true;
@@ -968,11 +994,11 @@ const addFootprintMarkers = (map, footprintData) => {
 
                 const handleTouchEnd = (e) => {
                     if (!isTouchStart) return;
-                    
+
                     const touchEndTime = Date.now();
                     const touchEndX = e.changedTouches[0].clientX;
                     const touchEndY = e.changedTouches[0].clientY;
-                    
+
                     // 计算触摸移动距离
                     const deltaX = Math.abs(touchEndX - touchStartX);
                     const deltaY = Math.abs(touchEndY - touchStartY);
@@ -982,10 +1008,10 @@ const addFootprintMarkers = (map, footprintData) => {
                     isTouchStart = false;
 
                     // 如果触摸时间短且移动距离小，且地图没有移动，则认为是点击
-                    if (touchDuration < TOUCH_TIME_THRESHOLD && 
-                        deltaX < TOUCH_THRESHOLD && 
-                        deltaY < TOUCH_THRESHOLD &&
-                        !isMapMoving) {
+                    if (touchDuration < TOUCH_TIME_THRESHOLD &&
+                            deltaX < TOUCH_THRESHOLD &&
+                            deltaY < TOUCH_THRESHOLD &&
+                            !isMapMoving) {
                         e.preventDefault();
                         e.stopPropagation();
                         handleMarkerClick();
@@ -994,13 +1020,13 @@ const addFootprintMarkers = (map, footprintData) => {
 
                 // 添加事件监听器
                 marker.on('click', handleMarkerClick);
-                
+
                 // 为移动端添加触摸事件
                 const markerElement = marker.getContent();
                 if (markerElement) {
-                    markerElement.addEventListener('touchstart', handleTouchStart, { passive: true });
-                    markerElement.addEventListener('touchmove', handleTouchMove, { passive: true });
-                    markerElement.addEventListener('touchend', handleTouchEnd, { passive: false });
+                    markerElement.addEventListener('touchstart', handleTouchStart, {passive: true});
+                    markerElement.addEventListener('touchmove', handleTouchMove, {passive: true});
+                    markerElement.addEventListener('touchend', handleTouchEnd, {passive: false});
                 }
 
                 map.add(marker);
