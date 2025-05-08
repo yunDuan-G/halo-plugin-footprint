@@ -799,8 +799,104 @@ const formatTime = (timeString) => {
     }
 };
 
-// 优化信息窗口内容创建
+// 常量定义
+const SVG_ICONS = {
+    type: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 7v10a4 4 0 004 4h10a4 4 0 004-4V7a4 4 0 00-4-4H7a4 4 0 00-4 4z"></path>
+        <path d="M9 12h6"></path>
+    </svg>`,
+    date: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+        <line x1="16" y1="2" x2="16" y2="6"></line>
+        <line x1="8" y1="2" x2="8" y2="6"></line>
+        <line x1="3" y1="10" x2="21" y2="10"></line>
+    </svg>`,
+    location: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"></path>
+        <circle cx="12" cy="10" r="3"></circle>
+    </svg>`
+};
+
+function escapeHtml(unsafe = '') {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 function createInfoWindow(spec) {
+    // 默认值处理和转义
+    const {
+        image = '',
+        name = '',
+        footprintType = '未知类型',
+        createTime = '',
+        address = '未知位置',
+        description = '',
+        article = ''
+    } = spec;
+
+    // 格式化时间
+    const formatDate = (dateString) => {
+        if (!dateString) return '';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            }).replace(/\//g, '-');
+        } catch {
+            return '';
+        }
+    };
+
+    // 构建公共HTML部分
+    const buildCommonHtml = () => `
+        <h3 class="title">${escapeHtml(name)}</h3>
+        <div class="meta">
+            <span>${SVG_ICONS.type} ${escapeHtml(footprintType)}</span>
+        </div>
+        <div class="meta">
+            <span>${SVG_ICONS.date} ${formatDate(createTime)}</span>
+        </div>
+        <div class="meta">
+            <span>${SVG_ICONS.location} ${escapeHtml(address)}</span>
+        </div>
+        ${description ? `<p class="description">${escapeHtml(description)}</p>` : ''}
+        ${article ? `
+            <a href="${escapeHtml(article)}" target="_blank" class="article-btn">
+                查看文章
+                <div class="arrow-wrapper">
+                    <div class="arrow"></div>
+                </div>
+            </a>
+        ` : ''}
+    `;
+
+    // 构建图片HTML
+    const imageContent = image
+        ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(name)}">`
+        : `<img src="https://www.lik.cc/upload/loading8.gif" alt="${escapeHtml(name)}" style="position: absolute; width: 100%; height: 100%; object-fit: cover;">`;
+
+    return `
+        <div class="info-window">
+            <div class="image">
+                ${imageContent}
+                <div class="image-info">
+                    ${buildCommonHtml()}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// 优化信息窗口内容创建
+/*function createInfoWindow(spec) {
     // 确保所有字段都有默认值
     const {
         image = '',
@@ -923,7 +1019,7 @@ function createInfoWindow(spec) {
             ${imageHtml}
         </div>
     `;
-}
+}*/
 
 // 优化防抖函数，添加立即执行选项
 const debounce = (func, wait, immediate = false) => {
