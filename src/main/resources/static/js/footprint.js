@@ -747,8 +747,24 @@ const moveToLocation = (map, position, Zoom) => {
     });
 };
 
-// 优化标记点创建
+
 const createMarker = (spec) => {
+    const markerContent = document.createElement('div');
+    markerContent.className = 'custom-marker';
+
+    // 使用更简单的DOM结构
+    markerContent.innerHTML = `
+        <div class="marker-image">
+            <img src="${spec.image || 'https://www.lik.cc/upload/loading8.gif'}" 
+                 alt="${spec.name || '足迹标记'}"
+                 loading="lazy"> <!-- 添加懒加载 -->
+        </div>
+    `;
+
+    return markerContent;
+};
+// 优化标记点创建
+/*const createMarker = (spec) => {
     const markerContent = document.createElement('div');
     markerContent.className = 'custom-marker';
 
@@ -763,7 +779,7 @@ const createMarker = (spec) => {
     markerContent.appendChild(markerImage);
 
     return markerContent;
-};
+};*/
 
 // 格式化时间
 const formatTime = (timeString) => {
@@ -1098,14 +1114,6 @@ const addFootprintMarkers = (map, footprintData) => {
 
                 // 添加事件监听器
                 marker.on('click', handleMarkerClick);
-
-                // 为移动端添加触摸事件
-                const markerElement = marker.getContent();
-                if (markerElement) {
-                    markerElement.addEventListener('touchstart', handleTouchStart, {passive: true});
-                    markerElement.addEventListener('touchmove', handleTouchMove, {passive: true});
-                    markerElement.addEventListener('touchend', handleTouchEnd, {passive: false});
-                }
 
                 map.add(marker);
             } catch (error) {
