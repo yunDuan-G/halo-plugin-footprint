@@ -378,13 +378,13 @@ const populateTimeline = async (map) => {
             const cardHeader = card.querySelector('.card-header');
             const cardHeaderContent = cardHeader.textContent;
             const footprint = window.FOOTPRINT_CONFIG.footprints.find(
-                f => f.spec.name === cardHeaderContent
+                    f => f.spec.name === cardHeaderContent
             );
 
             if (footprint) {
                 const position = new AMap.LngLat(
-                    parseFloat(footprint.spec.longitude),
-                    parseFloat(footprint.spec.latitude)
+                        parseFloat(footprint.spec.longitude),
+                        parseFloat(footprint.spec.latitude)
                 );
 
                 // 检查是否需要移动地图
@@ -402,8 +402,8 @@ const populateTimeline = async (map) => {
 
                 // 查找并触发对应的标记点点击事件
                 const marker = map.getAllOverlays().find(
-                    m => m._position.lng === parseFloat(footprint.spec.longitude) &&
-                         m._position.lat === parseFloat(footprint.spec.latitude)
+                        m => m._position.lng === parseFloat(footprint.spec.longitude) &&
+                                m._position.lat === parseFloat(footprint.spec.latitude)
                 );
 
                 if (marker) {
@@ -1231,11 +1231,13 @@ const initializeApp = async (isMobile) => {
         const map = new AMap.Map('footprint-map', {
             zoom: 4,
             center: [116.397428, 39.90923],
-            mapStyle: window.FOOTPRINT_CONFIG.mapStyle || 'amap://styles/normal',
-            viewMode: '2D',
+            mapStyle: 'amap://styles/light',
+            // mapStyle: window.FOOTPRINT_CONFIG.mapStyle || 'amap://styles/normal',
+            viewMode: isMobile ? '2D' : '2D',
             pitch: 0,
-            features: ['bg', 'road', 'building', 'point'],
-            showBuildingBlock: true,
+            features: isMobile ? ['bg', 'road', 'point'] : ['bg', 'road', 'building', 'point'],
+            showBuildingBlock: !isMobile, // 移动端不显示建筑物
+            optimize: true, // 开启优化模式
             resizeEnable: true     // 启用自动适应容器尺寸
         });
 
