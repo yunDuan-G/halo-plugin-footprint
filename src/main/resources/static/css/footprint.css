@@ -1512,5 +1512,17 @@
         width: 14px;
         height: 14px;
     }
+
+    .map-controls {
+        display: flex !important; /* Ensure map-controls are visible */
+    }
+
+    #timeline-btn {
+        display: none !important; /* Hide the timeline button */
+    }
+
+    #timeline-drawer {
+        display: none !important; /* Prevent the timeline drawer from being visible */
+    }
 }
 
