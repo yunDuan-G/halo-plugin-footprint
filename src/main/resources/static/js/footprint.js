@@ -2,7 +2,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // 判断是否为移动端
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
+    console.log(isMobile)
     // 判断当前路径是否为/footprints
     const currentPath = window.location.pathname;
     /*if (currentPath !== '/footprints') {
@@ -426,6 +426,7 @@ const populateTimeline = async (map) => {
 
     // 打开抽屉
     timelineBtn.addEventListener('click', () => {
+        console.log(123)
         timelineDrawer.classList.add('open');
     });
 
@@ -694,29 +695,7 @@ const layerConfig = {
     }
 };
 
-//跳转移动
-const moveToLocation2 = (map, position, Zoom) => {
-    return new Promise((resolve) => {
-        // 启用动画
-        map.setStatus({animateEnable: true});
 
-        // 设置缩放级别
-        map.setZoom(Zoom);
-
-        // 平移到目标位置
-        map.panTo(position);
-
-        // 等待动画完成
-        const checkAnimation = () => {
-            if (!map.isMoving && !map.isZooming) {
-                resolve();
-            } else {
-                requestAnimationFrame(checkAnimation);
-            }
-        };
-        checkAnimation();
-    });
-};
 
 // 优化地图移动
 const moveToLocation = (map, position, Zoom) => {
@@ -729,8 +708,9 @@ const moveToLocation = (map, position, Zoom) => {
         if (currentZoom == Zoom) {
             map.setZoom(Zoom + 1);
         }
-        // 设置缩放级别
-        map.setZoom(Zoom);
+        // 强制设置新的缩放级别（即使相同也设置）
+        map.setZoom(Zoom - 0.1); // 先设置一个略小的值确保动画触发
+        map.setZoom(Zoom); // 然后设置目标值
 
         // 平移到目标位置
         map.panTo(position);
@@ -766,23 +746,6 @@ const createMarker = (spec) => {
 
     return markerContent;
 };
-// 优化标记点创建
-/*const createMarker = (spec) => {
-    const markerContent = document.createElement('div');
-    markerContent.className = 'custom-marker';
-
-    const markerImage = document.createElement('div');
-    markerImage.className = 'marker-image';
-
-    const img = document.createElement('img');
-    img.src = spec.image || 'https://www.lik.cc/upload/loading8.gif';
-    img.alt = spec.name || '足迹标记';
-
-    markerImage.appendChild(img);
-    markerContent.appendChild(markerImage);
-
-    return markerContent;
-};*/
 
 // 格式化时间
 const formatTime = (timeString) => {
@@ -943,6 +906,28 @@ const addFootprintMarkers = (map, footprintData) => {
     let isMapMoving = false;
     let isTouchStart = false;
 
+    // 用于跟踪当前触摸状态
+    let isDragging = false;
+    let touchStartPos = null;
+
+    map.on('touchstart', (e) => {
+        if (currentMarker) {
+            // 如果信息窗口已打开，允许地图拖动
+            map.setDefaultCursor('grab');
+        }
+    });
+
+    map.on('touchmove', (e) => {
+        if (currentMarker) {
+            // 拖动地图时关闭信息窗口
+            // infoWindow.close();
+            // currentMarker = null;
+        }
+    });
+
+    map.on('touchend', (e) => {
+        map.setDefaultCursor('');
+    });
 
     // 创建事件处理防抖函数
     const debouncedUpdate = debounce(() => {
@@ -1028,8 +1013,8 @@ const addFootprintMarkers = (map, footprintData) => {
                     extData: footprint.spec // 存储额外数据
                 });
 
-                // 处理点击事件
-                const handleMarkerClick = async () => {
+// 处理点击事件
+                const handleMarkerClick = async (marker) => {
                     // 如果当前标记已经打开，则关闭它
                     if (currentMarker === marker) {
                         infoWindow.close();
@@ -1060,63 +1045,59 @@ const addFootprintMarkers = (map, footprintData) => {
                     currentMarker = marker;
                 };
 
+
+
                 // 添加触摸事件处理
-                const handleTouchStart = (e) => {
-                    isTouchStart = true;
-                    touchStartTime = Date.now();
-                    touchStartX = e.touches[0].clientX;
-                    touchStartY = e.touches[0].clientY;
+                const handleTouchStart = (e, marker) => {
+                    if (e.touches.length !== 1) return;
+
+                    touchStartPos = {
+                        x: e.touches[0].clientX,
+                        y: e.touches[0].clientY,
+                        time: Date.now()
+                    };
+                    isDragging = false;
                 };
 
-                const handleTouchMove = (e) => {
-                    if (!isTouchStart) return;
+                const handleTouchMove = (e, marker) => {
+                    if (!touchStartPos || e.touches.length !== 1) return;
 
-                    const touchMoveX = e.touches[0].clientX;
-                    const touchMoveY = e.touches[0].clientY;
-                    const deltaX = Math.abs(touchMoveX - touchStartX);
-                    const deltaY = Math.abs(touchMoveY - touchStartY);
+                    const touch = e.touches[0];
+                    const deltaX = Math.abs(touch.clientX - touchStartPos.x);
+                    const deltaY = Math.abs(touch.clientY - touchStartPos.y);
 
-                    // 如果移动距离超过阈值，标记为地图移动
-                    if (deltaX > TOUCH_THRESHOLD || deltaY > TOUCH_THRESHOLD) {
-                        isMapMoving = true;
+                    // 如果移动距离超过阈值，认为是拖拽
+                    if (deltaX > 5 || deltaY > 5) {
+                        isDragging = true;
                     }
                 };
 
-                const handleTouchEnd = (e) => {
-                    if (!isTouchStart) return;
+                const handleTouchEnd = async (e, marker, footprint) => {
+                    if (!touchStartPos || e.changedTouches.length !== 1) return;
 
-                    const touchEndTime = Date.now();
-                    const touchEndX = e.changedTouches[0].clientX;
-                    const touchEndY = e.changedTouches[0].clientY;
+                    const touch = e.changedTouches[0];
+                    const deltaX = Math.abs(touch.clientX - touchStartPos.x);
+                    const deltaY = Math.abs(touch.clientY - touchStartPos.y);
+                    const duration = Date.now() - touchStartPos.time;
 
-                    // 计算触摸移动距离
-                    const deltaX = Math.abs(touchEndX - touchStartX);
-                    const deltaY = Math.abs(touchEndY - touchStartY);
-                    const touchDuration = touchEndTime - touchStartTime;
-
-                    // 重置触摸状态
-                    isTouchStart = false;
-
-                    // 如果触摸时间短且移动距离小，且地图没有移动，则认为是点击
-                    if (touchDuration < TOUCH_TIME_THRESHOLD &&
-                            deltaX < TOUCH_THRESHOLD &&
-                            deltaY < TOUCH_THRESHOLD &&
-                            !isMapMoving) {
+                    // 如果是短按且移动距离小，则触发点击事件
+                    if (!isDragging && duration < 300 && deltaX < 10 && deltaY < 10) {
                         e.preventDefault();
-                        e.stopPropagation();
-                        handleMarkerClick();
+                        await handleMarkerClick(marker);
                     }
+
+                    touchStartPos = null;
                 };
 
                 // 添加事件监听器
-                marker.on('click', handleMarkerClick);
+                // marker.on('click', handleMarkerClick);
 
                 // 为移动端添加触摸事件
                 const markerElement = marker.getContent();
                 if (markerElement) {
-                    markerElement.addEventListener('touchstart', handleTouchStart, { passive: true });
-                    markerElement.addEventListener('touchmove', handleTouchMove, { passive: true });
-                    markerElement.addEventListener('touchend', handleTouchEnd, { passive: false });
+                    markerElement.addEventListener('touchstart', (e) => handleTouchStart(e, marker), { passive: true });
+                    markerElement.addEventListener('touchmove', (e) => handleTouchMove(e, marker), { passive: true });
+                    markerElement.addEventListener('touchend', (e) => handleTouchEnd(e, marker, footprint));
                 }
 
                 map.add(marker);
@@ -1326,6 +1307,8 @@ const initializeApp = async (isMobile) => {
         document.querySelectorAll('.control-btn, .zoom-controls button').forEach(button => {
             addButtonAnimation(button);
         });
+
+
 
         // 只在非移动端显示界面元素
         if (!isMobile) {
