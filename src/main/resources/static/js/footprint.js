@@ -1154,6 +1154,11 @@ const addFootprintMarkers = (map, footprintData) => {
     // 在组件卸载时清理事件监听器
     window.addEventListener('unload', cleanup);
 
+
+    document.getElementById('messageBoards').addEventListener('click', () => {
+        window.open('http://www.yunduan019.com/liu', '_blank');
+    });
+
     document.getElementById('zoom-restore').addEventListener('click', () => {
         const timelineDrawer = document.getElementById('timeline-drawer');
         timelineDrawer.classList.remove('open');
