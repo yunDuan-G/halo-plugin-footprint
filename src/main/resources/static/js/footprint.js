@@ -507,7 +507,7 @@ const populateTimeline = async (map) => {
                             .filter(Boolean); // 过滤掉未找到的覆盖物
                     // [0,0,0,0]) 四周边距，上、下、左、右
                     // 根据覆盖物获取地图的最优的缩放级别和中心点
-                    const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [150, 120, 60, 360]);
+                    const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [150, 120, 60, 420]);
 
                     const newposition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
 

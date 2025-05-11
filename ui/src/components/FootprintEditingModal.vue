@@ -24,6 +24,8 @@ const emit = defineEmits<{
   (event: "close"): void;
 }>();
 
+const articleType = ref<'post' | 'custom'>('post');
+
 const initialFormState: Footprint = {
   metadata: {
     name: "",
@@ -397,24 +399,51 @@ onMounted(async () => {
           ></FormKit>
 
           <FormKit
-            v-model="formState.spec.article"
+            v-model="articleType"
             type="select"
-            name="article"
-            label="关联文章"
-            :multiple="false"
-            clearable
-            searchable
-            action="/apis/content.halo.run/v1alpha1/posts"
-            :request-option="{
-              method: 'GET',
-              pageField: 'page',
-              sizeField: 'size',
-              totalField: 'total',
-              itemsField: 'items',
-              labelField: 'spec.title',
-              valueField: 'status.permalink',
-            }"
+            name="articleType"
+            label="关联类型"
+            :options="[
+              { label: '文章', value: 'post' },
+              { label: '自定义链接', value: 'custom' },
+            ]"
           ></FormKit>
+
+          <template v-if="articleType === 'post'">
+            <FormKit
+              v-model="formState.spec.article"
+              type="select"
+              name="article"
+              label="关联文章"
+              :multiple="false"
+              clearable
+              searchable
+              action="/apis/content.halo.run/v1alpha1/posts"
+              :request-option="{
+                method: 'GET',
+                pageField: 'page',
+                sizeField: 'size',
+                totalField: 'total',
+                itemsField: 'items',
+                labelField: 'spec.title',
+                valueField: 'status.permalink',
+              }"
+            ></FormKit>
+          </template>
+
+          <template v-else-if="articleType === 'custom'">
+            <FormKit
+              v-model="formState.spec.article"
+              type="text"
+              name="customArticle"
+              label="链接地址"
+              placeholder="请输入完整的URL，例如 https://example.com"
+              validation="url"
+              :validation-messages="{
+                url: '请输入有效的URL地址，需包含http://或https://',
+              }"
+            ></FormKit>
+          </template>
 
           <FormKit
             v-model="formState.spec.metadataNames"
