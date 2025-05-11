@@ -2,7 +2,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     // 判断是否为移动端
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    console.log(isMobile)
     // 判断当前路径是否为/footprints
     const currentPath = window.location.pathname;
     /*if (currentPath !== '/footprints') {
@@ -709,7 +708,6 @@ const moveToLocation = (map, position, Zoom) => {
             map.setZoom(Zoom + 1);
         }
         // 强制设置新的缩放级别（即使相同也设置）
-        map.setZoom(Zoom - 0.1); // 先设置一个略小的值确保动画触发
         map.setZoom(Zoom); // 然后设置目标值
 
         // 平移到目标位置
@@ -1090,7 +1088,7 @@ const addFootprintMarkers = (map, footprintData) => {
                 };
 
                 // 添加事件监听器
-                // marker.on('click', handleMarkerClick);
+                marker.on('click', handleMarkerClick);
 
                 // 为移动端添加触摸事件
                 const markerElement = marker.getContent();
