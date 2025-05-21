@@ -396,7 +396,7 @@ const populateTimeline = async (map) => {
 
                 if (needsMovement) {
                     // 移动地图到目标位置
-                    await moveToLocation(map, position, 14);
+                    await moveToLocation(map, position, 14, 500);
                 }
 
                 // 查找并触发对应的标记点点击事件
@@ -425,7 +425,6 @@ const populateTimeline = async (map) => {
 
     // 打开抽屉
     timelineBtn.addEventListener('click', () => {
-        console.log(123)
         timelineDrawer.classList.add('open');
     });
 
@@ -507,20 +506,20 @@ const populateTimeline = async (map) => {
                             .filter(Boolean); // 过滤掉未找到的覆盖物
                     // [0,0,0,0]) 四周边距，上、下、左、右
                     // 根据覆盖物获取地图的最优的缩放级别和中心点
-                    const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [150, 120, 60, 420]);
+                    const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [350, 120, 60, 420]);
 
                     const newposition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
 
                     //判断当前地图的缩放级别是否和byOverlays[0]一致
                     if (!byOverlays[0].toString().startsWith(currentZoom)) {
-                        await moveToLocation(map, newposition, byOverlays[0]);
+                        await moveToLocation(map, newposition, byOverlays[0], 0);
                     } else {
                         // 如果缩放级别一致，直接加载抛物线
                         loadParabolaAnimation(card);
                     }
                 } else {
                     if (needsMovement) {
-                        await moveToLocation(map, position2, zoom);
+                        await moveToLocation(map, position2, zoom, 0);
                     } else {
                         loadParabolaAnimation(card);
                     }
@@ -695,9 +694,8 @@ const layerConfig = {
 };
 
 
-
 // 优化地图移动
-const moveToLocation = (map, position, Zoom) => {
+const moveToLocation = (map, position, Zoom, time) => {
     return new Promise((resolve) => {
         // 启用动画
         map.setStatus({animateEnable: true});
@@ -707,11 +705,16 @@ const moveToLocation = (map, position, Zoom) => {
         if (currentZoom == Zoom) {
             map.setZoom(Zoom + 1);
         }
-        // 强制设置新的缩放级别（即使相同也设置）
-        map.setZoom(Zoom); // 然后设置目标值
 
         // 平移到目标位置
         map.panTo(position);
+
+        // 延迟缩放
+        setTimeout(() => {
+            // 强制设置新的缩放级别（即使相同也设置）
+            map.setZoom(Zoom); // 然后设置目标值
+        }, time); // 2-second delay
+
 
         // 等待动画完成
         const checkAnimation = () => {
@@ -730,8 +733,10 @@ const createMarker = (spec) => {
     const markerContent = document.createElement('div');
     markerContent.className = 'custom-marker';
 
+    const image = spec.image.replace("!w100", "!A100");
+
     // 使用图片压缩服务
-    const compressedImageUrl = spec.image ? `https://images.weserv.nl/?url=${encodeURIComponent(spec.image)}&w=100&h=100&fit=cover&q=80` : 'https://www.lik.cc/upload/loading8.gif';
+    const compressedImageUrl = spec.image ? image : 'https://www.lik.cc/upload/loading8.gif';
 
     markerContent.innerHTML = `
         <div class="marker-image">
@@ -783,11 +788,11 @@ const SVG_ICONS = {
 
 function escapeHtml(unsafe = '') {
     return unsafe
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
 }
 
 function createInfoWindow(spec) {
@@ -850,7 +855,6 @@ function createInfoWindow(spec) {
     return `
         <div class="info-window">
             <div class="image">
-                ${imageContent}
                 <div class="image-info">
                     ${buildCommonHtml()}
                 </div>
@@ -886,7 +890,7 @@ const debounce = (func, wait, immediate = false) => {
 };
 
 // 添加足迹标记
-const addFootprintMarkers = (map, footprintData) => {
+const addFootprintMarkers = async (map, footprintData) => {
     // 创建信息窗体
     let infoWindow = new AMap.InfoWindow({
         isCustom: true,
@@ -982,7 +986,7 @@ const addFootprintMarkers = (map, footprintData) => {
     };
 
     // 分批次渲染
-    const batchSize = 10;
+    const batchSize = 1;
     let currentIndex = 0;
 
     const renderBatch = () => {
@@ -1011,7 +1015,7 @@ const addFootprintMarkers = (map, footprintData) => {
                     extData: footprint.spec // 存储额外数据
                 });
 
-// 处理点击事件
+                // 处理点击事件
                 const handleMarkerClick = async (marker) => {
                     // 如果当前标记已经打开，则关闭它
                     if (currentMarker === marker) {
@@ -1037,12 +1041,11 @@ const addFootprintMarkers = (map, footprintData) => {
                     const needsMovement = distance > 1000 || currentZoom < 13;
 
                     if (needsMovement) {
-                        await moveToLocation(map, position, 14);
+                        await moveToLocation(map, position, 14, 500);
                     }
                     openInfoWindow(position, content);
                     currentMarker = marker;
                 };
-
 
 
                 // 添加触摸事件处理
@@ -1093,8 +1096,8 @@ const addFootprintMarkers = (map, footprintData) => {
                 // 为移动端添加触摸事件
                 const markerElement = marker.getContent();
                 if (markerElement) {
-                    markerElement.addEventListener('touchstart', (e) => handleTouchStart(e, marker), { passive: true });
-                    markerElement.addEventListener('touchmove', (e) => handleTouchMove(e, marker), { passive: true });
+                    markerElement.addEventListener('touchstart', (e) => handleTouchStart(e, marker), {passive: true});
+                    markerElement.addEventListener('touchmove', (e) => handleTouchMove(e, marker), {passive: true});
                     markerElement.addEventListener('touchend', (e) => handleTouchEnd(e, marker, footprint));
                 }
 
@@ -1144,7 +1147,7 @@ const addFootprintMarkers = (map, footprintData) => {
         infoWindow.close();
         currentMarker = null;
         const position = new AMap.LngLat(116.397428, 39.90923);
-        moveToLocation(map, position, 4);
+        moveToLocation(map, position, 4, 0);
     });
 };
 // 优化图层切换
@@ -1305,7 +1308,6 @@ const initializeApp = async (isMobile) => {
         document.querySelectorAll('.control-btn, .zoom-controls button').forEach(button => {
             addButtonAnimation(button);
         });
-
 
 
         // 只在非移动端显示界面元素
