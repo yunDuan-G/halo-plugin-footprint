@@ -1268,8 +1268,8 @@
 .drawer {
     position: fixed;
     top: 0;
-    right: -380px; /* 增加宽度 */
-    width: 380px;
+    right: -650px; /* 增加宽度 */
+    width: 650px;
     height: 100%;
     background: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(20px);
@@ -1282,6 +1282,7 @@
 
 .drawer.open {
     right: 0;
+    background: rgba(255, 255, 255, 0.1); /* 设置透明背景 */
 }
 
 .drawer-content {
@@ -1380,9 +1381,9 @@
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
-    min-height: 220px;
+    min-height: 180px;
     cursor: pointer;
-    width: 300px;
+    width: 270px;
 }
 
 .timeline-card::before {
@@ -1411,7 +1412,7 @@
 
 .timeline-card .card-header {
     position: relative;
-    font-size: 20px;
+    font-size: 14px;
     font-weight: 600;
     margin-bottom: 10px;
     z-index: 2;
@@ -1446,7 +1447,7 @@
 
 .timeline-card .card-description {
     position: relative;
-    font-size: 15px;
+    font-size: 13px;
     line-height: 1.6;
     opacity: 0.9;
     z-index: 2;
@@ -1473,7 +1474,7 @@
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 20px;
     color: white;
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.3s ease;

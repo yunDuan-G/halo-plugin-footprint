@@ -309,6 +309,13 @@ const loadParabolaAnimation = (card) => {
 
 const position = null;
 
+//标记点偏移量
+const offsetLng = 0.025;
+
+//是否打开时间线
+let isTimelineOpen = false;
+
+
 //渲染抽屉中的时间线
 const populateTimeline = async (map) => {
     const timelineContainer = document.getElementById('timeline-container');
@@ -379,10 +386,9 @@ const populateTimeline = async (map) => {
             const footprint = window.FOOTPRINT_CONFIG.footprints.find(
                     f => f.spec.name === cardHeaderContent
             );
-
             if (footprint) {
-                const position = new AMap.LngLat(
-                        parseFloat(footprint.spec.longitude),
+                /*const position = new AMap.LngLat(
+                        parseFloat(footprint.spec.longitude + offsetLng),
                         parseFloat(footprint.spec.latitude)
                 );
 
@@ -397,7 +403,7 @@ const populateTimeline = async (map) => {
                 if (needsMovement) {
                     // 移动地图到目标位置
                     await moveToLocation(map, position, 14, 500);
-                }
+                }*/
 
                 // 查找并触发对应的标记点点击事件
                 const marker = map.getAllOverlays().find(
@@ -425,11 +431,13 @@ const populateTimeline = async (map) => {
 
     // 打开抽屉
     timelineBtn.addEventListener('click', () => {
+        isTimelineOpen = true;
         timelineDrawer.classList.add('open');
     });
 
     // 合上抽屉
     closeDrawerBtn.addEventListener('click', () => {
+        isTimelineOpen = false;
         timelineDrawer.classList.remove('open');
     });
 
@@ -468,7 +476,7 @@ const populateTimeline = async (map) => {
                 const footprint = window.FOOTPRINT_CONFIG.footprints.find(
                         f => f.spec.name === cardHeaderContent
                 );
-                const position2 = new AMap.LngLat(parseFloat(footprint.spec.longitude),
+                const position2 = new AMap.LngLat(parseFloat(isTimelineOpen ? footprint.spec.longitude + offsetLng : footprint.spec.longitude),
                         parseFloat(footprint.spec.latitude));
 
                 // 检查是否需要移动地图
@@ -506,7 +514,7 @@ const populateTimeline = async (map) => {
                             .filter(Boolean); // 过滤掉未找到的覆盖物
                     // [0,0,0,0]) 四周边距，上、下、左、右
                     // 根据覆盖物获取地图的最优的缩放级别和中心点
-                    const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [350, 120, 60, 420]);
+                    const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [350, 120, 60, 650]);
 
                     const newposition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
 
@@ -1032,16 +1040,17 @@ const addFootprintMarkers = async (map, footprintData) => {
                     // 构建信息窗体内容
                     const content = createInfoWindow(footprint.spec);
 
+                    const position2 = new AMap.LngLat(isTimelineOpen ? longitude +  offsetLng : longitude, latitude);
                     // 检查是否需要移动地图
                     const currentPos = map.getCenter();
-                    const distance = position.distance(currentPos);
+                    const distance = position2.distance(currentPos);
                     const currentZoom = map.getZoom();
 
                     // 如果距离超过1公里或缩放级别不够，需要移动地图
                     const needsMovement = distance > 1000 || currentZoom < 13;
 
                     if (needsMovement) {
-                        await moveToLocation(map, position, 14, 500);
+                        await moveToLocation(map, position2, 14, 500);
                     }
                     openInfoWindow(position, content);
                     currentMarker = marker;
@@ -1141,6 +1150,7 @@ const addFootprintMarkers = async (map, footprintData) => {
 
     document.getElementById('zoom-restore').addEventListener('click', () => {
         const timelineDrawer = document.getElementById('timeline-drawer');
+        isTimelineOpen = false;
         timelineDrawer.classList.remove('open');
 
         // 关闭信息窗口
