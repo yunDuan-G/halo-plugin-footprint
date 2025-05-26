@@ -1286,7 +1286,7 @@
 }
 
 .drawer-content {
-    padding: 30px;
+    padding: 20px;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -1294,7 +1294,7 @@
 }
 
 .drawer-content h2 {
-    margin: 0 0 25px 0;
+    margin: 0 0 -10px 0;
     font-size: 24px;
     font-weight: 600;
     padding-bottom: 15px;
@@ -1349,7 +1349,7 @@
     gap: 20px;
     overflow-y: auto;
     margin-right: -10px;
-    padding: 10px 10px 0 10px;
+    /*padding: 10px 10px 0 10px;*/
 }
 
 #timeline-container::-webkit-scrollbar {
@@ -1418,6 +1418,7 @@
     z-index: 2;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     transition: transform 0.3s ease;
+    display: flex;
 }
 
 .timeline-card:hover .card-header {
@@ -1458,6 +1459,8 @@
     overflow: hidden;
     margin-bottom: 15px;
     transition: opacity 0.3s ease;
+    display: flex;
+    height: 20px;
 }
 
 .timeline-card:hover .card-description {

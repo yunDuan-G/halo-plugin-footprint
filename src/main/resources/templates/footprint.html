@@ -154,6 +154,156 @@
         };
         // console.log('Footprint Config:', window.FOOTPRINT_CONFIG);
     </script>
+
+    <style>
+        .timeLineBox {
+            width: 100%;
+            height: 100%;
+            //padding: 20px;
+            box-sizing: border-box;
+            display: block;
+            position: relative;
+            overflow-y: auto;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE和Edge */
+        }
+
+        /* Chrome/Safari/Opera */
+        .timeLineBox::-webkit-scrollbar {
+            display: none;
+        }
+
+        .timeline {
+            width: 100%;
+            height: 255px;
+            display: flex;
+            justify-content: start;
+            border-left: 5px solid gray;
+        }
+
+        .timeline.reverse {
+            flex-direction: row-reverse;
+            justify-content: end;
+            border-right: 5px solid gray;
+            border-left: 0;
+        }
+
+        .timeline.on {
+            border-color: #254b87;
+        }
+
+        .timeline:first-child {
+            border: 0;
+        }
+
+        .timelineItem {
+            height: 100%;
+            border-bottom: 5px solid gray;
+            display: flex;
+            flex-direction: column;
+            justify-content: end;
+            align-items: center;
+            cursor: default;
+            position: relative;
+        }
+
+        .timelineItem.active {
+            border-color: #254b87;
+        }
+
+        .timelineItem.active .itemTitle {
+            color: #254b87;
+        }
+
+        .timelineItem.active .itemTitleDiv {
+            color: #254b87;
+        }
+
+        .timelineItem.active .itemDot {
+            background-color: #254b87;
+        }
+
+        .itemTitle {
+            position: absolute;
+            bottom: 10px;
+            left: 0;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            text-align: center;
+            font-size: 18px;
+            overflow: visible; /* 需要改为 visible 才能显示完整卡片 */
+            display: flex;
+            justify-content: center; /* 水平居中 */
+            align-items: center; /* 垂直居中 */
+        }
+
+        .itemDot {
+            width: 20px;
+            height: 20px;
+            background-color: gray;
+            border-radius: 10px;
+            margin-bottom: -12px;
+            display: block;
+        }
+
+        .ellipsis {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .card {
+            padding: 4px 0;
+            box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.24);
+            border-radius: 4px;
+            margin-top: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.12);
+        }
+
+        .itemTitleDiv {
+            padding: 0 15px;
+        }
+
+        /* Arrow styles */
+        .to_left {
+            width: 0;
+            height: 0;
+            border-right: 10px solid gray;
+            border-top: 10px solid transparent;
+            border-bottom: 10px solid transparent;
+        }
+
+        .to_right {
+            width: 0;
+            height: 0;
+            border-left: 10px solid gray;
+            border-top: 10px solid transparent;
+            border-bottom: 10px solid transparent;
+        }
+
+        .to-btn-left {
+            width: 100%;
+            transform: translate(-5px, 20px);
+        }
+
+        .to-btn-right {
+            display: flex;
+            justify-content: flex-end;
+            width: 100%;
+            transform: translate(5px, 20px);
+        }
+
+        /*.app-container {
+            width: 100%;
+            height: 500px;
+        }*/
+    </style>
 </head>
 <body id="footprint-page">
 <canvas id="canvas"></canvas>
@@ -214,9 +364,9 @@
         <div id="messageBoards" class="amap-scale-text">留言板</div>
     </div>
     <div id="timeline-drawer" class="drawer">
-        <div class="drawer-content">
+        <div class="drawer-content app-container">
             <h2>时间线</h2>
-            <div id="timeline-container"></div>
+            <div id="timeline-container" style="width: 100%"></div>
             <button id="close-drawer">X</button>
         </div>
     </div>
