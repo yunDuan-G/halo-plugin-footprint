@@ -924,6 +924,7 @@ function createInfoWindow(spec) {
     return `
         <div class="info-window">
             <div class="image">
+            ${imageContent}
                 <div class="image-info">
                     ${buildCommonHtml()}
                 </div>
