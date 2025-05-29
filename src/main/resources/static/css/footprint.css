@@ -1554,3 +1554,40 @@
     }
 }
 
+.timeline-card .loading-indicator {
+    position: absolute;
+    top: 10px;
+    left: calc(100% - 36px);
+    width: 24px;
+    height: 24px;
+    border: 2px solid #ffffff;
+    border-top-color: transparent;
+    border-radius: 100%;
+    background: none;
+    animation: circle infinite 0.75s linear;
+    z-index: 3;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.timeline-card.loading .loading-indicator {
+    opacity: 1;
+}
+
+.timeline-card.loading {
+    background: rgba(0, 0, 0, 0.1) !important;
+}
+
+.timeline-card.loading::before {
+    opacity: 0.5;
+}
+
+@keyframes circle {
+    0% {
+        transform: rotate(0);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
