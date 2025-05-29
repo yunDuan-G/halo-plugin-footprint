@@ -539,6 +539,9 @@ const populateTimeline = async (map) => {
         timelineDrawer.classList.add('open');
         const mapControls = document.getElementById('map-controls');
         mapControls.classList.add('open');
+        const position = new AMap.LngLat(116.397428 + 20, 39.90923);
+        moveToLocation(map, position, 4, 0);
+        console.log(123)
     });
 
     // 合上抽屉
