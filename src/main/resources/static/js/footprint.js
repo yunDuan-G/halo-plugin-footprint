@@ -537,12 +537,16 @@ const populateTimeline = async (map) => {
     timelineBtn.addEventListener('click', () => {
         isTimelineOpen = true;
         timelineDrawer.classList.add('open');
+        const mapControls = document.getElementById('map-controls');
+        mapControls.classList.add('open');
     });
 
     // 合上抽屉
     closeDrawerBtn.addEventListener('click', () => {
         isTimelineOpen = false;
         timelineDrawer.classList.remove('open');
+        const mapControls = document.getElementById('map-controls');
+        mapControls.classList.remove('open');
     });
 
     // 获取所有 timeline-card 元素
@@ -1257,6 +1261,8 @@ const addFootprintMarkers = async (map, footprintData) => {
         const timelineDrawer = document.getElementById('timeline-drawer');
         isTimelineOpen = false;
         timelineDrawer.classList.remove('open');
+        const mapControls = document.getElementById('map-controls');
+        mapControls.classList.remove('open');
 
         // 关闭信息窗口
         infoWindow.close();

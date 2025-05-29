@@ -189,6 +189,11 @@
     white-space: nowrap; /* 防止内容换行 */
 }
 
+.map-controls.open{
+    left: 25%;
+    transform: translateX(-25%);
+}
+
 .zoom-buttons {
     display: flex;
     align-items: center;
