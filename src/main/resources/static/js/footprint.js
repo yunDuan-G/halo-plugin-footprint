@@ -335,6 +335,43 @@ const config = {
     cols: 2 //每行显示数量
 };
 
+// 添加图片预加载和缓存
+const imageCache = new Map();
+const preloadImage = async (src) => {
+    if (imageCache.has(src)) {
+        return imageCache.get(src);
+    }
+
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            imageCache.set(src, img);
+            resolve(img);
+        };
+        img.onerror = reject;
+        img.src = src;
+    });
+};
+
+// 预加载所有卡片图片
+const preloadAllImages = async () => {
+    const cards = document.querySelectorAll('.timeline-card');
+    const preloadPromises = Array.from(cards).map(async (card) => {
+        const bgImage = card.style.backgroundImage;
+        if (bgImage) {
+            const src = bgImage.replace(/url\(['"](.+)['"]\)/, '$1');
+            try {
+                await preloadImage(src);
+                // 使用 will-change 提示浏览器优化渲染
+                card.style.willChange = 'transform, opacity';
+            } catch (error) {
+                console.warn('Failed to preload image:', src, error);
+            }
+        }
+    });
+    await Promise.all(preloadPromises);
+};
+
 //渲染抽屉中的时间线
 const populateTimeline = async (map) => {
     const timelineContainer = document.getElementById('timeline-container');
@@ -369,9 +406,18 @@ const populateTimeline = async (map) => {
 
             const card = document.createElement('div');
             card.className = 'timeline-card';
-            // card.style.backgroundImage = `url(${footprint.spec.image})`;
-            card.style.backgroundSize = 'cover';
-            card.style.backgroundPosition = 'center';
+            // 直接设置背景图片，但使用预加载机制
+            if (footprint.spec.image) {
+                const img = new Image();
+                img.onload = () => {
+                    card.style.backgroundImage = `url(${footprint.spec.image})`;
+                    card.style.backgroundSize = 'cover';
+                    card.style.backgroundPosition = 'center';
+                };
+                img.src = footprint.spec.image;
+            }
+            // 添加 will-change 属性
+            card.style.willChange = 'transform, opacity';
 
             const header = document.createElement('div');
             header.className = 'card-header';
@@ -630,6 +676,9 @@ const populateTimeline = async (map) => {
         });
         card.addEventListener('mouseleave', handleLeave);
     });
+
+    // 在创建完所有卡片后预加载图片
+    await preloadAllImages();
 };
 
 // 存储绑定的函数，方便解绑
@@ -928,8 +977,6 @@ function createInfoWindow(spec) {
         </div>
     `;
 }
-
-const imageCache = new Map();
 
 const getCachedImage = (src) => {
     if (!imageCache.has(src)) {
