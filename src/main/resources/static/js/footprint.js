@@ -43,28 +43,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // populateTimeline();
     /* ---------------------- */
 
-    // 预解码所有 marker-image 图片，减少动画时的解码卡顿
-    const decodeAllMarkerImages = () => {
-        document.querySelectorAll('.marker-image img').forEach(img => {
-            if (img.complete) {
-                if (img.decode) img.decode();
-            } else {
-                img.onload = () => {
-                    if (img.decode) img.decode();
-                };
-            }
-        });
-    };
-    // 初始解码一次
-    decodeAllMarkerImages();
-    // 如果后续有动态添加图片，可以在相关逻辑后再次调用 decodeAllMarkerImages()
+    window.FOOTPRINT_CONFIG.footprints.forEach(fp => {
+        if (fp.spec.image) {
+            const img = new Image();
+            img.src = fp.spec.image;
+        }
+    });
 });
 
 // 添加一个全局变量来跟踪当前激活的卡片
 let activeCard = null;
 
 //抛物线动画加载
-const loadParabolaAnimation = (card) => {
+const loadParabolaAnimation = (card, map) => {
     // 如果当前卡片不是激活的卡片，则不执行动画
     if (card !== activeCard) {
         return;
@@ -97,18 +88,12 @@ const loadParabolaAnimation = (card) => {
     const cardHeader = card.querySelector('.card-header');
     //获取cardHeader的元素内容
     const cardHeaderContent = cardHeader.textContent;
-    //获取class为marker-image下的img中alt为cardHeaderContent的元素
-    const markerImage = document.querySelector(`.marker-image img[alt="${cardHeaderContent}"]`);
 
-    if (!markerImage) {
-        console.warn('未找到对应的标记图片');
-        return;
-    }
-
-    // 获取所有相关的标记点
+    // 获取card对应的标记点
     const footprint = window.FOOTPRINT_CONFIG.footprints.find(
             f => f.spec.name === cardHeaderContent
     );
+    console.log(footprint)
 
     if (!footprint) {
         console.warn('未找到对应的足迹数据');
@@ -116,15 +101,20 @@ const loadParabolaAnimation = (card) => {
     }
 
     // 获取所有相关的标记点
-    const markerImages = [];
+    const mapCenter = [];
     if (footprint.spec.metadataNames) {
         const name = footprint.metadata.name;
 
         const metadataName = footprint.spec.metadataNames.includes(name);
         // 如果没有当前的标记点，手动添加
         if (!metadataName) {
-            console.log(123)
-            markerImages.push(markerImage);
+            const pixel = map.lngLatToContainer([footprint.spec.longitude, footprint.spec.latitude]); // 相对于地图容器的坐标
+            // 转换为屏幕XY坐标
+            const mapCenterXY = {
+                mapCenterX: pixel.x,
+                mapCenterY: pixel.y
+            }
+            mapCenter.push(mapCenterXY)
         }
         // 如果有 metadataNames，获取所有相关的标记点
         footprint.spec.metadataNames.forEach(metadataName => {
@@ -132,26 +122,33 @@ const loadParabolaAnimation = (card) => {
                     f => f.metadata.name === metadataName
             );
             if (relatedFootprint) {
-                const marker = document.querySelector(`.marker-image img[alt="${relatedFootprint.spec.name}"]`);
-                if (marker) {
-                    markerImages.push(marker);
+                const pixel = map.lngLatToContainer([relatedFootprint.spec.longitude, relatedFootprint.spec.latitude]); // 相对于地图容器的坐标
+                // 转换为屏幕XY坐标
+                const mapCenterXY = {
+                    mapCenterX: pixel.x,
+                    mapCenterY: pixel.y
                 }
+                // 如果没有 metadataNames，只使用当前标记点
+                mapCenter.push(mapCenterXY)
             }
         });
     } else {
+        const pixel = map.lngLatToContainer([footprint.spec.longitude, footprint.spec.latitude]); // 相对于地图容器的坐标
+        // 转换为屏幕XY坐标
+        const mapCenterXY = {
+            mapCenterX: pixel.x,
+            mapCenterY: pixel.y
+        }
         // 如果没有 metadataNames，只使用当前标记点
-        markerImages.push(markerImage);
+        mapCenter.push(mapCenterXY)
     }
+    console.log(mapCenter)
 
     // 为每个标记点创建动画
-    const animations = markerImages.map(marker => {
-        const mapRect = marker.getBoundingClientRect();
-        const mapCenterX = mapRect.left + mapRect.width / 2;
-        const mapCenterY = mapRect.top + mapRect.height / 2;
-
+    const animations = mapCenter.map(center => {
         // 起点和终点
         const startPoint = {x: cardCenterX, y: cardCenterY};
-        const endPoint = {x: mapCenterX, y: mapCenterY};
+        const endPoint = {x: center.mapCenterX, y: center.mapCenterY - 16};
 
         // 控制点，控制抛物线形状
         const controlPoint = {
@@ -372,7 +369,7 @@ const populateTimeline = async (map) => {
 
             const card = document.createElement('div');
             card.className = 'timeline-card';
-            card.style.backgroundImage = `url(${footprint.spec.image})`;
+            // card.style.backgroundImage = `url(${footprint.spec.image})`;
             card.style.backgroundSize = 'cover';
             card.style.backgroundPosition = 'center';
 
@@ -584,13 +581,13 @@ const populateTimeline = async (map) => {
                         await moveToLocation(map, newposition, byOverlays[0], 0);
                     } else {
                         // 如果缩放级别一致，直接加载抛物线
-                        loadParabolaAnimation(card);
+                        loadParabolaAnimation(card, map);
                     }
                 } else {
                     if (needsMovement) {
                         await moveToLocation(map, position2, zoom, 0);
                     } else {
-                        loadParabolaAnimation(card);
+                        loadParabolaAnimation(card, map);
                     }
                 }
             } catch (error) {
@@ -645,7 +642,7 @@ function zoomOn(map, card) {
     // 存储绑定的函数
     boundZoomStart = mapZoomstart.bind(null, card);
     boundZoom = mapZoom.bind(null, card);
-    boundZoomEnd = mapZoomend.bind(null, card);
+    boundZoomEnd = mapZoomend.bind(null, card, map);
 
     map.on('zoomstart', boundZoomStart);
     map.on('zoomchange', boundZoom);
@@ -672,10 +669,10 @@ function mapZoom() {
 }
 
 //缩放结束
-function mapZoomend(card) {
+function mapZoomend(card, map) {
     console.log("缩放结束");
     if (card != null) {
-        loadParabolaAnimation(card);
+        loadParabolaAnimation(card, map);
     }
 }
 
@@ -809,9 +806,8 @@ const createMarker = (spec) => {
 
     markerContent.innerHTML = `
         <div class="marker-image">
-            <img src="${compressedImageUrl}" 
+            <img src="${compressedImageUrl}"
                  alt="${spec.name || '足迹标记'}"
-                 loading="lazy"
                  decoding="async">
         </div>
     `;
@@ -918,7 +914,7 @@ function createInfoWindow(spec) {
     // 优化图片内容生成逻辑
     const imageContent = (() => {
         const cachedImage = image ? getCachedImage(escapeHtml(image)) : getCachedImage('https://www.lik.cc/upload/loading8.gif');
-        return `<img src="${cachedImage}" alt="${escapeHtml(name)}" loading="lazy" style="position: absolute; width: 100%; height: 100%; object-fit: cover;">`;
+        return `<img src="${cachedImage}" alt="${escapeHtml(name)}" loading="lazy" decoding="async" style="position: absolute; width: 100%; height: 100%; object-fit: cover;">`;
     })();
 
     return `
