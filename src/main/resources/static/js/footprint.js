@@ -1,13 +1,13 @@
 // 等待DOM加载完成
 document.addEventListener('DOMContentLoaded', () => {
     // 判断是否为移动端
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
     // 判断当前路径是否为/footprints
     const currentPath = window.location.pathname;
-    /*if (currentPath !== '/footprints') {
+    if (currentPath !== '/footprints') {
         console.log('非足迹页面，不加载地图功能');
         return;
-    }*/
+    }
 
 
     // 设置全局颜色变量
@@ -50,6 +50,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 // 添加一个全局变量来跟踪当前激活的卡片
 let activeCard = null;
@@ -332,7 +334,7 @@ let isTimelineOpen = false;
 
 // Configuration
 const config = {
-    cols: 2 //每行显示数量
+    cols: isMobile ? 1 : 2 //每行显示数量
 };
 
 // 添加图片预加载和缓存
@@ -429,6 +431,19 @@ const populateTimeline = async (map) => {
                 const footprint = window.FOOTPRINT_CONFIG.footprints.find(
                         f => f.spec.name === cardHeaderContent
                 );
+                if (isMobile) {
+                    isTimelineOpen = false;
+                    timelineDrawer.classList.remove('open');
+                    const mapControls = document.getElementById('map-controls');
+                    mapControls.classList.remove('open');
+
+                    // 卸载所有图片
+                    const cards = document.querySelectorAll('.timeline-card');
+                    cards.forEach(card => {
+                        card.style.backgroundImage = 'none';
+                        card.classList.add('loading');
+                    });
+                }
                 if (footprint) {
                     // 查找并触发对应的标记点点击事件
                     const marker = map.getAllOverlays().find(
@@ -496,8 +511,10 @@ const populateTimeline = async (map) => {
         timelineDrawer.classList.add('open');
         const mapControls = document.getElementById('map-controls');
         mapControls.classList.add('open');
-        const position = new AMap.LngLat(116.397428 + 20, 39.90923);
-        moveToLocation(map, position, 4, 0);
+        if (!isMobile) {
+            const position = new AMap.LngLat(116.397428 + 20, 39.90923);
+            moveToLocation(map, position, 4, 0);
+        }
 
         // 延迟加载图片
         setTimeout(() => {
@@ -506,7 +523,7 @@ const populateTimeline = async (map) => {
                 const cardHeader = card.querySelector('.card-header');
                 const cardHeaderContent = cardHeader.textContent;
                 const footprint = window.FOOTPRINT_CONFIG.footprints.find(
-                    f => f.spec.name === cardHeaderContent
+                        f => f.spec.name === cardHeaderContent
                 );
 
                 if (footprint && footprint.spec.image) {
@@ -556,6 +573,7 @@ const populateTimeline = async (map) => {
     // 为每个卡片绑定鼠标悬停事件
     const timelineCards = document.querySelectorAll('.timeline-card');
     timelineCards.forEach(card => {
+        if (isMobile) return; //手机端不添加悬停事件
         let debounceTimer;
         let isProcessing = false;
 
@@ -579,11 +597,11 @@ const populateTimeline = async (map) => {
                 const cardHeader = card.querySelector('.card-header');
                 const cardHeaderContent = cardHeader.textContent;
                 const footprint = window.FOOTPRINT_CONFIG.footprints.find(
-                    f => f.spec.name === cardHeaderContent
+                        f => f.spec.name === cardHeaderContent
                 );
                 const position2 = new AMap.LngLat(
-                    parseFloat(isTimelineOpen ? footprint.spec.longitude + offsetLng : footprint.spec.longitude),
-                    parseFloat(footprint.spec.latitude)
+                        parseFloat(isTimelineOpen ? footprint.spec.longitude + offsetLng : footprint.spec.longitude),
+                        parseFloat(footprint.spec.latitude)
                 );
 
                 const currentPos = map.getCenter();
@@ -596,20 +614,20 @@ const populateTimeline = async (map) => {
                     const name = footprint.metadata.name;
                     const metadataName = footprint.spec.metadataNames.includes(name);
                     const positions = metadataNames
-                        .map(metadataName => window.FOOTPRINT_CONFIG.footprints.find(
-                            f => f.metadata.name === metadataName
-                        ))
-                        .filter(Boolean);
+                            .map(metadataName => window.FOOTPRINT_CONFIG.footprints.find(
+                                    f => f.metadata.name === metadataName
+                            ))
+                            .filter(Boolean);
                     if (!metadataName) {
                         positions.push(footprint);
                     }
 
                     const allOverlays = map.getAllOverlays();
                     const newOverlays = positions
-                        .map(value => allOverlays.find(
-                            f => f._position.lng === value.spec.longitude && f._position.lat === value.spec.latitude
-                        ))
-                        .filter(Boolean);
+                            .map(value => allOverlays.find(
+                                    f => f._position.lng === value.spec.longitude && f._position.lat === value.spec.latitude
+                            ))
+                            .filter(Boolean);
 
                     const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [350, 120, 60, 680]);
                     const newposition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
@@ -997,13 +1015,7 @@ const addFootprintMarkers = async (map, footprintData) => {
 
     // 用于存储当前打开的标记
     let currentMarker = null;
-    let touchStartTime = 0;
-    let touchStartX = 0;
-    let touchStartY = 0;
-    const TOUCH_THRESHOLD = 10; // 触摸移动阈值
-    const TOUCH_TIME_THRESHOLD = 300; // 触摸时间阈值(ms)
     let isMapMoving = false;
-    let isTouchStart = false;
 
     // 用于跟踪当前触摸状态
     let isDragging = false;
@@ -1129,7 +1141,9 @@ const addFootprintMarkers = async (map, footprintData) => {
                     // 构建信息窗体内容
                     const content = createInfoWindow(footprint.spec);
 
-                    const position2 = new AMap.LngLat(isTimelineOpen ? longitude + offsetLng : longitude, latitude);
+                    //时间线抽屉打开时设置中心点偏右
+                    //
+                    const position2 = new AMap.LngLat(isTimelineOpen ? longitude + offsetLng : longitude, isTimelineOpen || isMobile ? latitude + 0.01 : latitude);
                     // 检查是否需要移动地图
                     const currentPos = map.getCenter();
                     const distance = position2.distance(currentPos);
@@ -1396,9 +1410,7 @@ const initializeApp = async (isMobile) => {
 
 
         // 只在非移动端显示界面元素
-        if (!isMobile) {
-            populateTimeline(map);
-        }
+        populateTimeline(map);
     } catch (error) {
         console.error('初始化地图时发生错误:', error);
     }

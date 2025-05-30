@@ -313,11 +313,6 @@
         font-size: 12px;
     }
 
-    #timeline-btn {
-        display: none !important;
-    }
-
-
 }
 
 /* 完全隐藏比例尺 */
@@ -1529,11 +1524,11 @@
     }
 
     #timeline-btn {
-        display: none !important; /* Hide the timeline button */
+        display: flex !important; /* Hide the timeline button */
     }
 
-    #timeline-drawer {
-        display: none !important; /* Prevent the timeline drawer from being visible */
+    #zoom-buttons {
+        display: none !important; /* Hide the timeline button */
     }
 }
 
