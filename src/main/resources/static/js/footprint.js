@@ -337,40 +337,6 @@ const config = {
 
 // 添加图片预加载和缓存
 const imageCache = new Map();
-const preloadImage = async (src) => {
-    if (imageCache.has(src)) {
-        return imageCache.get(src);
-    }
-
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-            imageCache.set(src, img);
-            resolve(img);
-        };
-        img.onerror = reject;
-        img.src = src;
-    });
-};
-
-// 预加载所有卡片图片
-const preloadAllImages = async () => {
-    const cards = document.querySelectorAll('.timeline-card');
-    const preloadPromises = Array.from(cards).map(async (card) => {
-        const bgImage = card.style.backgroundImage;
-        if (bgImage) {
-            const src = bgImage.replace(/url\(['"](.+)['"]\)/, '$1');
-            try {
-                await preloadImage(src);
-                // 使用 will-change 提示浏览器优化渲染
-                card.style.willChange = 'transform, opacity';
-            } catch (error) {
-                console.warn('Failed to preload image:', src, error);
-            }
-        }
-    });
-    await Promise.all(preloadPromises);
-};
 
 //渲染抽屉中的时间线
 const populateTimeline = async (map) => {
@@ -1421,29 +1387,6 @@ const initializeApp = async (isMobile) => {
 
         // 添加足迹标记
         addFootprintMarkers(map, window.FOOTPRINT_CONFIG.footprints);
-
-        // map.setFitView(null, false, [150, 60, 100, 60]);
-        /*const allOverlays = map.getAllOverlays();
-        console.log(allOverlays)
-        allOverlays.forEach(overlay => {
-            console.log(overlay._position)
-        })
-        const newOverlays = [];
-        const Overlay = allOverlays.find(
-            f => f._position.lng === 118.161927
-        );
-        const Overlay2 = allOverlays.find(
-            f => f._position.lng === 118.771818
-        );
-        newOverlays.push(Overlay);
-        newOverlays.push(Overlay2);
-        console.log(newOverlays);
-        const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [150, 60, 100, 60]);
-        console.log(byOverlays);
-        console.log(byOverlays[1]);
-        const position = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
-        await moveToLocation(map, position, byOverlays[0]);
-*/
 
         showElements();
         // 为所有控制按钮添加点击动画
