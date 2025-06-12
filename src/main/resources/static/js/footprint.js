@@ -4,10 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 判断当前路径是否为/footprints
     const currentPath = window.location.pathname;
-    if (currentPath !== '/footprints') {
+    /*if (currentPath !== '/footprints') {
         console.log('非足迹页面，不加载地图功能');
         return;
-    }
+    }*/
 
 
     // 设置全局颜色变量
@@ -104,7 +104,9 @@ const loadParabolaAnimation = (card, map) => {
 
     // 获取所有相关的标记点
     const mapCenter = [];
-    if (footprint.spec.metadataNames) {
+    if (footprint.spec.metadataNames
+            && footprint.spec.metadataNames.length > 0 &&
+            !(footprint.spec.metadataNames.length === 1 && footprint.spec.metadataNames.includes(footprint.metadata.name))) {
         const name = footprint.metadata.name;
 
         const metadataName = footprint.spec.metadataNames.includes(name);
@@ -610,7 +612,8 @@ const populateTimeline = async (map) => {
                 const needsMovement = distance > 1000 || currentZoom < 13;
 
                 const metadataNames = footprint.spec.metadataNames;
-                if (metadataNames) {
+                if (metadataNames && metadataNames.length > 0 &&
+                        !(metadataNames.length === 1 && metadataNames.includes(footprint.metadata.name))) {
                     const name = footprint.metadata.name;
                     const metadataName = footprint.spec.metadataNames.includes(name);
                     const positions = metadataNames
