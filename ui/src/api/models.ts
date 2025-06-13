@@ -61,6 +61,11 @@ export interface FootprintSpec {
   metadataNames?: [];
 
   /**
+   * 缩放级别 4-20
+   */
+  zoomLevel: string;
+
+  /**
    * 创建时间
    */
   createTime?: string;

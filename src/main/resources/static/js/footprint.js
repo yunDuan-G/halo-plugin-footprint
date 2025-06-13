@@ -642,6 +642,7 @@ const populateTimeline = async (map) => {
                     }
                 } else {
                     if (needsMovement) {
+                        console.log(123)
                         await moveToLocation(map, position2, zoom, 0);
                     } else {
                         loadParabolaAnimation(card, map);
@@ -712,6 +713,32 @@ function zoomOff(map) {
     map.off('zoomend', boundZoomEnd);
 }
 
+// 存储绑定的函数，方便解绑
+let boundZoomStart2, boundZoom2, boundZoomEnd2;
+
+//绑定事件
+function zoomOn2(map, card) {
+    console.log("绑定事件2!");
+
+    // 存储绑定的函数
+    boundZoomStart2 = mapZoomstart.bind(null, card);
+    boundZoom2 = mapZoom.bind(null, card);
+    boundZoomEnd2 = mapZoomend.bind(null, card, map);
+
+    map.on('zoomstart', boundZoomStart2);
+    map.on('zoomchange', boundZoom2);
+    map.on('zoomend', boundZoomEnd2);
+}
+
+function zoomOff2(map) {
+    console.log("解除事件绑定2!");
+
+    // 使用存储的函数引用解绑
+    map.off('zoomstart', boundZoomStart2);
+    map.off('zoomchange', boundZoom2);
+    map.off('zoomend', boundZoomEnd2);
+}
+
 //地图开始缩放
 function mapZoomstart() {
     console.log("缩放开始");
@@ -727,7 +754,31 @@ function mapZoomend(card, map) {
     console.log("缩放结束");
     if (card != null) {
         loadParabolaAnimation(card, map);
+    } else {
+        zoomOff2(map);
+        calculateTheNewCenterPoint(map);
     }
+}
+
+const calculateTheNewCenterPoint = (map) => {
+    if (!isTimelineOpen) {
+        return;
+    }
+
+    const drawer = document.getElementById("timeline-drawer");
+    const drawerWidth = drawer.getBoundingClientRect().width;
+
+    // 1. 计算抽屉左边到窗口左边的距离
+    const availableWidth = window.innerWidth - drawerWidth;
+
+    // 2. 计算新的中心点（相对于窗口左侧）
+    const newCenterX = availableWidth / 2;
+
+    // 3. 计算原始中心点到新中心点的距离
+    const number = (window.innerWidth / 2) - newCenterX;
+
+    // 移动
+    map.panBy(-number, (window.innerHeight / 4) - 60)
 }
 
 // 优化动画性能
@@ -822,7 +873,7 @@ const moveToLocation = (map, position, Zoom, time) => {
 
         //防止缩放级别相同时，不执行抛物线问题
         const currentZoom = map.getZoom();
-        if (currentZoom == Zoom) {
+        if (currentZoom === Zoom) {
             map.setZoom(Zoom + 1);
         }
 
@@ -1144,20 +1195,24 @@ const addFootprintMarkers = async (map, footprintData) => {
                     // 构建信息窗体内容
                     const content = createInfoWindow(footprint.spec);
 
+                    const zoomLevel = footprint.spec.zoomLevel;
                     //时间线抽屉打开时设置中心点偏右
                     //
-                    const position2 = new AMap.LngLat(isTimelineOpen ? longitude + offsetLng : longitude, isTimelineOpen || isMobile ? latitude + 0.01 : latitude);
+                    const position2 = new AMap.LngLat(longitude, latitude);
                     // 检查是否需要移动地图
                     const currentPos = map.getCenter();
                     const distance = position2.distance(currentPos);
                     const currentZoom = map.getZoom();
 
-                    // 如果距离超过1公里或缩放级别不够，需要移动地图
-                    const needsMovement = distance > 1000 || currentZoom < 13;
+                    // 如果距离超过3公里或缩放级别不够，需要移动地图
+                    const needsMovement = distance > 3000 || currentZoom != zoomLevel;
 
                     if (needsMovement) {
-                        await moveToLocation(map, position2, 14, 500);
+                        console.log(123)
+                        zoomOn2(map, null);
+                        await moveToLocation(map, position2, zoomLevel, 500);
                     }
+                    console.log(456)
                     openInfoWindow(position, content);
                     currentMarker = marker;
                 };

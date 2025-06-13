@@ -8,6 +8,7 @@ import {FormKit} from "@formkit/vue";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import {Teleport} from "vue";
 
+
 const props = withDefaults(
   defineProps<{
     visible: boolean;
@@ -40,6 +41,7 @@ const initialFormState: Footprint = {
     footprintType: "旅游",
     image: "",
     article: "",
+    zoomLevel: "14",
     createTime: new Date().toISOString(),
   },
   kind: "Footprint",
@@ -381,6 +383,22 @@ onMounted(async () => {
             name="address"
             label="地址"
             help="建议地址格式：市+地址，如杭州市灵隐寺,系统会根据所填写地址获取经纬度"
+          ></FormKit>
+
+          <FormKit
+            v-model="formState.spec.zoomLevel"
+            type="number"
+            name="zoomLevel"
+            label="缩放级别"
+            validation="required|between:4,20"
+            :validation-messages="{
+              required: '缩放级别不能为空',
+              between: '缩放级别必须在4到20之间'
+            }"
+            help="信息卡的放大级别，数值范围：4-20（支持两位小数）"
+            min="4"
+            max="20"
+            step="0.01"  
           ></FormKit>
 
           <FormKit

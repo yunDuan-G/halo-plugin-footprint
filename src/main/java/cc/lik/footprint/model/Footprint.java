@@ -60,6 +60,12 @@ public class Footprint extends AbstractExtension {
         private String address;
 
         /**
+         * 缩放级别
+         */
+        @Schema(description = "缩放级别")
+        private String zoomLevel;
+
+        /**
          * 足迹类型
          */
         @Schema(description = "足迹类型")
