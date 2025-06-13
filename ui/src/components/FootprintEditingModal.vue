@@ -115,6 +115,7 @@ const isFormValid = computed(() => {
   // 检查必填项
   if (!formState.value.spec.name?.trim()) return false;
   if (!formState.value.spec.description?.trim()) return false;
+  if (!formState.value.spec.zoomLevel?.trim()) return false;
   return formState.value.spec.address?.trim();
 });
 
@@ -135,12 +136,22 @@ const handleSubmit = async () => {
         Toast.error("地址不能为空");
         return;
       }
+      if (!formState.value.spec.zoomLevel?.trim()) {
+        Toast.error("缩放级别不能为空");
+        return;
+      }
       if (!createTime.value) {
         Toast.error("请选择创建时间");
         return;
       }
 
       Toast.error("请检查表单填写是否正确");
+      return;
+    }
+
+    const zoomLevel = formState.value.spec.zoomLevel;
+    if (parseFloat(zoomLevel) < 4 || parseFloat(zoomLevel) > 20) {
+      Toast.error("缩放级别必须在4-20之间");
       return;
     }
 
@@ -390,7 +401,8 @@ onMounted(async () => {
             type="number"
             name="zoomLevel"
             label="缩放级别"
-            validation="required|between:4,20"
+            validation="required|number|between:4,20"
+            validation-visibility="live"
             :validation-messages="{
               required: '缩放级别不能为空',
               between: '缩放级别必须在4到20之间'
@@ -398,7 +410,7 @@ onMounted(async () => {
             help="信息卡的放大级别，数值范围：4-20（支持两位小数）"
             min="4"
             max="20"
-            step="0.01"  
+            step="0.01"
           ></FormKit>
 
           <FormKit
