@@ -894,11 +894,6 @@
     z-index: 2; /* 确保 footprint-container 是 above */
 }
 
-#footprint-map {
-    width: 100%;
-    height: 100%;
-}
-
 /* Logo和描述 */
 .logo-container {
     position: fixed;

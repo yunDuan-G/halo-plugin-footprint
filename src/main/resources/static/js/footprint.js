@@ -152,7 +152,7 @@ const loadParabolaAnimation = (card, map) => {
     const animations = mapCenter.map(center => {
         // 起点和终点
         const startPoint = {x: cardCenterX, y: cardCenterY};
-        const endPoint = {x: center.mapCenterX, y: center.mapCenterY - 16};
+        const endPoint = {x: center.mapCenterX, y: center.mapCenterY - 46};
 
         // 控制点，控制抛物线形状
         const controlPoint = {
@@ -334,6 +334,9 @@ const offsetLng = 0.025;
 //是否打开时间线
 let isTimelineOpen = false;
 
+//是否打开仰角和旋转
+let isElevation = false;
+
 // Configuration
 const config = {
     cols: isMobile ? 1 : 2 //每行显示数量
@@ -509,14 +512,22 @@ const populateTimeline = async (map) => {
 
     // 打开抽屉
     timelineBtn.addEventListener('click', () => {
+        const footprintMap = document.getElementById('footprint-map');
+        const number = window.innerWidth - 650;
+        footprintMap.style.width = number + "px";
+        //还原仰角和旋转
+        if (isElevation) {
+            map.setPitch(0);
+            map.setRotation(0);
+        }
         isTimelineOpen = true;
         timelineDrawer.classList.add('open');
         const mapControls = document.getElementById('map-controls');
         mapControls.classList.add('open');
-        if (!isMobile) {
+        /*if (!isMobile) {
             const position = new AMap.LngLat(116.397428 + 20, 39.90923);
             moveToLocation(map, position, 4, 0);
-        }
+        }*/
 
         // 延迟加载图片
         setTimeout(() => {
@@ -581,6 +592,12 @@ const populateTimeline = async (map) => {
 
         const handleEnter = async () => {
             if (isProcessing) return;
+            //还原仰角和旋转
+            if (isElevation) {
+                map.setPitch(0);
+                map.setRotation(0);
+            }
+            isElevation = false;
             try {
                 isProcessing = true;
                 activeCard = card;
@@ -760,6 +777,7 @@ function mapZoomend(card, map) {
     }
 }
 
+// 计算打开抽屉后，中间点的偏移像素
 const calculateTheNewCenterPoint = (map) => {
     if (!isTimelineOpen) {
         return;
@@ -778,7 +796,7 @@ const calculateTheNewCenterPoint = (map) => {
     const number = (window.innerWidth / 2) - newCenterX;
 
     // 移动
-    map.panBy(-number, (window.innerHeight / 4) - 60)
+    map.panBy(-number + 60, (window.innerHeight / 4) - 80);
 }
 
 // 优化动画性能
@@ -1064,7 +1082,7 @@ const addFootprintMarkers = async (map, footprintData) => {
     let infoWindow = new AMap.InfoWindow({
         isCustom: true,
         autoMove: false,
-        offset: new AMap.Pixel(0, -10)
+        offset: new AMap.Pixel(0, -40)
     });
 
     // 用于存储当前打开的标记
@@ -1104,6 +1122,13 @@ const addFootprintMarkers = async (map, footprintData) => {
         if (currentMarker) {
             infoWindow.close();
             currentMarker = null;
+            //还原仰角和旋转
+            if (isElevation) {
+                console.log(11111111111)
+                map.setPitch(0);
+                map.setRotation(0);
+                // map.panBy(-60, (window.innerHeight / 4) + 260);
+            }
         }
     };
 
@@ -1174,7 +1199,7 @@ const addFootprintMarkers = async (map, footprintData) => {
                     position: position,
                     content: createMarker(footprint.spec),
                     anchor: 'bottom-center',
-                    offset: new AMap.Pixel(0, 0),
+                    offset: new AMap.Pixel(0, -30),
                     extData: footprint.spec // 存储额外数据
                 });
 
@@ -1195,7 +1220,7 @@ const addFootprintMarkers = async (map, footprintData) => {
                     // 构建信息窗体内容
                     const content = createInfoWindow(footprint.spec);
 
-                    const zoomLevel = footprint.spec.zoomLevel;
+                    const zoomLevel = Number(footprint.spec.zoomLevel);
                     //时间线抽屉打开时设置中心点偏右
                     //
                     const position2 = new AMap.LngLat(longitude, latitude);
@@ -1205,16 +1230,20 @@ const addFootprintMarkers = async (map, footprintData) => {
                     const currentZoom = map.getZoom();
 
                     // 如果距离超过3公里或缩放级别不够，需要移动地图
-                    const needsMovement = distance > 3000 || currentZoom != zoomLevel;
+                    const needsMovement = distance > 3000 || currentZoom !== zoomLevel;
 
                     if (needsMovement) {
-                        console.log(123)
+                        zoomOff2(map);
                         zoomOn2(map, null);
                         await moveToLocation(map, position2, zoomLevel, 500);
                     }
-                    console.log(456)
                     openInfoWindow(position, content);
                     currentMarker = marker;
+                    if (zoomLevel > 19) {
+                        map.setPitch(45);
+                        map.setRotation(-100);
+                        isElevation = true;
+                    }
                 };
 
 
@@ -1318,6 +1347,11 @@ const addFootprintMarkers = async (map, footprintData) => {
 
         // 关闭信息窗口
         infoWindow.close();
+        //还原仰角和旋转
+        if (isElevation) {
+            map.setPitch(0);
+            map.setRotation(0);
+        }
         currentMarker = null;
         const position = new AMap.LngLat(116.397428, 39.90923);
         moveToLocation(map, position, 4, 0);
@@ -1428,9 +1462,10 @@ const initializeApp = async (isMobile) => {
         const map = new AMap.Map('footprint-map', {
             zoom: 4,
             center: [116.397428, 39.90923],
+            zooms: [2, 26],
             mapStyle: 'amap://styles/light',
             // mapStyle: window.FOOTPRINT_CONFIG.mapStyle || 'amap://styles/normal',
-            viewMode: isMobile ? '2D' : '2D',
+            viewMode: isMobile ? '2D' : '3D',
             pitch: 0,
             features: isMobile ? ['bg', 'road', 'point'] : ['bg', 'road', 'building', 'point'],
             showBuildingBlock: !isMobile, // 移动端不显示建筑物
