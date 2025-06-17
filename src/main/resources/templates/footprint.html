@@ -10,124 +10,16 @@
             securityJsCode: /*[[${settings.gaoDeKey}]]*/''
         }
     </script>
-<!--    <script type="text/javascript" th:src="|https://webapi.amap.com/maps?v=2.0&key=${settings.gaoDeKey}|"></script>-->
-    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=9618e4f2ebbbcbac8cdae50c795901d1"></script>
+    <script type="text/javascript" th:src="|https://webapi.amap.com/maps?v=2.0&key=${settings.gaoDeKey}|"></script>
     <!-- 引入jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-    <link rel="stylesheet" href="../static/css/footprint.css" type="text/css">
-    <script type="text/javascript" src="../static/js/footprint.js"></script>
 
     <!-- 注入配置信息 -->
     <script th:inline="javascript">
         window.FOOTPRINT_CONFIG = {
             amapKey: /*[[${settings.gaoDeKey}]]*/ '',
-            footprints: /*[[${footprints}]]*/ [
-                {
-                    "spec": {
-                        "name": "五一执行---西湖",
-                        "description": "1",
-                        "longitude": 120.158108,
-                        "latitude": 30.241651,
-                        "address": "杭州市杭州西湖风景名胜区",
-                        "zoomLevel": "14",
-                        "footprintType": "旅游",
-                        "image": "",
-                        "article": "",
-                        "metadataNames": [
-                            "footprint-UKsBR",
-                            "footprint-sgvor",
-                            "footprint-ZwdpC"
-                        ],
-                        "createTime": "2025-05-03T00:37:00Z"
-                    },
-                    "apiVersion": "footprint.lik.cc/v1alpha1",
-                    "kind": "Footprint",
-                    "metadata": {
-                        "generateName": "footprint-",
-                        "name": "footprint-UKsBR",
-                        "version": 7,
-                        "creationTimestamp": "2025-05-07T00:39:55.867684861Z"
-                    }
-                },
-                {
-                    "spec": {
-                        "name": "五一之行---武功山",
-                        "description": "武功山的四季永远有少年",
-                        "longitude": 114.17542,
-                        "latitude": 27.467943,
-                        "address": "萍乡武功山国家级风景名胜区",
-                        "zoomLevel": "14",
-                        "footprintType": "旅游",
-                        "image": "http://tc.yunduan019.com/2025/04/07/IMG_4966.jpg!w100",
-                        "article": "",
-                        "metadataNames": [
-                            "footprint-UKsBR",
-                            "footprint-sgvor"
-                        ],
-                        "createTime": "2025-05-01T15:40:00Z"
-                    },
-                    "apiVersion": "footprint.lik.cc/v1alpha1",
-                    "kind": "Footprint",
-                    "metadata": {
-                        "generateName": "footprint-",
-                        "name": "footprint-sgvor",
-                        "version": 3,
-                        "creationTimestamp": "2025-05-06T11:42:16.927514623Z"
-                    }
-                },
-                {
-                    "spec": {
-                        "name": "黄山",
-                        "description": "“登黄山，天下无山，观止矣 ”",
-                        "longitude": 118.161927,
-                        "latitude": 30.138115,
-                        "address": "黄山市黄山风景区",
-                        "zoomLevel": "14",
-                        "footprintType": "旅游",
-                        "image": "http://tc.yunduan019.com/2025/04/07/IMG_4854.jpg!w100",
-                        "article": "/archives/huang-shan-zhi-xing",
-                        "metadataNames": [
-                            "footprint-ZwdpC",
-                            "footprint-fdCKV"
-                        ],
-                        "createTime": "2025-04-04T22:52:00Z"
-                    },
-                    "apiVersion": "footprint.lik.cc/v1alpha1",
-                    "kind": "Footprint",
-                    "metadata": {
-                        "generateName": "footprint-",
-                        "name": "footprint-ZwdpC",
-                        "version": 11,
-                        "creationTimestamp": "2025-04-24T05:50:25.688090118Z"
-                    }
-                },
-                {
-                    "spec": {
-                        "name": "莫愁路",
-                        "description": "“听说南京有一条莫愁路，后来，我一个人去了”",
-                        "longitude": 118.771818,
-                        "latitude": 32.029528,
-                        "address": "南京市莫愁咖啡·花植·空间",
-                        "zoomLevel": "20",
-                        "footprintType": "旅游",
-                        "image": "http://tc.yunduan019.com/2025/04/07/IMG_20250404_100123.jpg!w100",
-                        "article": "",
-                        "metadataNames": [
-                            "footprint-fdCKV"
-                        ],
-                        "createTime": "2025-04-04T08:03:00Z"
-                    },
-                    "apiVersion": "footprint.lik.cc/v1alpha1",
-                    "kind": "Footprint",
-                    "metadata": {
-                        "generateName": "footprint-",
-                        "name": "footprint-fdCKV",
-                        "version": 7,
-                        "creationTimestamp": "2025-04-24T17:05:14.668842563Z"
-                    }
-                }
-            ],
+            footprints: /*[[${footprints}]]*/ [],
             title: /*[[${settings.title}]]*/ '足迹',
             logoName: /*[[${settings.logoName}]]*/ '足迹',
             describe: /*[[${settings.describe}]]*/ '描述',

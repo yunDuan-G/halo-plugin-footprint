@@ -42,6 +42,8 @@ const initialFormState: Footprint = {
     image: "",
     article: "",
     zoomLevel: "14",
+    pitchAngle: "0",
+    rotationAngle: "0",
     createTime: new Date().toISOString(),
   },
   kind: "Footprint",
@@ -106,6 +108,12 @@ watch(
   },
 );
 
+// 添加一个计算属性来控制pitchAngle的显示
+const showPitchAngle = computed(() => {
+  const zoomLevel = parseFloat(formState.value.spec.zoomLevel || '0')
+  return zoomLevel >= 19
+})
+
 const validationMessages = {
   required: (ctx: { name: string }) => `${ctx.name}不能为空`,
 } as const;
@@ -116,6 +124,12 @@ const isFormValid = computed(() => {
   if (!formState.value.spec.name?.trim()) return false;
   if (!formState.value.spec.description?.trim()) return false;
   if (!formState.value.spec.zoomLevel?.trim()) return false;
+  if (!formState.value.spec.pitchAngle?.trim()) {
+    formState.value.spec.pitchAngle = "0";
+  }
+  if (!formState.value.spec.rotationAngle?.trim()) {
+    formState.value.spec.rotationAngle = "0";
+  }
   return formState.value.spec.address?.trim();
 });
 
@@ -140,6 +154,14 @@ const handleSubmit = async () => {
         Toast.error("缩放级别不能为空");
         return;
       }
+      if (!formState.value.spec.pitchAngle?.trim()) {
+        Toast.error("俯仰角度不能为空");
+        return;
+      }
+      if (!formState.value.spec.rotationAngle?.trim()) {
+        Toast.error("旋转角度不能为空");
+        return;
+      }
       if (!createTime.value) {
         Toast.error("请选择创建时间");
         return;
@@ -150,8 +172,20 @@ const handleSubmit = async () => {
     }
 
     const zoomLevel = formState.value.spec.zoomLevel;
-    if (parseFloat(zoomLevel) < 4 || parseFloat(zoomLevel) > 20) {
+    if (parseFloat(zoomLevel) < 4 || parseFloat(zoomLevel) > 26) {
       Toast.error("缩放级别必须在4-20之间");
+      return;
+    }
+
+    const pitchAngle = formState.value.spec.pitchAngle;
+    if (parseFloat(pitchAngle) < 0 || parseFloat(pitchAngle) > 83) {
+      Toast.error("俯仰角度必须在0-83之间");
+      return;
+    }
+
+    const rotationAngle = formState.value.spec.rotationAngle;
+    if (parseFloat(rotationAngle) < -360 || parseFloat(rotationAngle) > 360) {
+      Toast.error("旋转角度必须在-360到360之间");
       return;
     }
 
@@ -401,16 +435,52 @@ onMounted(async () => {
             type="number"
             name="zoomLevel"
             label="缩放级别"
-            validation="required|number|between:4,20"
+            validation="required|number|between:4,26"
             validation-visibility="live"
             :validation-messages="{
               required: '缩放级别不能为空',
-              between: '缩放级别必须在4到20之间'
+              between: '缩放级别必须在4到26之间'
             }"
-            help="信息卡的放大级别，数值范围：4-20（支持两位小数）"
+            help="标记的放大级别，数值范围：4-26（支持两位小数），大于19时，可开启3D效果"
             min="4"
-            max="20"
+            max="26"
             step="0.01"
+          ></FormKit>
+
+          <FormKit
+            v-if="showPitchAngle"
+            v-model="formState.spec.pitchAngle"
+            type="number"
+            name="pitchAngle"
+            label="3D俯仰角度"
+            validation="required|number|between:0,83"
+            validation-visibility="live"
+            :validation-messages="{
+              required: '俯仰角不能为空',
+              between: '俯仰角必须在0到83之间'
+            }"
+            help="3D俯仰角度，数值范围：0-83"
+            min="0"
+            max="90"
+            step="1"
+          ></FormKit>
+
+          <FormKit
+            v-if="showPitchAngle"
+            v-model="formState.spec.rotationAngle"
+            type="number"
+            name="rotationAngle"
+            label="3D旋转角度"
+            validation="required|number|between:-360,360"
+            validation-visibility="live"
+            :validation-messages="{
+              required: '旋转角度不能为空',
+              between: '旋转角度必须在-360到360之间'
+            }"
+            help="3D旋转角度，数值范围：-360到360"
+            min="-360"
+            max="360"
+            step="1"
           ></FormKit>
 
           <FormKit

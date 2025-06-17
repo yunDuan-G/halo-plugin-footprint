@@ -4,10 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 判断当前路径是否为/footprints
     const currentPath = window.location.pathname;
-    /*if (currentPath !== '/footprints') {
+    if (currentPath !== '/footprints') {
         console.log('非足迹页面，不加载地图功能');
         return;
-    }*/
+    }
 
 
     // 设置全局颜色变量
@@ -37,24 +37,37 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     checkAMap();
 
-
-    /* ---------------------- */
-    // 初始化右侧时间线抽屉
-    // populateTimeline();
-    /* ---------------------- */
-
-    window.FOOTPRINT_CONFIG.footprints.forEach(fp => {
-        if (fp.spec.image) {
-            const img = new Image();
-            img.src = fp.spec.image;
-        }
-    });
+    // 添加事件监听（注意在组件卸载时移除）
+    window.addEventListener('resize', handleResize);
 });
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 // 添加一个全局变量来跟踪当前激活的卡片
 let activeCard = null;
+
+// 使用防抖优化resize事件
+const handleResize = () => {
+    const mapContainer = document.getElementById('footprint-map');
+    const timelineDrawer = document.getElementById('timeline-drawer');
+
+    if (!mapContainer || !timelineDrawer) return;
+
+    if (isTimelineOpen) {
+        // 抽屉打开时的计算逻辑
+        const drawerRect = timelineDrawer.getBoundingClientRect();
+        const newMapWidth = window.innerWidth - drawerRect.width;
+
+        // 应用新宽度（添加CSS过渡效果）
+        mapContainer.style.transition = 'width 0.3s ease';
+        mapContainer.style.width = `${newMapWidth}px`;
+
+    } else {
+        // 全屏模式
+        mapContainer.style.transition = 'width 0.3s ease';
+        mapContainer.style.width = '100%';
+    }
+};
 
 //抛物线动画加载
 const loadParabolaAnimation = (card, map) => {
@@ -95,7 +108,6 @@ const loadParabolaAnimation = (card, map) => {
     const footprint = window.FOOTPRINT_CONFIG.footprints.find(
             f => f.spec.name === cardHeaderContent
     );
-    console.log(footprint)
 
     if (!footprint) {
         console.warn('未找到对应的足迹数据');
@@ -146,13 +158,12 @@ const loadParabolaAnimation = (card, map) => {
         // 如果没有 metadataNames，只使用当前标记点
         mapCenter.push(mapCenterXY)
     }
-    console.log(mapCenter)
 
     // 为每个标记点创建动画
     const animations = mapCenter.map(center => {
         // 起点和终点
         const startPoint = {x: cardCenterX, y: cardCenterY};
-        const endPoint = {x: center.mapCenterX, y: center.mapCenterY - 46};
+        const endPoint = {x: center.mapCenterX, y: center.mapCenterY - 36};
 
         // 控制点，控制抛物线形状
         const controlPoint = {
@@ -325,11 +336,6 @@ const loadParabolaAnimation = (card, map) => {
     const handleLeave = debounce(cleanup, 100);
     card.addEventListener('mouseleave', handleLeave);
 };
-
-const position = null;
-
-//标记点偏移量
-const offsetLng = 0.025;
 
 //是否打开时间线
 let isTimelineOpen = false;
@@ -513,7 +519,9 @@ const populateTimeline = async (map) => {
     // 打开抽屉
     timelineBtn.addEventListener('click', () => {
         const footprintMap = document.getElementById('footprint-map');
-        const number = window.innerWidth - 650;
+        const timelineDrawer = document.getElementById('timeline-drawer');
+        const drawerRect = timelineDrawer.getBoundingClientRect();
+        const number = window.innerWidth - drawerRect.width;
         footprintMap.style.width = number + "px";
         //还原仰角和旋转
         if (isElevation) {
@@ -570,6 +578,10 @@ const populateTimeline = async (map) => {
 
     // 合上抽屉
     closeDrawerBtn.addEventListener('click', () => {
+        //还原地图宽度
+        const footprintMap = document.getElementById('footprint-map');
+        footprintMap.style.width = window.innerWidth + "px";
+
         isTimelineOpen = false;
         timelineDrawer.classList.remove('open');
         const mapControls = document.getElementById('map-controls');
@@ -619,7 +631,7 @@ const populateTimeline = async (map) => {
                         f => f.spec.name === cardHeaderContent
                 );
                 const position2 = new AMap.LngLat(
-                        parseFloat(isTimelineOpen ? footprint.spec.longitude + offsetLng : footprint.spec.longitude),
+                        parseFloat(footprint.spec.longitude),
                         parseFloat(footprint.spec.latitude)
                 );
 
@@ -649,7 +661,7 @@ const populateTimeline = async (map) => {
                             ))
                             .filter(Boolean);
 
-                    const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [350, 120, 60, 680]);
+                    const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [350, 120, 120, 120]);
                     const newposition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
 
                     if (!byOverlays[0].toString().startsWith(currentZoom)) {
@@ -659,7 +671,6 @@ const populateTimeline = async (map) => {
                     }
                 } else {
                     if (needsMovement) {
-                        console.log(123)
                         await moveToLocation(map, position2, zoom, 0);
                     } else {
                         loadParabolaAnimation(card, map);
@@ -773,7 +784,7 @@ function mapZoomend(card, map) {
         loadParabolaAnimation(card, map);
     } else {
         zoomOff2(map);
-        calculateTheNewCenterPoint(map);
+        // calculateTheNewCenterPoint(map);
     }
 }
 
@@ -1062,17 +1073,18 @@ const getCachedImage = (src) => {
 };
 
 // 优化防抖函数，添加立即执行选项
-const debounce = (func, wait, immediate = false) => {
+// 优化后的防抖函数（支持立即执行）
+const debounce = (func, wait = 100, immediate = false) => {
     let timeout;
-    return function executedFunction(...args) {
+    return function (...args) {
         const later = () => {
-            clearTimeout(timeout);
-            if (!immediate) func(...args);
+            timeout = null;
+            if (!immediate) func.apply(this, args);
         };
         const callNow = immediate && !timeout;
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
-        if (callNow) func(...args);
+        if (callNow) func.apply(this, args);
     };
 };
 
@@ -1124,10 +1136,8 @@ const addFootprintMarkers = async (map, footprintData) => {
             currentMarker = null;
             //还原仰角和旋转
             if (isElevation) {
-                console.log(11111111111)
                 map.setPitch(0);
                 map.setRotation(0);
-                // map.panBy(-60, (window.innerHeight / 4) + 260);
             }
         }
     };
@@ -1199,7 +1209,7 @@ const addFootprintMarkers = async (map, footprintData) => {
                     position: position,
                     content: createMarker(footprint.spec),
                     anchor: 'bottom-center',
-                    offset: new AMap.Pixel(0, -30),
+                    offset: new AMap.Pixel(0, -15),
                     extData: footprint.spec // 存储额外数据
                 });
 
@@ -1240,8 +1250,8 @@ const addFootprintMarkers = async (map, footprintData) => {
                     openInfoWindow(position, content);
                     currentMarker = marker;
                     if (zoomLevel > 19) {
-                        map.setPitch(45);
-                        map.setRotation(-100);
+                        map.setPitch(Number(footprint.spec.pitchAngle));
+                        map.setRotation(Number(footprint.spec.rotationAngle));
                         isElevation = true;
                     }
                 };
@@ -1339,6 +1349,8 @@ const addFootprintMarkers = async (map, footprintData) => {
     });
 
     document.getElementById('zoom-restore').addEventListener('click', () => {
+        const footprintMap = document.getElementById('footprint-map');
+        footprintMap.style.width = window.innerWidth + "px";
         const timelineDrawer = document.getElementById('timeline-drawer');
         isTimelineOpen = false;
         timelineDrawer.classList.remove('open');
@@ -1465,12 +1477,12 @@ const initializeApp = async (isMobile) => {
             zooms: [2, 26],
             mapStyle: 'amap://styles/light',
             // mapStyle: window.FOOTPRINT_CONFIG.mapStyle || 'amap://styles/normal',
-            viewMode: isMobile ? '2D' : '3D',
+            viewMode: '3D',
             pitch: 0,
-            features: isMobile ? ['bg', 'road', 'point'] : ['bg', 'road', 'building', 'point'],
-            showBuildingBlock: !isMobile, // 移动端不显示建筑物
-            optimize: true, // 开启优化模式
-            resizeEnable: true     // 启用自动适应容器尺寸
+            terrain: true, // 开启地形图
+            features: ['bg', 'road', 'building', 'point'],
+            // optimize: true, // 开启优化模式
+            // resizeEnable: true     // 启用自动适应容器尺寸
         });
 
         // 等待地图加载完成

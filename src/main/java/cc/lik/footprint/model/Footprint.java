@@ -17,10 +17,10 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
 @GVK(group = "footprint.lik.cc",
-     version = "v1alpha1",
-     kind = "Footprint",
-     plural = "footprints",
-     singular = "footprint")
+    version = "v1alpha1",
+    kind = "Footprint",
+    plural = "footprints",
+    singular = "footprint")
 public class Footprint extends AbstractExtension {
 
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
@@ -44,13 +44,15 @@ public class Footprint extends AbstractExtension {
         /**
          * 经度
          */
-        @Schema(description = "经度", requiredMode = Schema.RequiredMode.REQUIRED, minimum = "-180", maximum = "180")
+        @Schema(description = "经度", requiredMode = Schema.RequiredMode.REQUIRED, minimum = "-180"
+            , maximum = "180")
         private Double longitude;
 
         /**
          * 纬度
          */
-        @Schema(description = "纬度", requiredMode = Schema.RequiredMode.REQUIRED, minimum = "-90", maximum = "90")
+        @Schema(description = "纬度", requiredMode = Schema.RequiredMode.REQUIRED, minimum = "-90",
+            maximum = "90")
         private Double latitude;
 
         /**
@@ -64,6 +66,19 @@ public class Footprint extends AbstractExtension {
          */
         @Schema(description = "缩放级别")
         private String zoomLevel;
+
+        /**
+         * 俯仰角度 0-83
+         * 3D地图启用
+         */
+        @Schema(description = "俯仰角度")
+        private String pitchAngle;
+
+        /**
+         * 旋转角度  -360到360
+         * 3D地图俯启用
+         */
+        private String rotationAngle;
 
         /**
          * 足迹类型

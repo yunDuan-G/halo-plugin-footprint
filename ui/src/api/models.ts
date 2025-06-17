@@ -61,9 +61,21 @@ export interface FootprintSpec {
   metadataNames?: [];
 
   /**
-   * 缩放级别 4-20
+   * 缩放级别 4-26
    */
   zoomLevel: string;
+
+  /**
+   * 俯仰角度 0-83
+   * 3D地图启用 
+   */
+  pitchAngle: string;
+
+  /**
+   * 旋转角度  -360到360
+   * 3D地图俯启用
+   */
+  rotationAngle: string;
 
   /**
    * 创建时间
