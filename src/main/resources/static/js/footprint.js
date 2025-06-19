@@ -4,10 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 判断当前路径是否为/footprints
     const currentPath = window.location.pathname;
-    if (currentPath !== '/footprints') {
+    /*if (currentPath !== '/footprints') {
         console.log('非足迹页面，不加载地图功能');
         return;
-    }
+    }*/
 
 
     // 设置全局颜色变量
@@ -45,29 +45,6 @@ const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 // 添加一个全局变量来跟踪当前激活的卡片
 let activeCard = null;
-
-// 使用防抖优化resize事件
-const handleResize = () => {
-    const mapContainer = document.getElementById('footprint-map');
-    const timelineDrawer = document.getElementById('timeline-drawer');
-
-    if (!mapContainer || !timelineDrawer) return;
-
-    if (isTimelineOpen) {
-        // 抽屉打开时的计算逻辑
-        const drawerRect = timelineDrawer.getBoundingClientRect();
-        const newMapWidth = window.innerWidth - drawerRect.width;
-
-        // 应用新宽度（添加CSS过渡效果）
-        mapContainer.style.transition = 'width 0.3s ease';
-        mapContainer.style.width = `${newMapWidth}px`;
-
-    } else {
-        // 全屏模式
-        mapContainer.style.transition = 'width 0.3s ease';
-        mapContainer.style.width = '100%';
-    }
-};
 
 //抛物线动画加载
 const loadParabolaAnimation = (card, map) => {
@@ -321,6 +298,10 @@ const loadParabolaAnimation = (card, map) => {
 
     // 添加清理函数
     const cleanup = () => {
+        const timeLineBox = document.getElementById('timeLineBox');
+        if (timeLineBox) {
+            timeLineBox.removeEventListener('scroll', handleScroll);
+        }
         isAnimating = false;
         if (card.currentAnimationId) {
             cancelAnimationFrame(card.currentAnimationId);
@@ -518,6 +499,13 @@ const populateTimeline = async (map) => {
 
     // 打开抽屉
     timelineBtn.addEventListener('click', () => {
+        const zoomButtons = document.getElementById('zoom-buttons');
+        const line = document.getElementById('line');
+        //隐藏时间线按钮/缩放按钮/线路按钮
+        timelineBtn.classList.add('hidden-important');
+        zoomButtons.classList.add('hidden-important');
+        line.classList.add('hidden-important');
+
         const footprintMap = document.getElementById('footprint-map');
         const timelineDrawer = document.getElementById('timeline-drawer');
         const drawerRect = timelineDrawer.getBoundingClientRect();
@@ -574,10 +562,20 @@ const populateTimeline = async (map) => {
                 }
             });
         }, 100); // 延迟100ms开始加载图片
+
+        // 添加滚动事件监听
+        timeLineBox.addEventListener('scroll', handleScroll);
     });
 
     // 合上抽屉
     closeDrawerBtn.addEventListener('click', () => {
+        //显示时间线按钮/缩放按钮/线路按钮
+        const zoomButtons = document.getElementById('zoom-buttons');
+        const line = document.getElementById('line');
+        timelineBtn.classList.remove('hidden-important');
+        zoomButtons.classList.remove('hidden-important');
+        line.classList.remove('hidden-important');
+
         //还原地图宽度
         const footprintMap = document.getElementById('footprint-map');
         footprintMap.style.width = window.innerWidth + "px";
@@ -593,6 +591,9 @@ const populateTimeline = async (map) => {
             card.style.backgroundImage = 'none';
             card.classList.add('loading');
         });
+
+        // 移除滚动事件监听
+        timeLineBox.removeEventListener('scroll', handleScroll);
     });
 
     // 为每个卡片绑定鼠标悬停事件
@@ -1088,6 +1089,53 @@ const debounce = (func, wait = 100, immediate = false) => {
     };
 };
 
+
+// 使用防抖优化resize事件
+const handleResize = debounce(() => {
+    const mapContainer = document.getElementById('footprint-map');
+    const timelineDrawer = document.getElementById('timeline-drawer');
+
+    if (!mapContainer || !timelineDrawer) return;
+
+    if (isTimelineOpen) {
+        // 抽屉打开时的计算逻辑
+        const drawerRect = timelineDrawer.getBoundingClientRect();
+        const newMapWidth = window.innerWidth - drawerRect.width;
+
+        // 应用新宽度（添加CSS过渡效果）
+        mapContainer.style.transition = 'width 0.3s ease';
+        mapContainer.style.width = `${newMapWidth}px`;
+
+    } else {
+        // 全屏模式
+        mapContainer.style.transition = 'width 0.3s ease';
+        mapContainer.style.width = '100%';
+    }
+}, 150);
+
+// 滚动处理函数
+const handleScroll = debounce(() => {
+
+    // 清除抛物线动画
+    if (activeCard.currentAnimationId) {
+        cancelAnimationFrame(activeCard.currentAnimationId);
+        activeCard.currentAnimationId = null;
+    }
+
+    // 清除画布
+    const canvas = document.getElementById('canvas');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // 重置动画状态
+    isAnimating = false;
+    activeCard = null;
+    // 清除抛物线动画
+
+}, 100);
+
 // 添加足迹标记
 const addFootprintMarkers = async (map, footprintData) => {
     // 创建信息窗体
@@ -1249,7 +1297,7 @@ const addFootprintMarkers = async (map, footprintData) => {
                     }
                     openInfoWindow(position, content);
                     currentMarker = marker;
-                    if (zoomLevel > 19) {
+                    if (zoomLevel >= 18) {
                         map.setPitch(Number(footprint.spec.pitchAngle));
                         map.setRotation(Number(footprint.spec.rotationAngle));
                         isElevation = true;
@@ -1349,6 +1397,14 @@ const addFootprintMarkers = async (map, footprintData) => {
     });
 
     document.getElementById('zoom-restore').addEventListener('click', () => {
+        //显示时间线按钮/缩放按钮/线路按钮
+        const timelineBtn = document.getElementById('timeline-btn');
+        const zoomButtons = document.getElementById('zoom-buttons');
+        const line = document.getElementById('line');
+        timelineBtn.classList.remove('hidden-important');
+        zoomButtons.classList.remove('hidden-important');
+        line.classList.remove('hidden-important');
+
         const footprintMap = document.getElementById('footprint-map');
         footprintMap.style.width = window.innerWidth + "px";
         const timelineDrawer = document.getElementById('timeline-drawer');
@@ -1374,6 +1430,13 @@ const addFootprintMarkers = async (map, footprintData) => {
             card.style.backgroundImage = 'none';
             card.classList.add('loading');
         });
+
+
+        // 移除滚动事件监听
+        const timeLineBox = document.getElementById('timeLineBox');
+        if (timeLineBox) {
+            timeLineBox.removeEventListener('scroll', handleScroll);
+        }
     });
 };
 // 优化图层切换
@@ -1492,7 +1555,9 @@ const initializeApp = async (isMobile) => {
 
         // 创建图层
         const layers = {
+            satellite: new AMap.TileLayer.Satellite(),
             road: new AMap.TileLayer.RoadNet(),
+            traffic: new AMap.TileLayer.Traffic()
         };
 
         // 添加图层到地图
