@@ -171,89 +171,92 @@
 .map-controls {
     position: fixed;
     left: 50%;
-    bottom: 20px;
+    bottom: 28px;
     transform: translateX(-50%);
-    display: inline-flex; /* 关键修改：改为inline-flex */
+    display: flex;
     align-items: center;
-    gap: 12px;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-radius: 50px;
-    padding: 8px 16px;
+    gap: 8px;
+    background: rgba(30, 41, 59, 0.65); /* 深色毛玻璃 */
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    border-radius: 22px;
+    padding: 8px 18px;
     z-index: 1000;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    /* 删除所有宽度限制属性 */
-    /* 删除max-width和margin */
-    white-space: nowrap; /* 防止内容换行 */
+    border: 1.5px solid rgba(255, 255, 255, 0.13);
+    box-shadow: 0 8px 32px 0 rgba(30, 41, 59, 0.18), 0 1.5px 6px rgba(0, 0, 0, 0.08);
+    white-space: nowrap;
+    transition: box-shadow 0.3s, background 0.3s;
 }
 
-.map-controls.open{
-    left: 25%;
-    transform: translateX(-25%);
+.map-controls:hover {
+    box-shadow: 0 12px 36px 0 rgba(30, 41, 59, 0.22), 0 2px 8px rgba(0, 0, 0, 0.12);
+    background: rgba(30, 41, 59, 0.78);
 }
 
 .zoom-buttons {
     display: flex;
     align-items: center;
-    gap: 4px;
-    background: rgba(0, 0, 0, 0.03);
-    border-radius: 20px;
-    padding: 2px;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 4px 8px;
+    box-shadow: 0 1px 4px rgba(30, 41, 59, 0.08);
 }
 
 .zoom-btn {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     border: none;
-    background: transparent;
-    color: var(--text-color);
-    font-size: 18px;
-    font-weight: 500;
+    background: rgba(255, 255, 255, 0.18);
+    color: var(--primary-color, #42b983);
+    font-size: 16px;
+    font-weight: bold;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s ease;
     border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(30, 41, 59, 0.08);
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s, transform 0.15s;
 }
 
 .zoom-btn:hover {
-    background: rgba(0, 0, 0, 0.05);
-    color: var(--primary-color);
+    background: var(--primary-color, #42b983);
+    color: #fff;
+    box-shadow: 0 4px 16px rgba(66, 185, 131, 0.18);
+    transform: scale(1.08);
 }
 
 .zoom-btn:active {
-    background: var(--primary-color);
-    color: white;
-    transform: scale(0.95);
+    background: #222;
+    color: #fff;
+    transform: scale(0.96);
 }
 
-#messageBoards,
-#zoom-restore {
-    padding: 8px 16px;
-    background: rgba(0, 0, 0, 0.03);
+#zoom-restore, #messageBoards {
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.18);
     border: none;
-    border-radius: 20px;
-    color: #ffffff;
+    border-radius: 10px;
+    color: var(--primary-color, #42b983);
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s ease;
+    box-shadow: 0 1px 4px rgba(30, 41, 59, 0.08);
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s, transform 0.15s;
 }
 
-#messageBoards:hover,
-#zoom-restore:hover {
-    background: rgba(0, 0, 0, 0.05);
-    color: var(--primary-color);
+#zoom-restore:hover, #messageBoards:hover {
+    background: var(--primary-color, #42b983);
+    color: #fff;
+    box-shadow: 0 4px 16px rgba(66, 185, 131, 0.18);
+    transform: translateY(-2px) scale(1.04);
 }
 
-#messageBoards:active,
-#zoom-restore:active {
-    background: var(--primary-color);
-    color: white;
-    transform: scale(0.95);
+#zoom-restore:active, #messageBoards:active {
+    background: #222;
+    color: #fff;
+    transform: scale(0.97);
 }
 
 /*.amap-scale-text {
@@ -273,16 +276,15 @@
         max-height: 80px;
     }
 
-    .footprint-logo {
-        font-size: 1.5rem;
-    }
-
-    .footprint-slogan {
-        font-size: 0.8rem;
-    }
-
     .map-controls {
-        display: none !important;
+        flex-wrap: wrap !important;
+        width: 85vw;
+        justify-content: flex-start !important;
+        row-gap: 12px !important;
+        padding: 6px !important;
+        border-radius: 10px !important;
+        /*gap: 10px !important;*/
+        font-size: 12px !important;
     }
 
     .drawer {
@@ -313,6 +315,50 @@
         font-size: 12px;
     }
 
+    #zoom-restore, #messageBoards, #timeline-btn {
+        padding: 4px 6px !important;
+        border-radius: 7px !important;
+        font-size: 12px !important;
+    }
+
+    .zoom-btn {
+        width: 22px !important;
+        height: 22px !important;
+        font-size: 13px !important;
+    }
+
+    #timeline-btn {
+        order: 1;
+        flex: 1 1 40%;
+        justify-content: center;
+    }
+
+    #messageBoards {
+        order: 2;
+        flex: 1 1 40%;
+        text-align: center;
+        justify-content: center;
+        align-items: center;
+        display: flex;
+    }
+
+    .zoom-buttons,
+    .button-group,
+    #zoom-restore,
+    #line {
+        order: 3;
+        flex-basis: 100%;
+        width: 100%;
+        justify-content: center;
+        margin-top: 2px;
+    }
+
+    .control-btn {
+        padding: 4px 8px !important;
+        border-radius: 7px !important;
+        font-size: 12px !important;
+        min-width: 0 !important;
+    }
 }
 
 /* 完全隐藏比例尺 */
@@ -679,8 +725,12 @@
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* 动画定义 */
@@ -839,7 +889,6 @@
 }
 
 
-
 .control-btn {
     position: relative;
     overflow: hidden;
@@ -895,6 +944,7 @@
     z-index: 3; /* 确保 canvas 位于下方 */
     pointer-events: none; /* 允许点击通过 */
 }
+
 .footprint-container {
     position: relative;
     z-index: 2; /* 确保 footprint-container 是 above */
@@ -1262,11 +1312,6 @@
 
 /* 移动端适配 */
 @media screen and (max-width: 768px) {
-    #timeline-btn {
-        padding: 6px 12px;
-        font-size: 13px;
-    }
-
     #timeline-btn::before {
         width: 14px;
         height: 14px;
@@ -1403,9 +1448,9 @@
     right: 0;
     bottom: 0;
     background: linear-gradient(to bottom,
-        rgba(0, 0, 0, 0.2) 0%,
-        rgba(0, 0, 0, 0.5) 50%,
-        rgba(0, 0, 0, 0.8) 100%);
+    rgba(0, 0, 0, 0.2) 0%,
+    rgba(0, 0, 0, 0.5) 50%,
+    rgba(0, 0, 0, 0.8) 100%);
     z-index: 1;
     transition: opacity 0.3s ease;
 }
@@ -1546,6 +1591,14 @@
 
     #zoom-restore {
         display: none !important; /* 隐藏缩放按钮 */
+    }
+
+    .footprint-logo {
+        font-size: 1.5rem;
+    }
+
+    .footprint-slogan {
+        font-size: 0.8rem;
     }
 }
 
@@ -1729,4 +1782,10 @@
     justify-content: flex-end;
     width: 100%;
     transform: translate(5px, 20px);
+}
+
+.map-controls.open {
+    left: 25%;
+    transform: translateX(-50%);
+    transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s, background 0.3s;
 }

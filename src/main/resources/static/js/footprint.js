@@ -785,6 +785,9 @@ function mapZoomend(card, map) {
         loadParabolaAnimation(card, map);
     } else {
         zoomOff2(map);
+        /*if (isMobile) {
+            map.panBy(0, 120);
+        }*/
         // calculateTheNewCenterPoint(map);
     }
 }
@@ -1117,7 +1120,7 @@ const handleResize = debounce(() => {
 const handleScroll = debounce(() => {
 
     // 清除抛物线动画
-    if (activeCard.currentAnimationId) {
+    if (activeCard != null && activeCard.currentAnimationId) {
         cancelAnimationFrame(activeCard.currentAnimationId);
         activeCard.currentAnimationId = null;
     }
@@ -1544,8 +1547,9 @@ const initializeApp = async (isMobile) => {
             pitch: 0,
             terrain: true, // 开启地形图
             features: ['bg', 'road', 'building', 'point'],
-            // optimize: true, // 开启优化模式
-            // resizeEnable: true     // 启用自动适应容器尺寸
+            rotateEnable: false,
+            optimize: true, // 开启优化模式
+            resizeEnable: true     // 启用自动适应容器尺寸
         });
 
         // 等待地图加载完成

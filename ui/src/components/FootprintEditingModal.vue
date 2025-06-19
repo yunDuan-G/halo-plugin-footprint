@@ -111,7 +111,7 @@ watch(
 // 添加一个计算属性来控制pitchAngle的显示
 const showPitchAngle = computed(() => {
   const zoomLevel = parseFloat(formState.value.spec.zoomLevel || '0')
-  return zoomLevel >= 19
+  return zoomLevel >= 18
 })
 
 const validationMessages = {
@@ -441,7 +441,7 @@ onMounted(async () => {
               required: '缩放级别不能为空',
               between: '缩放级别必须在4到26之间'
             }"
-            help="标记的放大级别，数值范围：4-26（支持两位小数），大于19时，可开启3D效果"
+            help="标记的放大级别，数值范围：4-26（支持两位小数），>=18时，可开启3D效果"
             min="4"
             max="26"
             step="0.01"
