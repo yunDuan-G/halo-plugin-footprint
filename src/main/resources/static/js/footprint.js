@@ -4,10 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 判断当前路径是否为/footprints
     const currentPath = window.location.pathname;
-    /*if (currentPath !== '/footprints') {
+    if (currentPath !== '/footprints') {
         console.log('非足迹页面，不加载地图功能');
         return;
-    }*/
+    }
 
 
     // 设置全局颜色变量
@@ -80,6 +80,9 @@ const loadParabolaAnimation = (card, map) => {
     const cardHeader = card.querySelector('.card-header');
     //获取cardHeader的元素内容
     const cardHeaderContent = cardHeader.textContent;
+    //获取class为marker-image下的img中alt为cardHeaderContent的元素
+    const markerImage = document.querySelector(`.marker-image img[alt="${cardHeaderContent}"]`);
+
 
     // 获取card对应的标记点
     const footprint = window.FOOTPRINT_CONFIG.footprints.find(
@@ -90,6 +93,47 @@ const loadParabolaAnimation = (card, map) => {
         console.warn('未找到对应的足迹数据');
         return;
     }
+
+    // 获取所有相关的标记点
+    const markerImages = [];
+    if (footprint.spec.metadataNames) {
+        const name = footprint.metadata.name;
+
+        const metadataName = footprint.spec.metadataNames.includes(name);
+        // 如果没有当前的标记点，手动添加
+        if (!metadataName) {
+            markerImages.push(markerImage);
+        }
+        // 如果有 metadataNames，获取所有相关的标记点
+        footprint.spec.metadataNames.forEach(metadataName => {
+            const relatedFootprint = window.FOOTPRINT_CONFIG.footprints.find(
+                    f => f.metadata.name === metadataName
+            );
+            if (relatedFootprint) {
+                const marker = document.querySelector(`.marker-image img[alt="${relatedFootprint.spec.name}"]`);
+                if (marker) {
+                    markerImages.push(marker);
+                }
+            }
+        });
+    } else {
+        // 如果没有 metadataNames，只使用当前标记点
+        markerImages.push(markerImage);
+    }
+    console.log(markerImages)
+    console.log(123)
+
+    // 遍历所有标记图片
+    markerImages.forEach(markerImg => {
+        // 查找最近的amap-marker父元素
+        const markerElement = markerImg.closest('.amap-marker');
+        console.log(222)
+        if (markerElement) {
+            console.log(333)
+            // 将card对应的标记点显示到最上层
+            markerElement.classList.add('zIndex13');
+        }
+    });
 
     // 获取所有相关的标记点
     const mapCenter = [];
@@ -690,6 +734,10 @@ const populateTimeline = async (map) => {
         };
 
         const handleLeave = () => {
+            const amapMarker = document.querySelectorAll('.amap-marker');
+            amapMarker.forEach(marker => {
+                marker.classList.remove('zIndex13');
+            });
             return new Promise((resolve) => {
                 debounceTimer = setTimeout(() => {
                     if (activeCard === card) {

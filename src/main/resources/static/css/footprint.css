@@ -1661,7 +1661,7 @@
     width: 96%;
     height: 255px;
     margin-left: 10px;
-    display: flex;
+    display: flex; /* TODO */
     justify-content: start;
     border-left: 5px solid gray;
 }
@@ -1788,4 +1788,8 @@
     left: 25%;
     transform: translateX(-50%);
     transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s, background 0.3s;
+}
+
+.zIndex13 {
+    z-index: 13 !important;
 }
