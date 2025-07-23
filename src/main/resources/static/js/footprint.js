@@ -4,10 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 判断当前路径是否为/footprints
     const currentPath = window.location.pathname;
-    if (currentPath !== '/footprints') {
+    /*if (currentPath !== '/footprints') {
         console.log('非足迹页面，不加载地图功能');
         return;
-    }
+    }*/
 
 
     // 设置全局颜色变量
@@ -120,16 +120,12 @@ const loadParabolaAnimation = (card, map) => {
         // 如果没有 metadataNames，只使用当前标记点
         markerImages.push(markerImage);
     }
-    console.log(markerImages)
-    console.log(123)
 
     // 遍历所有标记图片
     markerImages.forEach(markerImg => {
         // 查找最近的amap-marker父元素
         const markerElement = markerImg.closest('.amap-marker');
-        console.log(222)
         if (markerElement) {
-            console.log(333)
             // 将card对应的标记点显示到最上层
             markerElement.classList.add('zIndex13');
         }
@@ -368,17 +364,12 @@ let isTimelineOpen = false;
 //是否打开仰角和旋转
 let isElevation = false;
 
-// Configuration
-const config = {
-    cols: isMobile ? 1 : 2 //每行显示数量
-};
-
 // 添加图片预加载和缓存
 const imageCache = new Map();
 
 //渲染抽屉中的时间线
 const populateTimeline = async (map) => {
-    const timelineContainer = document.getElementById('timeline-container');
+    const timelineContainer = document.getElementById('timelineDrawer');
     const footprints = window.FOOTPRINT_CONFIG.footprints;
 
     if (!Array.isArray(footprints) || footprints.length === 0) {
@@ -386,160 +377,151 @@ const populateTimeline = async (map) => {
         return;
     }
 
-    timelineContainer.innerHTML = ''; // 清除现有内容
-
-    const timeLineBox = document.createElement('div');
-    timeLineBox.className = 'timeLineBox';
-
-    const cols = config.cols;
-    const rows = Math.ceil(footprints.length / cols);
-
-    // 创建所有卡片但不立即加载图片
-    for (let row = 1; row <= rows; row++) {
-        const isReverse = row % 2 === 0;
-
-        const timeline = document.createElement('div');
-        timeline.className = 'timeline';
-        if (isReverse) timeline.classList.add('reverse');
-
-        for (let item = 1; item <= cols; item++) {
-            const index = (row - 1) * cols + item;
-            if (index > footprints.length) continue;
-
-            const footprint = footprints[index - 1];
-
-            const card = document.createElement('div');
-            card.className = 'timeline-card loading';
-
-            // 添加 loading 指示器
-            const loadingIndicator = document.createElement('div');
-            loadingIndicator.className = 'loading-indicator';
-            card.appendChild(loadingIndicator);
-
-            const header = document.createElement('div');
-            header.className = 'card-header';
-            header.textContent = footprint.spec.name || 'Unnamed Footprint';
-
-            const time = document.createElement('div');
-            time.className = 'card-time';
-            time.textContent = footprint.spec.createTime
-                    ? new Date(footprint.spec.createTime).toLocaleString('zh-CN')
-                    : 'Unknown Time';
-
-            const description = document.createElement('div');
-            description.className = 'card-description';
-            description.textContent = footprint.spec.description || 'No description available.';
-
-            // 添加查看按钮
-            const viewButton = document.createElement('button');
-            viewButton.className = 'view-button';
-            viewButton.innerHTML = `
-                <span>查看详情</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                </svg>
-            `;
-
-            // 添加点击事件处理
-            viewButton.addEventListener('click', async (e) => {
-                e.stopPropagation();
-
-                // 清除抛物线动画
-                if (card.currentAnimationId) {
-                    cancelAnimationFrame(card.currentAnimationId);
-                    card.currentAnimationId = null;
-                }
-
-                // 清除画布
-                const canvas = document.getElementById('canvas');
-                if (canvas) {
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                }
-
-                // 重置动画状态
-                isAnimating = false;
-                activeCard = null;
-
-                const cardHeader = card.querySelector('.card-header');
-                const cardHeaderContent = cardHeader.textContent;
-                const footprint = window.FOOTPRINT_CONFIG.footprints.find(
-                        f => f.spec.name === cardHeaderContent
-                );
-                if (isMobile) {
-                    isTimelineOpen = false;
-                    timelineDrawer.classList.remove('open');
-                    const mapControls = document.getElementById('map-controls');
-                    mapControls.classList.remove('open');
-
-                    // 卸载所有图片
-                    const cards = document.querySelectorAll('.timeline-card');
-                    cards.forEach(card => {
-                        card.style.backgroundImage = 'none';
-                        card.classList.add('loading');
-                    });
-                }
-                if (footprint) {
-                    // 查找并触发对应的标记点点击事件
-                    const marker = map.getAllOverlays().find(
-                            m => m._position.lng === parseFloat(footprint.spec.longitude) &&
-                                    m._position.lat === parseFloat(footprint.spec.latitude)
-                    );
-
-                    if (marker) {
-                        marker.emit('click');
-                    }
-                }
-            });
-
-            card.appendChild(header);
-            card.appendChild(time);
-            card.appendChild(description);
-            card.appendChild(viewButton);
-
-            const timelineItem = document.createElement('div');
-            timelineItem.className = 'timelineItem';
-            timelineItem.style.width = `${100 / cols}%`;
-
-            const itemTitle = document.createElement('div');
-            itemTitle.className = 'itemTitle';
-            itemTitle.appendChild(card);
-
-            // 如果这是最后一项，则添加箭头
-            if (index === footprints.length) {
-                const arrowContainer = document.createElement('div');
-                if (isReverse) {
-                    arrowContainer.className = 'to-btn-left';
-                    const arrow = document.createElement('div');
-                    arrow.className = 'to_left';
-                    arrow.style.borderRightColor = 'gray';
-                    arrowContainer.appendChild(arrow);
-                } else {
-                    arrowContainer.className = 'to-btn-right';
-                    const arrow = document.createElement('div');
-                    arrow.className = 'to_right';
-                    arrow.style.borderLeftColor = 'gray';
-                    arrowContainer.appendChild(arrow);
-                }
-                timelineItem.appendChild(arrowContainer);
-            }
-
-            const itemDot = document.createElement('div');
-            itemDot.className = 'itemDot';
-
-            timelineItem.appendChild(itemTitle);
-            timelineItem.appendChild(itemDot);
-            timeline.appendChild(timelineItem);
-        }
-        timeLineBox.appendChild(timeline);
-    }
-    timelineContainer.appendChild(timeLineBox);
-
     // 添加时间线按钮事件处理
     const timelineBtn = document.getElementById('timeline-btn');
-    const timelineDrawer = document.getElementById('timeline-drawer');
-    const closeDrawerBtn = document.getElementById('close-drawer');
+    const timelineDrawer = document.getElementById('timelineDrawer');
+    const closeDrawerBtn = document.getElementById('closeBtn');
+    const timeline = document.getElementById('timeline');
+    const timelineContent = document.getElementById('timelineContent');
+
+    footprints.forEach((item, index) => {
+        const image = item.spec.image.replace("!w100", "!A100");
+        const cachedImage = image ? getCachedImage(escapeHtml(image)) : 'https://www.lik.cc/upload/loading8.gif';
+
+        const timelineItem = document.createElement('div');
+        timelineItem.className = 'timeline-item';
+
+        // 创建日期元素
+        const timelineDate = document.createElement('div');
+        timelineDate.className = 'timeline-date';
+        timelineDate.textContent = formatDateToYMD(item.spec.createTime);
+        timelineItem.appendChild(timelineDate);
+
+        // 创建内容卡片
+        const contentCard = document.createElement('div');
+        contentCard.className = 'timeline-content-card';
+        timelineItem.appendChild(contentCard);
+
+        // 创建媒体容器
+        const timelineMedia = document.createElement('div');
+        timelineMedia.className = 'timeline-media';
+        contentCard.appendChild(timelineMedia);
+
+        // 创建图片
+        const img = document.createElement('img');
+        img.src = cachedImage;
+        img.loading = 'lazy';
+        img.alt = item.spec.name;
+        timelineMedia.appendChild(img);
+
+        // 创建媒体覆盖层
+        const mediaOverlay = document.createElement('div');
+        mediaOverlay.className = 'media-overlay';
+        timelineMedia.appendChild(mediaOverlay);
+
+        // 创建位置信息
+        const locationDiv = document.createElement('div');
+        locationDiv.className = 'timeline-location';
+
+        // 创建标题
+        const cardHeader = document.createElement('div');
+        cardHeader.className = 'card-header';
+        cardHeader.textContent = item.spec.name;
+
+        // 添加SVG_ICONS.location图标到名称左侧
+        const iconSpan = document.createElement('span');
+        iconSpan.innerHTML = SVG_ICONS.location;
+        iconSpan.classList.add('location-icon'); // 添加 class
+        locationDiv.appendChild(iconSpan);
+        locationDiv.appendChild(cardHeader);
+
+        mediaOverlay.appendChild(locationDiv);
+
+        // 创建信息覆盖层
+        const infoOverlay = document.createElement('div');
+        infoOverlay.className = 'timeline-info-overlay';
+        mediaOverlay.appendChild(infoOverlay);
+
+        // 创建描述
+        const desc = document.createElement('p');
+        desc.className = 'timeline-desc';
+        desc.textContent = item.spec.description;
+        infoOverlay.appendChild(desc);
+
+        // 创建按钮
+        const detailBtn = document.createElement('button');
+        detailBtn.className = 'detail-btn';
+        detailBtn.id = 'detailBtn';
+
+        // 创建按钮图标
+        const binocularsIcon = document.createElement('i');
+        binocularsIcon.className = 'fas fa-binoculars';
+        detailBtn.appendChild(binocularsIcon);
+
+        // 添加按钮文本
+        detailBtn.appendChild(document.createTextNode(' 查看旅行故事'));
+        infoOverlay.appendChild(detailBtn);
+
+        // 最后将整个元素添加到时间线中
+        timeline.appendChild(timelineItem);
+
+        // 添加点击事件处理
+        detailBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+
+            // 清除抛物线动画
+            if (timelineItem.currentAnimationId) {
+                cancelAnimationFrame(timelineItem.currentAnimationId);
+                timelineItem.currentAnimationId = null;
+            }
+
+            // 清除画布
+            const canvas = document.getElementById('canvas');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+
+            // 重置动画状态
+            isAnimating = false;
+            activeCard = null;
+
+            const cardHeader = timelineItem.querySelector('.card-header');
+            const cardHeaderContent = cardHeader.textContent;
+            const footprint = window.FOOTPRINT_CONFIG.footprints.find(
+                    f => f.spec.name === cardHeaderContent
+            );
+            if (isMobile) {
+                isTimelineOpen = false;
+                timelineDrawer.classList.remove('open');
+                const mapControls = document.getElementById('map-controls');
+                mapControls.classList.remove('open');
+
+                // 卸载所有图片
+                const cards = document.querySelectorAll('.timeline-card');
+                cards.forEach(card => {
+                    card.style.backgroundImage = 'none';
+                    card.classList.add('loading');
+                });
+            }
+            if (footprint) {
+                // 查找并触发对应的标记点点击事件
+                const marker = map.getAllOverlays().find(
+                        m => m._position.lng === parseFloat(footprint.spec.longitude) &&
+                                m._position.lat === parseFloat(footprint.spec.latitude)
+                );
+
+                if (marker) {
+                    marker.emit('click');
+                }
+            }
+        });
+
+        // 添加动画延迟
+        setTimeout(() => {
+            timelineItem.classList.add('visible');
+        }, 300 + (index * 200));
+    });
 
     // 打开抽屉
     timelineBtn.addEventListener('click', () => {
@@ -551,7 +533,7 @@ const populateTimeline = async (map) => {
         line.classList.add('hidden-important');
 
         const footprintMap = document.getElementById('footprint-map');
-        const timelineDrawer = document.getElementById('timeline-drawer');
+        const timelineDrawer = document.getElementById('timelineDrawer');
         const drawerRect = timelineDrawer.getBoundingClientRect();
         const number = window.innerWidth - drawerRect.width;
         footprintMap.style.width = number + "px";
@@ -564,51 +546,9 @@ const populateTimeline = async (map) => {
         timelineDrawer.classList.add('open');
         const mapControls = document.getElementById('map-controls');
         mapControls.classList.add('open');
-        /*if (!isMobile) {
-            const position = new AMap.LngLat(116.397428 + 20, 39.90923);
-            moveToLocation(map, position, 4, 0);
-        }*/
-
-        // 延迟加载图片
-        setTimeout(() => {
-            const cards = document.querySelectorAll('.timeline-card');
-            cards.forEach((card, index) => {
-                const cardHeader = card.querySelector('.card-header');
-                const cardHeaderContent = cardHeader.textContent;
-                const footprint = window.FOOTPRINT_CONFIG.footprints.find(
-                        f => f.spec.name === cardHeaderContent
-                );
-
-                if (footprint && footprint.spec.image) {
-                    // 添加最小显示时间
-                    const startTime = Date.now();
-                    const minDisplayTime = 1000; // 最小显示1秒
-
-                    const img = new Image();
-                    img.onload = () => {
-                        const elapsedTime = Date.now() - startTime;
-                        const remainingTime = Math.max(0, minDisplayTime - elapsedTime);
-
-                        setTimeout(() => {
-                            card.style.backgroundImage = `url(${footprint.spec.image})`;
-                            card.style.backgroundSize = 'cover';
-                            card.style.backgroundPosition = 'center';
-                            card.classList.remove('loading');
-                        }, remainingTime);
-                    };
-                    img.onerror = () => {
-                        card.classList.remove('loading');
-                        console.warn('Failed to load image:', footprint.spec.image);
-                    };
-                    img.src = footprint.spec.image;
-                } else {
-                    card.classList.remove('loading');
-                }
-            });
-        }, 100); // 延迟100ms开始加载图片
 
         // 添加滚动事件监听
-        timeLineBox.addEventListener('scroll', handleScroll);
+        timelineContent.addEventListener('scroll', handleScroll);
     });
 
     // 合上抽屉
@@ -629,19 +569,12 @@ const populateTimeline = async (map) => {
         const mapControls = document.getElementById('map-controls');
         mapControls.classList.remove('open');
 
-        // 卸载所有图片
-        const cards = document.querySelectorAll('.timeline-card');
-        cards.forEach(card => {
-            card.style.backgroundImage = 'none';
-            card.classList.add('loading');
-        });
-
         // 移除滚动事件监听
-        timeLineBox.removeEventListener('scroll', handleScroll);
+        timelineContent.removeEventListener('scroll', handleScroll);
     });
 
     // 为每个卡片绑定鼠标悬停事件
-    const timelineCards = document.querySelectorAll('.timeline-card');
+    const timelineCards = document.querySelectorAll('.timeline-content-card');
     timelineCards.forEach(card => {
         if (isMobile) return; //手机端不添加悬停事件
         let debounceTimer;
@@ -769,7 +702,7 @@ let boundZoomStart, boundZoom, boundZoomEnd;
 
 //绑定事件
 function zoomOn(map, card) {
-    console.log("绑定事件!");
+    // console.log("绑定事件!");
 
     // 存储绑定的函数
     boundZoomStart = mapZoomstart.bind(null, card);
@@ -782,7 +715,7 @@ function zoomOn(map, card) {
 }
 
 function zoomOff(map) {
-    console.log("解除事件绑定!");
+    // console.log("解除事件绑定!");
 
     // 使用存储的函数引用解绑
     map.off('zoomstart', boundZoomStart);
@@ -795,7 +728,7 @@ let boundZoomStart2, boundZoom2, boundZoomEnd2;
 
 //绑定事件
 function zoomOn2(map, card) {
-    console.log("绑定事件2!");
+    // console.log("绑定事件2!");
 
     // 存储绑定的函数
     boundZoomStart2 = mapZoomstart.bind(null, card);
@@ -808,7 +741,7 @@ function zoomOn2(map, card) {
 }
 
 function zoomOff2(map) {
-    console.log("解除事件绑定2!");
+    // console.log("解除事件绑定2!");
 
     // 使用存储的函数引用解绑
     map.off('zoomstart', boundZoomStart2);
@@ -846,7 +779,7 @@ const calculateTheNewCenterPoint = (map) => {
         return;
     }
 
-    const drawer = document.getElementById("timeline-drawer");
+    const drawer = document.getElementById("timelineDrawer");
     const drawerWidth = drawer.getBoundingClientRect().width;
 
     // 1. 计算抽屉左边到窗口左边的距离
@@ -1019,6 +952,20 @@ const formatTime = (timeString) => {
     }
 };
 
+// 格式化为 yyyy-mm-dd
+function formatDateToYMD(dateString) {
+    if (!dateString) return '';
+    try {
+        const date = new Date(dateString);
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    } catch {
+        return dateString;
+    }
+}
+
 // 常量定义
 const SVG_ICONS = {
     type: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1144,7 +1091,7 @@ const debounce = (func, wait = 100, immediate = false) => {
 // 使用防抖优化resize事件
 const handleResize = debounce(() => {
     const mapContainer = document.getElementById('footprint-map');
-    const timelineDrawer = document.getElementById('timeline-drawer');
+    const timelineDrawer = document.getElementById('timelineDrawer');
 
     if (!mapContainer || !timelineDrawer) return;
 
@@ -1166,7 +1113,6 @@ const handleResize = debounce(() => {
 
 // 滚动处理函数
 const handleScroll = debounce(() => {
-
     // 清除抛物线动画
     if (activeCard != null && activeCard.currentAnimationId) {
         cancelAnimationFrame(activeCard.currentAnimationId);
@@ -1185,7 +1131,7 @@ const handleScroll = debounce(() => {
     activeCard = null;
     // 清除抛物线动画
 
-}, 100);
+}, 10);
 
 // 添加足迹标记
 const addFootprintMarkers = async (map, footprintData) => {
@@ -1458,7 +1404,7 @@ const addFootprintMarkers = async (map, footprintData) => {
 
         const footprintMap = document.getElementById('footprint-map');
         footprintMap.style.width = window.innerWidth + "px";
-        const timelineDrawer = document.getElementById('timeline-drawer');
+        const timelineDrawer = document.getElementById('timelineDrawer');
         isTimelineOpen = false;
         timelineDrawer.classList.remove('open');
         const mapControls = document.getElementById('map-controls');
@@ -1582,7 +1528,7 @@ const AnimationState = {
 
 
 // 初始化应用
-const initializeApp = async (isMobile) => {
+const initializeApp = async () => {
     try {
         // 创建地图实例
         const map = new AMap.Map('footprint-map', {
