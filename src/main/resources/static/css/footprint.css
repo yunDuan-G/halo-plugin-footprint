@@ -531,7 +531,7 @@
     right: 0;
 }
 
-.info-window .close-btn {
+.info-window .time-close-btn {
     display: none;
 }
 
@@ -1738,19 +1738,6 @@
     text-overflow: ellipsis;
 }
 
-.card {
-    padding: 4px 0;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.24);
-    border-radius: 4px;
-    margin-top: 5px;
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.card:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.12);
-}
-
 .itemTitleDiv {
     padding: 0 15px;
 }
@@ -1838,7 +1825,7 @@
     color: var(--primary-color, #42b983);
 }
 
-.close-btn {
+.time-close-btn {
     background: rgba(var(--primary-color, 66,185,131), 0.10);
     border: none;
     border-radius: 50%;
@@ -1853,7 +1840,7 @@
     transition: all 0.3s ease;
 }
 
-.close-btn:hover {
+.time-close-btn:hover {
     background: var(--primary-color, #42b983);
     color: #fff;
     transform: rotate(90deg);
