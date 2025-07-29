@@ -476,7 +476,7 @@
             title: /*[[${settings.title}]]*/ '足迹',
             logoName: /*[[${settings.logoName}]]*/ '足迹',
             describe: /*[[${settings.describe}]]*/ '描述',
-            hsla: /*[[${settings.hsla}]]*/ '200, 100%, 50%',
+            hsla: /*[[${settings.hsla}]]*/ '1,75%,88%',
             mapStyle: /*[[${settings.mapStyle}]]*/ 'amap://styles/light'
         };
         // console.log('Footprint Config:', window.FOOTPRINT_CONFIG);
@@ -497,17 +497,17 @@
 
     <!-- 底部控制栏 -->
     <div class="map-controls" id="map-controls">
-        <div id="timeline-btn">时间线</div>
+        <div id="timeline-btn" data-tooltip="查看旅行时间线">时间线</div>
         <div class="zoom-buttons" id="zoom-buttons">
-            <button class="zoom-btn" id="zoom-in">+</button>
-            <button class="zoom-btn" id="zoom-out">−</button>
+            <button class="zoom-btn" id="zoom-in" data-tooltip="放大地图">+</button>
+            <button class="zoom-btn" id="zoom-out" data-tooltip="缩小地图">−</button>
         </div>
         <div class="button-group">
-            <button class="control-btn active" data-type="normal">标准图层</button>
-            <button class="control-btn" data-type="satellite">卫星图</button>
+            <button class="control-btn active" data-type="normal" data-tooltip="切换到标准地图">标准图层</button>
+            <button class="control-btn" data-type="satellite" data-tooltip="切换到卫星地图">卫星图</button>
         </div>
         <div class="button-group" id="line">
-            <label class="plane-switch">
+            <label class="plane-switch" data-tooltip="显示/隐藏道路网络">
                 <input type="checkbox" data-type="road">
                 <div>
                     <div>
@@ -521,7 +521,7 @@
                 </div>
                 <span class="switch-text">路网</span>
             </label>
-            <label class="plane-switch">
+            <label class="plane-switch" data-tooltip="显示/隐藏实时路况">
                 <input type="checkbox" data-type="traffic">
                 <div>
                     <div>
@@ -536,8 +536,8 @@
                 <span class="switch-text">路况</span>
             </label>
         </div>
-        <button id="zoom-restore">中国地图</button>
-        <div id="messageBoards" class="amap-scale-text">留言板</div>
+        <button id="zoom-restore" data-tooltip="返回中国全图视图">中国地图</button>
+        <div id="messageBoards" class="amap-scale-text" data-tooltip="查看留言板">留言板</div>
     </div>
 <!--    <div id="timeline-drawer" class="drawer">
         <div class="drawer-content app-container">
