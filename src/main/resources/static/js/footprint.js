@@ -386,7 +386,7 @@ const populateTimeline = async (map) => {
 
     footprints.forEach((item, index) => {
         const image = item.spec.image.replace("!w100", "!A100");
-        const cachedImage = image ? getCachedImage(escapeHtml(image)) : 'https://www.lik.cc/upload/loading8.gif';
+        const cachedImage = image + "/fw/500" ? getCachedImage(escapeHtml(image)) : 'https://www.lik.cc/upload/loading8.gif';
 
         const timelineItem = document.createElement('div');
         timelineItem.className = 'timeline-item';
@@ -848,40 +848,40 @@ const showElements = () => {
     ];
 
     // 执行动画序列
-animationSequence.forEach(({element, className, delay, callback}) => {
-    setTimeout(() => {
-        const el = document.querySelector(element);
-        if (el) {
-            el.classList.add(className);
-            if (callback) {
-                callback();
+    animationSequence.forEach(({element, className, delay, callback}) => {
+        setTimeout(() => {
+            const el = document.querySelector(element);
+            if (el) {
+                el.classList.add(className);
+                if (callback) {
+                    callback();
+                }
             }
-        }
-    }, delay);
-});
+        }, delay);
+    });
 
 // 为底部工具栏添加进入动画
-const mapControls = document.querySelector('.map-controls');
-if (mapControls) {
-    setTimeout(() => {
-        const buttons = mapControls.querySelectorAll('button, .control-btn, #timeline-btn, #messageBoards');
-        buttons.forEach((btn, index) => {
-            setTimeout(() => {
-                btn.classList.add('animate-in');
-                // 添加波纹效果和提示
-                addRippleEffect(btn);
-                
-                // 添加点击脉冲效果
-                btn.addEventListener('click', () => {
-                    btn.classList.add('btn-pulse');
-                    setTimeout(() => {
-                        btn.classList.remove('btn-pulse');
-                    }, 300);
-                });
-            }, 600 + (index * 120)); // 增加延迟和间隔，使动画更平滑
-        });
-    }, 800);
-}
+    const mapControls = document.querySelector('.map-controls');
+    if (mapControls) {
+        setTimeout(() => {
+            const buttons = mapControls.querySelectorAll('button, .control-btn, #timeline-btn, #messageBoards');
+            buttons.forEach((btn, index) => {
+                setTimeout(() => {
+                    btn.classList.add('animate-in');
+                    // 添加波纹效果和提示
+                    addRippleEffect(btn);
+
+                    // 添加点击脉冲效果
+                    btn.addEventListener('click', () => {
+                        btn.classList.add('btn-pulse');
+                        setTimeout(() => {
+                            btn.classList.remove('btn-pulse');
+                        }, 300);
+                    });
+                }, 600 + (index * 120)); // 增加延迟和间隔，使动画更平滑
+            });
+        }, 800);
+    }
 };
 
 // 图层配置
@@ -944,7 +944,7 @@ const createMarker = (spec) => {
     const image = spec.image.replace("!w100", "!A100");
 
     // 使用图片压缩服务
-    const compressedImageUrl = spec.image ? image : 'https://www.lik.cc/upload/loading8.gif';
+    const compressedImageUrl = spec.image ? image + "/fw/200" : 'https://www.lik.cc/upload/loading8.gif';
 
     markerContent.innerHTML = `
         <div class="marker-image">
@@ -1255,10 +1255,17 @@ const addFootprintMarkers = async (map, footprintData) => {
     const batchSize = 1;
     let currentIndex = 0;
 
+    // 先按创建时间降序排序
+    const sortedFootprintData = [...footprintData].sort((a, b) => {
+        const timeA = new Date(a.spec.createTime).getTime();
+        const timeB = new Date(b.spec.createTime).getTime();
+        return timeA - timeB;
+    });
+
     const renderBatch = () => {
-        const batch = footprintData.slice(currentIndex, currentIndex + batchSize);
+        const batch = sortedFootprintData.slice(currentIndex, currentIndex + batchSize);
         batch.forEach(footprint => {
-            if (!Array.isArray(footprintData) || footprintData.length === 0) {
+            if (!Array.isArray(sortedFootprintData) || sortedFootprintData.length === 0) {
                 console.warn('足迹数据为空或格式不正确');
                 return;
             }
@@ -1385,8 +1392,11 @@ const addFootprintMarkers = async (map, footprintData) => {
         });
 
         currentIndex += batchSize;
-        if (currentIndex < footprintData.length) {
-            requestIdleCallback(renderBatch);
+        if (currentIndex < sortedFootprintData.length) {
+            // 添加100ms的延迟后再渲染下一批
+            setTimeout(() => {
+                requestIdleCallback(renderBatch);
+            }, 0);
         }
     };
 
@@ -1540,21 +1550,21 @@ const addButtonAnimation = (button) => {
             button.classList.remove('btn-pulse');
         }, 300);
     });
-    
+
     // 添加波纹效果
     addRippleEffect(button);
-    
+
     // 添加悬停提示
     if (button.dataset.tooltip) {
         const tooltip = document.createElement('div');
         tooltip.className = 'tooltip';
         tooltip.textContent = button.dataset.tooltip;
         button.appendChild(tooltip);
-        
+
         button.addEventListener('mouseenter', () => {
             tooltip.classList.add('show');
         });
-        
+
         button.addEventListener('mouseleave', () => {
             tooltip.classList.remove('show');
         });
@@ -1570,18 +1580,18 @@ const AnimationState = {
 
 // 添加按钮波纹效果
 const addRippleEffect = (button) => {
-    button.addEventListener('click', function(e) {
+    button.addEventListener('click', function (e) {
         const rect = button.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-        
+
         const ripple = document.createElement('span');
         ripple.className = 'ripple';
         ripple.style.left = `${x}px`;
         ripple.style.top = `${y}px`;
-        
+
         button.appendChild(ripple);
-        
+
         setTimeout(() => {
             ripple.remove();
         }, 600);
