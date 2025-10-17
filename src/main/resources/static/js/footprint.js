@@ -618,16 +618,21 @@ const populateTimeline = async (map) => {
                 const currentZoom = map.getZoom();
                 const needsMovement = distance > 1000 || currentZoom < 13;
 
+                //获取关联标记点
                 const metadataNames = footprint.spec.metadataNames;
+                //判断是否有 关联标记点
                 if (metadataNames && metadataNames.length > 0 &&
+                        // 判断关联标记点是否为自身
                         !(metadataNames.length === 1 && metadataNames.includes(footprint.metadata.name))) {
                     const name = footprint.metadata.name;
                     const metadataName = footprint.spec.metadataNames.includes(name);
+                    // 统计关联的标记点到集合
                     const positions = metadataNames
                             .map(metadataName => window.FOOTPRINT_CONFIG.footprints.find(
                                     f => f.metadata.name === metadataName
                             ))
                             .filter(Boolean);
+                    // 把自身加入到 标记点集合中
                     if (!metadataName) {
                         positions.push(footprint);
                     }
@@ -639,9 +644,12 @@ const populateTimeline = async (map) => {
                             ))
                             .filter(Boolean);
 
+                    //获取多个标记点的 地图中心点 和 缩放级别
                     const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [350, 120, 120, 120]);
+                    // 提取坐标
                     const newposition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
 
+                    //判断是否
                     if (!byOverlays[0].toString().startsWith(currentZoom)) {
                         await moveToLocation(map, newposition, byOverlays[0], 0);
                     } else {
@@ -762,6 +770,7 @@ function mapZoom() {
 //缩放结束
 function mapZoomend(card, map) {
     console.log("缩放结束");
+    //卡片不为空时执行抛物线
     if (card != null) {
         loadParabolaAnimation(card, map);
     } else {
