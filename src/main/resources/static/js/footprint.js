@@ -367,6 +367,9 @@ let isElevation = false;
 // 添加图片预加载和缓存
 const imageCache = new Map();
 
+//保存上一次悬停卡片的坐标
+let lastPositions = [];
+
 //渲染抽屉中的时间线
 const populateTimeline = async (map) => {
     const timelineContainer = document.getElementById('timelineDrawer');
@@ -573,6 +576,8 @@ const populateTimeline = async (map) => {
         timelineContent.removeEventListener('scroll', handleScroll);
     });
 
+
+
     // 为每个卡片绑定鼠标悬停事件
     const timelineCards = document.querySelectorAll('.timeline-content-card');
     timelineCards.forEach(card => {
@@ -600,7 +605,7 @@ const populateTimeline = async (map) => {
                     }
                 });
 
-                zoomOn(map, card);
+
                 const zoom = 14;
 
                 const cardHeader = card.querySelector('.card-header');
@@ -643,23 +648,55 @@ const populateTimeline = async (map) => {
                                     f => f._position.lng === value.spec.longitude && f._position.lat === value.spec.latitude
                             ))
                             .filter(Boolean);
+                    lastPositions = newOverlays;
 
                     //获取多个标记点的 地图中心点 和 缩放级别
                     const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [350, 120, 120, 120]);
                     // 提取坐标
-                    const newposition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
+                    const newPosition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
 
-                    //判断是否
+                    //判断是否需要移动地图
                     if (!byOverlays[0].toString().startsWith(currentZoom)) {
-                        await moveToLocation(map, newposition, byOverlays[0], 0);
+                        //第一次 绑定地图 缩放事件
+                        zoomOn(map, card, newPosition, byOverlays[0], 1);
+                        await moveToLocation(map, newPosition, byOverlays[0], 0);
                     } else {
                         loadParabolaAnimation(card, map);
+                        zoomOff(map);
                     }
                 } else {
                     if (needsMovement) {
-                        await moveToLocation(map, position2, zoom, 0);
+                        //第一次 绑定地图 缩放事件
+                        zoomOn(map, card, position2, zoom, 1);
+                        // 绑定次数
+                        frequency = 1;
+
+                        // 获取悬停card的 Overlays
+                        const newOverlays2 = allOverlays.filter(
+                                f => f && f._position && f._position.lng === position2.getLng() && f._position.lat === position2.getLat()
+                        );
+
+                        // 获取上次悬停card的 Overlays
+                        /*const newOverlays3 = lastPositions
+                                .map(value => allOverlays.find(
+                                        f => f._position.lng === value.getLng() && f._position.lat === value.getLat()
+                                ))
+                                .filter(Boolean);*/
+                        const mergedOverlays = [...new Set([...newOverlays2, ...lastPositions])];
+
+                        lastPositions = newOverlays2;
+
+                        //获取多个标记点的 地图中心点 和 缩放级别
+                        const mergedOverlay = map.getFitZoomAndCenterByOverlays(mergedOverlays, [350, 120, 120, 120]);
+                        // 提取坐标
+                        const newPosition2 = new AMap.LngLat(mergedOverlay[1].lng, mergedOverlay[1].lat);
+
+                        //缩放到 多个标记点的 地图中心点 和 缩放级别
+                        await moveToLocation(map, newPosition2, mergedOverlay[0], 5);
+                        // await moveToLocation(map, position2, zoom, 0);
                     } else {
                         loadParabolaAnimation(card, map);
+                        zoomOff(map);
                     }
                 }
             } catch (error) {
@@ -685,6 +722,7 @@ const populateTimeline = async (map) => {
                         activeCard = null;
                     }
                     zoomOff(map);
+                    zoomOff3(map);
                     if (card.currentAnimationId) {
                         cancelAnimationFrame(card.currentAnimationId);
                         card.currentAnimationId = null;
@@ -708,40 +746,49 @@ const populateTimeline = async (map) => {
 // 存储绑定的函数，方便解绑
 let boundZoomStart, boundZoom, boundZoomEnd;
 
-//绑定事件
-function zoomOn(map, card) {
+//缩放事件绑定次数
+let frequency;
+
+
+//绑定事件 用于card的悬停
+function zoomOn(map, card, newPosition, zoom) {
     // console.log("绑定事件!");
 
     // 存储绑定的函数
     boundZoomStart = mapZoomstart.bind(null, card);
     boundZoom = mapZoom.bind(null, card);
-    boundZoomEnd = mapZoomend.bind(null, card, map);
+    boundZoomEnd = mapZoomend.bind(null, card, map, newPosition, zoom);
 
     map.on('zoomstart', boundZoomStart);
     map.on('zoomchange', boundZoom);
     map.on('zoomend', boundZoomEnd);
 }
 
-function zoomOff(map) {
+function zoomOff(map, card, newPosition, byOverlays) {
     // console.log("解除事件绑定!");
 
     // 使用存储的函数引用解绑
     map.off('zoomstart', boundZoomStart);
     map.off('zoomchange', boundZoom);
     map.off('zoomend', boundZoomEnd);
+    if (card) {
+        //第二次 绑定地图 缩放事件
+        zoomOn3(map, card, newPosition, byOverlays, 2);
+        moveToLocation(map, newPosition, byOverlays, 0);
+    }
 }
 
 // 存储绑定的函数，方便解绑
 let boundZoomStart2, boundZoom2, boundZoomEnd2;
 
-//绑定事件
+//绑定事件 用于标记点的缩放
 function zoomOn2(map, card) {
     // console.log("绑定事件2!");
 
     // 存储绑定的函数
     boundZoomStart2 = mapZoomstart.bind(null, card);
     boundZoom2 = mapZoom.bind(null, card);
-    boundZoomEnd2 = mapZoomend.bind(null, card, map);
+    boundZoomEnd2 = mapZoomend.bind(null, card, map, null, null, null);
 
     map.on('zoomstart', boundZoomStart2);
     map.on('zoomchange', boundZoom2);
@@ -757,22 +804,62 @@ function zoomOff2(map) {
     map.off('zoomend', boundZoomEnd2);
 }
 
+// 存储绑定的函数，方便解绑
+let boundZoomStart3, boundZoom3, boundZoomEnd3;
+
+//绑定事件 用于标记点的缩放
+function zoomOn3(map, card, newPosition, zoom) {
+    // console.log("绑定事件3!");
+
+    // 存储绑定的函数
+    boundZoomStart3 = mapZoomstart.bind(null, card);
+    boundZoom3 = mapZoom.bind(null, card);
+    boundZoomEnd3 = mapZoomend.bind(null, card, map, newPosition, zoom);
+
+    map.on('zoomstart', boundZoomStart3);
+    map.on('zoomchange', boundZoom3);
+    map.on('zoomend', boundZoomEnd3);
+}
+
+function zoomOff3(map, card) {
+    // console.log("解除事件绑定3!");
+    // 第二次 缩放结束以后执行抛物线
+    if (card) {
+        loadParabolaAnimation(card, map);
+    }
+
+    // 使用存储的函数引用解绑
+    map.off('zoomstart', boundZoomStart3);
+    map.off('zoomchange', boundZoom3);
+    map.off('zoomend', boundZoomEnd3);
+}
+
 //地图开始缩放
 function mapZoomstart() {
-    console.log("缩放开始");
+    // console.log("缩放开始");
 }
 
 //地图缩放中
-function mapZoom() {
-    console.log("正在缩放");
+function mapZoom(map) {
+    // console.log("正在缩放");
 }
 
 //缩放结束
-function mapZoomend(card, map) {
-    console.log("缩放结束");
+async function mapZoomend(card, map, newPosition, byOverlays) {
+    // console.log("缩放结束");
     //卡片不为空时执行抛物线
     if (card != null) {
-        loadParabolaAnimation(card, map);
+        if (frequency === 2) {
+            // console.log("第二次解除绑定");
+            zoomOff3(map, card);
+            frequency = 1;
+            return;
+        }
+        frequency = 2
+        // 第一次 解除绑定 缩放事件
+        zoomOff(map, card, newPosition, byOverlays);
+
+
     } else {
         zoomOff2(map);
         /*if (isMobile) {
@@ -926,11 +1013,9 @@ const moveToLocation = (map, position, Zoom, time) => {
         // 平移到目标位置
         map.panTo(position);
 
-        // 延迟缩放
-        setTimeout(() => {
-            // 强制设置新的缩放级别（即使相同也设置）
-            map.setZoom(Zoom); // 然后设置目标值
-        }, time); // 2-second delay
+
+        // 强制设置新的缩放级别（即使相同也设置）
+        map.setZoom(Zoom); // 然后设置目标值
 
 
         // 等待动画完成
