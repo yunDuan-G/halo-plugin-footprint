@@ -1,4 +1,4 @@
-// 等待DOM加载完成
+﻿// 等待DOM加载完成
 document.addEventListener('DOMContentLoaded', () => {
     // 判断是否为移动端
 
@@ -45,11 +45,16 @@ const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 // 添加一个全局变量来跟踪当前激活的卡片
 let activeCard = null;
+// 跟踪当前正在执行动画的卡片（与activeCard分开，避免mouseleave中断异步动画）
+let animationInFlight = null;
+
+// 标记点DOM缓存，避免重复querySelector查询
+const markerCache = new Map();
 
 //抛物线动画加载
 const loadParabolaAnimation = (card, map) => {
     // 如果当前卡片不是激活的卡片，则不执行动画
-    if (card !== activeCard) {
+    if (card !== animationInFlight) {
         return;
     }
 
@@ -81,7 +86,7 @@ const loadParabolaAnimation = (card, map) => {
     //获取cardHeader的元素内容
     const cardHeaderContent = cardHeader.textContent;
     //获取class为marker-image下的img中alt为cardHeaderContent的元素
-    const markerImage = document.querySelector(`.marker-image img[alt="${cardHeaderContent}"]`);
+    const markerImage = markerCache.get(cardHeaderContent);
 
 
     // 获取card对应的标记点
@@ -110,7 +115,7 @@ const loadParabolaAnimation = (card, map) => {
                     f => f.metadata.name === metadataName
             );
             if (relatedFootprint) {
-                const marker = document.querySelector(`.marker-image img[alt="${relatedFootprint.spec.name}"]`);
+                const marker = markerCache.get(relatedFootprint.spec.name);
                 if (marker) {
                     markerImages.push(marker);
                 }
@@ -124,7 +129,7 @@ const loadParabolaAnimation = (card, map) => {
     // 遍历所有标记图片
     markerImages.forEach(markerImg => {
         // 查找最近的amap-marker父元素
-        const markerElement = markerImg.closest('.amap-marker');
+        const markerElement = markerImg?.closest('.amap-marker');
         if (markerElement) {
             // 将card对应的标记点显示到最上层
             markerElement.classList.add('zIndex13');
@@ -596,6 +601,7 @@ const populateTimeline = async (map) => {
             try {
                 isProcessing = true;
                 activeCard = card;
+                animationInFlight = card;
 
                 // 关闭已打开的信息窗口
                 const allOverlays = map.getAllOverlays();
@@ -1481,6 +1487,12 @@ const addFootprintMarkers = async (map, footprintData) => {
 
                 map.add(marker);
             } catch (error) {
+
+                // 缓存标记点DOM引用，供抛物线动画使用
+                const imgElement = markerContent.querySelector('img');
+                if (imgElement) {
+                    markerCache.set(footprint.spec.name, imgElement);
+                }
                 console.error('创建标记失败:', error, footprint);
             }
         });
@@ -1832,3 +1844,4 @@ const initializeMapFeatures = (map, layers) => {
     // 初始化图层状态
     updateLayers(layerState, layers);
 };
+

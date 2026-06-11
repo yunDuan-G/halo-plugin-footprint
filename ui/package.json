@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "scripts": {
     "dev": "vite build --watch --mode=development",
     "build": "run-p type-check \"build-only {@}\" --",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@halo-dev/ui-plugin-bundler-kit": "^2.17.0",
     "@iconify/json": "^2.2.224",
+    "@iconify/utils": "^2.1.32",
     "@rushstack/eslint-patch": "^1.10.3",
     "@tsconfig/node20": "^20.1.4",
     "@types/canvas-confetti": "^1.6.4",
