@@ -1,4 +1,8 @@
-#footprint-page {
+﻿#footprint-page {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
     /* 全局变量定义 */
     --hsla-raw: var(--footprint-hsla);
     --primary-color: hsl(var(--hsla-raw));
@@ -181,6 +185,8 @@
 
 /* Logo 容器样式优化 */
 .logo-container {
+    top: calc(30px + var(--safe-top));
+    left: calc(30px + var(--safe-left));
     position: fixed;
     left: 30px;
     top: 30px;
@@ -272,6 +278,7 @@
 
 /* 地图控件样式 */
 .map-controls {
+    bottom: calc(20px + var(--safe-bottom));
     position: fixed;
     left: 50%;
     bottom: 28px;
@@ -432,6 +439,8 @@
 @media screen and (max-width: 768px) {
     /* 调整移动端的 logo-container */
     .logo-container {
+    top: calc(30px + var(--safe-top));
+    left: calc(30px + var(--safe-left));
         bottom: 10px;
         left: 10px;
         max-width: 200px;
@@ -439,6 +448,7 @@
     }
 
     .map-controls {
+    bottom: calc(20px + var(--safe-bottom));
         flex-wrap: wrap !important;
         width: 85vw;
         justify-content: flex-start !important;
@@ -969,6 +979,7 @@
 
 /* 控制栏动画 */
 .map-controls {
+    bottom: calc(20px + var(--safe-bottom));
     opacity: 0;
     transform: translateX(-50%) translateY(20px);
     transition: all 0.3s ease-out;
@@ -1083,6 +1094,10 @@
 }
 
 #footprint-page {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -1114,6 +1129,8 @@
 
 /* Logo和描述 */
 .logo-container {
+    top: calc(30px + var(--safe-top));
+    left: calc(30px + var(--safe-left));
     position: fixed;
     bottom: 20px;
     left: 20px;
@@ -1786,6 +1803,7 @@
     }
 
     .map-controls {
+    bottom: calc(20px + var(--safe-bottom));
         display: flex !important; /* Ensure map-controls are visible */
     }
 
@@ -2357,4 +2375,83 @@
 .location-icon {
     width: 20px;
     height: 20px;
+}
+/* === 无障碍: prefers-reduced-motion === */
+@media (prefers-reduced-motion: reduce) {
+  #footprint-page *,
+  #footprint-page *::before,
+  #footprint-page *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .animate-in,
+  .fade-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .btn-pulse {
+    animation: none !important;
+  }
+  #footprint-map.map-shake {
+    animation: none !important;
+  }
+  .timeline-content-card:hover .timeline-media img,
+  .timeline-content-card:hover .timeline-location {
+    transform: none !important;
+  }
+  .detail-btn:hover {
+    transform: none !important;
+  }
+}
+
+/* === 深色模式基础支持 === */
+@media (prefers-color-scheme: dark) {
+  #footprint-page {
+    --bg-color: #1a1a2e;
+    --text-color: #e0e0e0;
+    --text-light: #a0a0a0;
+    --shadow-color: rgba(0, 0, 0, 0.4);
+    background: #12121f;
+  }
+  #footprint-page #footprint-map {
+    background: #1a1a2e;
+  }
+  .timeline-drawer {
+    background: #1a1a2e;
+    border-left-color: rgba(255, 255, 255, 0.08);
+  }
+  .drawer-header {
+    background: #16213e;
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+  }
+  .drawer-header h2 {
+    color: #e0e0e0;
+  }
+  .timeline-content-card {
+    background: #1e2a3a;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+  .timeline-content-card:hover {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+  .timeline-desc {
+    color: rgba(200, 200, 200, 0.8);
+  }
+  .detail-btn {
+    background: linear-gradient(to right, var(--primary-color, #42b983), #2a5a3a);
+  }
+  #messageBoards {
+    background: #1e2a3a;
+    color: #e0e0e0;
+  }
+  #zoom-restore {
+    background: #1e2a3a;
+    color: #e0e0e0;
+  }
+  .plane-switch input[type="checkbox"]:checked + div > div {
+    background: #2a5a3a;
+    border-color: #42b983;
+  }
 }

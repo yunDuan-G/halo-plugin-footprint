@@ -2,7 +2,10 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f5f5f5" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#1a1a2e" media="(prefers-color-scheme: dark)">
     <title th:text="${settings.title}">足迹 - 记录生活的每一步</title>
     <!-- 引入高德地图API -->
     <script type="text/javascript">
@@ -486,7 +489,7 @@
 <canvas id="canvas"></canvas>
 <div class="footprint-container">
     <!-- 地图容器 -->
-    <div id="footprint-map"></div>
+    <div id="footprint-map" role="application" aria-label="足迹地图"></div>
 
     <!-- 左下角Logo和文字 -->
     <div class="logo-container">
@@ -507,7 +510,7 @@
             <button class="control-btn" data-type="satellite" data-tooltip="切换到卫星地图">卫星图</button>
         </div>
         <div class="button-group" id="line">
-            <label class="plane-switch" data-tooltip="显示/隐藏道路网络">
+            <label class="plane-switch" data-tooltip="显示/隐藏道路网络" aria-label="切换路网显示">
                 <input type="checkbox" data-type="road">
                 <div>
                     <div>
@@ -521,7 +524,7 @@
                 </div>
                 <span class="switch-text">路网</span>
             </label>
-            <label class="plane-switch" data-tooltip="显示/隐藏实时路况">
+            <label class="plane-switch" data-tooltip="显示/隐藏实时路况" aria-label="切换实时路况显示">
                 <input type="checkbox" data-type="traffic">
                 <div>
                     <div>
@@ -536,8 +539,8 @@
                 <span class="switch-text">路况</span>
             </label>
         </div>
-        <button id="zoom-restore" data-tooltip="返回中国全图视图">中国地图</button>
-        <div id="messageBoards" class="amap-scale-text" data-tooltip="查看留言板">留言板</div>
+        <button id="zoom-restore" data-tooltip="返回中国全图视图" aria-label="返回中国全图视图">中国地图</button>
+        <div id="messageBoards" class="amap-scale-text" data-tooltip="查看留言板" role="button" tabindex="0" aria-label="查看留言板">留言板</div>
     </div>
 <!--    <div id="timeline-drawer" class="drawer">
         <div class="drawer-content app-container">
@@ -549,8 +552,8 @@
 </div>
 <div class="timeline-drawer" id="timelineDrawer">
     <div class="drawer-header">
-        <h2><i class="fas fa-clock"></i> 旅行时间线</h2>
-        <button class="time-close-btn" id="closeBtn">X</button>
+        <h2><i class="fas fa-clock" aria-hidden="true"></i> 旅行时间线</h2>
+        <button class="time-close-btn" id="closeBtn" aria-label="关闭时间线">X</button>
     </div>
     <div class="timeline-content" id="timelineContent">
         <div class="timeline-decoration"></div>
