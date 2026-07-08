@@ -1644,20 +1644,20 @@
 }
 
 #timeline-container::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
 }
 
 #timeline-container::-webkit-scrollbar-track {
-    background: transparent;
+    background: rgba(15, 23, 42, 0.06);
 }
 
 #timeline-container::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1);
+    background: hsla(var(--hsla-raw), 0.25);
     border-radius: 4px;
 }
 
 #timeline-container::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.2);
+    background: hsla(var(--hsla-raw), 0.42);
 }
 
 .timeline-card {
@@ -2029,13 +2029,15 @@
     right: -500px;
     width: 500px;
     height: 100%;
-    background: rgba(255,255,255,0.98); /* 明亮半透明白 */
-    box-shadow: -5px 0 30px rgba(66,185,131,0.10);
+    background: rgba(255, 255, 255, 0.94);
+    border-left: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: -18px 0 44px rgba(15, 23, 42, 0.12);
     z-index: 2;
-    transition: right 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    transition: right 0.35s ease;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    backdrop-filter: blur(12px);
 }
 
 .timeline-drawer.open {
@@ -2044,35 +2046,37 @@
 }
 
 .drawer-header {
-    background: rgba(var(--primary-color, 66,185,131), 0.08);
-    padding: 25px;
-    color: var(--primary-color, #42b983);
+    background: rgba(255, 255, 255, 0.72);
+    padding: 20px 22px;
+    color: var(--text-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
     position: relative;
     z-index: 2;
-    box-shadow: 0 4px 24px 0 rgba(66,185,131,0.10), 0 2px 0 0 rgba(66,185,131,0.10);
-    border-bottom: 2.5px solid rgba(var(--primary-color, 66,185,131), 0.18);
-    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(12px);
 }
 
 .drawer-header h2 {
-    font-size: 1.6rem;
+    font-size: 1.2rem;
+    font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 10px;
-    color: var(--primary-color, #42b983);
+    gap: 8px;
+    color: var(--text-color);
+    letter-spacing: 0.02em;
 }
 
 .time-close-btn {
-    background: rgba(var(--primary-color, 66,185,131), 0.10);
-    border: none;
+    background: rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(15, 23, 42, 0.08);
     border-radius: 50%;
     width: 40px;
     height: 40px;
-    color: var(--primary-color, #42b983);
-    font-size: 1.5rem;
+    color: var(--text-light);
+    font-size: 1.2rem;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2081,13 +2085,13 @@
 }
 
 .time-close-btn:hover {
-    background: var(--primary-color, #42b983);
+    background: hsla(var(--hsla-raw), 0.16);
     color: #fff;
-    transform: rotate(90deg);
+    transform: rotate(90deg) scale(1.02);
 }
 
 .timeline-content {
-    padding: 20px 0 20px 20px;
+    padding: 18px 0 22px 18px;
     overflow-y: auto;
     height: 100%;
     background: transparent;
@@ -2096,7 +2100,7 @@
 /* 时间线主线 */
 .timeline {
     position: relative;
-    padding: 0px 0 40px;
+    padding: 0 0 28px;
 }
 
 .timeline::before {
@@ -2104,18 +2108,18 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 50px;
-    width: 4px;
-    background: linear-gradient(to bottom, var(--primary-color, #42b983), hsla(var(--hsla-raw), 0.35));
+    left: 44px;
+    width: 2px;
+    background: linear-gradient(to bottom, hsla(var(--hsla-raw), 0.14), hsla(var(--hsla-raw), 0.5), hsla(var(--hsla-raw), 0.14));
 }
 
 .timeline-item {
     position: relative;
-    margin: 0 30px 40px 0;
-    padding-left: 80px;
+    margin: 0 22px 26px 0;
+    padding-left: 72px;
     opacity: 0;
-    transform: translateX(30px);
-    transition: all 0.5s ease;
+    transform: translateX(16px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
 }
 
 .timeline-item.visible {
@@ -2126,41 +2130,43 @@
 .timeline-date {
     position: absolute;
     left: 0;
-    top: 16px;
-    background: var(--primary-color, #42b983);
-    color: #fff;
-    padding: 6px 10px;
-    border-radius: 22px;
+    top: 14px;
+    background: hsla(var(--hsla-raw), 0.12);
+    color: hsl(var(--hsla-raw));
+    padding: 5px 10px;
+    border-radius: 999px;
     font-weight: 600;
     min-width: 65px;
-    font-size: 0.95rem;
+    font-size: 0.8rem;
     text-align: center;
-    box-shadow: 0 2px 6px rgba(66,185,131,0.10);
+    border: 1px solid hsla(var(--hsla-raw), 0.25);
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
     z-index: 2;
-    letter-spacing: 1px;
+    letter-spacing: 0.03em;
 }
 
 /* 卡片样式优化 */
 .timeline-content-card {
     background: var(--bg-color, #fff);
-    border-radius: 15px;
-    box-shadow: 0 8px 32px rgba(66,185,131,0.13), 0 1.5px 6px rgba(0,0,0,0.08);
+    border-radius: 14px;
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
     overflow: hidden;
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
     position: relative;
     z-index: 1;
-    margin-top: 15px;
+    margin-top: 10px;
     width: 320px;
 }
 
 .timeline-content-card:hover {
-    box-shadow: 0 8px 32px rgba(66,185,131,0.18);
-    /*z-index: 10;*/
+    transform: translateY(-2px);
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
 }
 
 .timeline-media {
     position: relative;
-    height: 230px;
+    height: 220px;
     overflow: hidden;
     background: #f5f5f5;
 }
@@ -2174,7 +2180,7 @@
 }
 
 .timeline-content-card:hover .timeline-media img {
-    transform: scale(1.04);
+    transform: scale(1.02);
     z-index: 10;
 }
 
@@ -2184,19 +2190,19 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(to top, rgba(var(--primary-color, 66,185,131),0.18), transparent 60%);
+    background: linear-gradient(to top, rgba(7, 12, 20, 0.7) 0%, rgba(7, 12, 20, 0.34) 42%, transparent 72%);
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    padding: 20px;
+    padding: 16px;
     z-index: 2;
 }
 
 .timeline-location {
     color: white;
-    font-size: 1.1rem;
-    font-weight: 700;
-    margin-bottom: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 6px;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
     transition: transform 0.3s ease;
     display: flex;
@@ -2205,20 +2211,20 @@
 }
 
 .timeline-content-card:hover .timeline-location {
-    transform: translateX(16px) translateY(-70px);
+    transform: translateX(10px) translateY(-52px);
     z-index: 10;
 }
 
 .timeline-info-overlay {
-    padding: 15px 0 0;
+    padding: 12px 0 0;
 }
 
 .timeline-desc {
-    color: rgba(255, 255, 255, 0.9);
-    line-height: 1.6;
-    margin: 0 0 16px 0;
-    font-size: 0.85rem;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    color: rgba(255, 255, 255, 0.88);
+    line-height: 1.5;
+    margin: 0 0 12px 0;
+    font-size: 0.82rem;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
@@ -2227,21 +2233,24 @@
 }
 
 .detail-btn {
-    background: linear-gradient(to right, var(--primary-color, #42b983), hsla(var(--hsla-raw), 0.78));
+    /*background: rgba(12, 18, 28, 0.46);*/
+    background: rgba(255, 255, 255, 0.46);
     color: #fff;
-    border: none;
-    border-radius: 30px;
-    padding: 8px 16px;
+    border: 1px solid hsla(var(--hsla-raw), 0.42);
+    border-radius: 999px;
+    padding: 8px 14px;
     font-size: 0.8rem;
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
     display: flex;
     align-items: center;
     gap: 6px;
-    transition: all 0.3s ease;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 4px 15px rgba(66,185,131,0.10);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+    letter-spacing: 0.02em;
+    backdrop-filter: blur(6px);
 }
 
 .detail-btn::before {
@@ -2257,9 +2266,11 @@
 }
 
 .detail-btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 20px rgba(66,185,131,0.18);
-    background: linear-gradient(to right, var(--primary-color, #42b983), hsla(var(--hsla-raw), 0.92));
+    transform: translateY(-1px);
+    /*box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);*/
+    box-shadow: 0 10px 24px rgba(231, 231, 231, 0.22);
+    background: hsla(var(--hsla-raw), 0.78);
+    border-color: hsla(var(--hsla-raw), 0.94);
 }
 
 .detail-btn:hover::before {
@@ -2349,7 +2360,7 @@
     left: 0;
     width: 100%;
     height: 150px;
-    background: linear-gradient(to bottom, rgba(var(--primary-color, 66,185,131),0.10), transparent);
+    background: linear-gradient(to bottom, hsla(var(--hsla-raw), 0.12), transparent);
     z-index: 1;
 }
 
@@ -2359,25 +2370,25 @@
     left: 0;
     width: 100%;
     height: 100px;
-    background: linear-gradient(to top, rgba(var(--primary-color, 66,185,131),0.10), transparent);
+    background: linear-gradient(to top, hsla(var(--hsla-raw), 0.12), transparent);
     z-index: 1;
 }
 
 .timeline-content::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
 }
 
 .timeline-content::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.03);
+    background: rgba(15, 23, 42, 0.06);
 }
 
 .timeline-content::-webkit-scrollbar-thumb {
-    background: linear-gradient(to bottom, var(--primary-color, #42b983), hsla(var(--hsla-raw), 0.35));
+    background: hsla(var(--hsla-raw), 0.38);
     border-radius: 4px;
 }
 
-.timeline-content::-webkit-scrollbar {
-    display: none;
+.timeline-content::-webkit-scrollbar-thumb:hover {
+    background: hsla(var(--hsla-raw), 0.55);
 }
 
 .location-icon {
@@ -2448,7 +2459,8 @@
     color: rgba(200, 200, 200, 0.8);
   }
   .detail-btn {
-    background: linear-gradient(to right, var(--primary-color, #42b983), #2a5a3a);
+    /*background: rgba(8, 12, 20, 0.52);*/
+    border-color: hsla(var(--hsla-raw), 0.55);
   }
   #messageBoards {
     background: #1e2a3a;
