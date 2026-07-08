@@ -2106,7 +2106,7 @@
     bottom: 0;
     left: 50px;
     width: 4px;
-    background: linear-gradient(to bottom, var(--primary-color, #42b983), #b2f2dd);
+    background: linear-gradient(to bottom, var(--primary-color, #42b983), hsla(var(--hsla-raw), 0.35));
 }
 
 .timeline-item {
@@ -2227,7 +2227,7 @@
 }
 
 .detail-btn {
-    background: linear-gradient(to right, var(--primary-color, #42b983), #b2f2dd);
+    background: linear-gradient(to right, var(--primary-color, #42b983), hsla(var(--hsla-raw), 0.78));
     color: #fff;
     border: none;
     border-radius: 30px;
@@ -2259,7 +2259,7 @@
 .detail-btn:hover {
     transform: translateY(-3px);
     box-shadow: 0 6px 20px rgba(66,185,131,0.18);
-    background: linear-gradient(to right, var(--primary-color, #42b983), #5ee2a0);
+    background: linear-gradient(to right, var(--primary-color, #42b983), hsla(var(--hsla-raw), 0.92));
 }
 
 .detail-btn:hover::before {
@@ -2372,7 +2372,7 @@
 }
 
 .timeline-content::-webkit-scrollbar-thumb {
-    background: linear-gradient(to bottom, #42b983, #b2f2dd);
+    background: linear-gradient(to bottom, var(--primary-color, #42b983), hsla(var(--hsla-raw), 0.35));
     border-radius: 4px;
 }
 
