@@ -1713,8 +1713,8 @@ const initializeApp = async () => {
             zoom: 4,
             center: [116.397428, 39.90923],
             zooms: [2, 26],
-            mapStyle: 'amap://styles/light',
-            // mapStyle: window.FOOTPRINT_CONFIG.mapStyle || 'amap://styles/normal',
+            // mapStyle: 'amap://styles/whitesmoke',
+            mapStyle: window.FOOTPRINT_CONFIG.mapStyle || 'amap://styles/grey',
             viewMode: '3D',
             pitch: 0,
             terrain: true, // 开启地形图
