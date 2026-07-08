@@ -285,70 +285,68 @@
     transform: translateX(-50%);
     display: flex;
     align-items: center;
-    gap: 16px;
-    background: rgba(30, 41, 59, 0.65); /* 深色毛玻璃 */
-    backdrop-filter: blur(18px) saturate(1.2);
-    -webkit-backdrop-filter: blur(18px) saturate(1.2);
-    border-radius: 24px;
-    padding: 12px 24px;
+    gap: 10px;
+    background: rgba(17, 24, 39, 0.56);
+    backdrop-filter: blur(16px) saturate(1.15);
+    -webkit-backdrop-filter: blur(16px) saturate(1.15);
+    border-radius: 18px;
+    padding: 10px 14px;
     z-index: 1000;
-    border: 1.5px solid rgba(255, 255, 255, 0.13);
-    box-shadow: 0 8px 32px 0 rgba(30, 41, 59, 0.18), 0 1.5px 6px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     white-space: nowrap;
     transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
     transform-origin: center bottom;
 }
 
 .map-controls:hover {
-    box-shadow: 0 16px 42px 0 rgba(30, 41, 59, 0.28), 0 3px 10px rgba(0, 0, 0, 0.15);
-    background: rgba(30, 41, 59, 0.82);
-    transform: translateX(-50%) translateY(-4px);
-    border: 1.5px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    background: rgba(17, 24, 39, 0.7);
+    transform: translateX(-50%) translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.16);
 }
 
 .zoom-buttons {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
     background: rgba(255, 255, 255, 0.08);
-    border-radius: 20px;
-    padding: 6px 12px;
-    box-shadow: 0 1px 4px rgba(30, 41, 59, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    padding: 4px;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08);
     position: relative;
     transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .zoom-buttons:hover {
-    background: rgba(255, 255, 255, 0.12);
-    box-shadow: 0 2px 8px rgba(30, 41, 59, 0.12), inset 0 1px 2px rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .zoom-btn {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     border: none;
-    background: rgba(255, 255, 255, 0.18);
-    color: var(--primary-color, #42b983);
-    font-size: 18px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 17px;
     font-weight: bold;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    box-shadow: 0 2px 8px rgba(30, 41, 59, 0.08), inset 0 1px 2px rgba(255, 255, 255, 0.2);
-    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12);
+    transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
     position: relative;
     overflow: hidden;
-    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
 }
 
 .zoom-btn:hover {
     background: var(--primary-color, #42b983);
     color: #fff;
-    box-shadow: 0 6px 18px rgba(66, 185, 131, 0.25), inset 0 1px 3px rgba(255, 255, 255, 0.3);
-    transform: translateY(-2px) scale(1.12);
-    filter: brightness(1.1);
+    box-shadow: 0 8px 18px rgba(66, 185, 131, 0.22), inset 0 1px 3px rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
 }
 
 .zoom-btn::after {
@@ -372,34 +370,36 @@
 }
 
 .zoom-btn:active {
-    background: #222;
+    background: rgba(15, 23, 42, 0.9);
     color: #fff;
     transform: scale(0.96);
 }
 
 #zoom-restore, #messageBoards {
-    padding: 10px 16px;
-    background: rgba(255, 255, 255, 0.18);
+    padding: 9px 14px;
+    min-height: 34px;
+    background: rgba(255, 255, 255, 0.08);
     border: none;
-    border-radius: 14px;
-    color: var(--primary-color, #42b983);
-    font-size: 14px;
-    font-weight: 600;
+    border-radius: 999px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
-    box-shadow: 0 2px 6px rgba(30, 41, 59, 0.08), inset 0 1px 2px rgba(255, 255, 255, 0.2);
-    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08);
+    transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
     position: relative;
     overflow: hidden;
-    letter-spacing: 0.3px;
-    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+    letter-spacing: 0.2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 #zoom-restore:hover, #messageBoards:hover {
     background: var(--primary-color, #42b983);
     color: #fff;
-    box-shadow: 0 6px 18px rgba(66, 185, 131, 0.25), inset 0 1px 3px rgba(255, 255, 255, 0.3);
-    transform: translateY(-3px) scale(1.05);
-    filter: brightness(1.1);
+    box-shadow: 0 8px 18px rgba(66, 185, 131, 0.2), inset 0 1px 3px rgba(255, 255, 255, 0.22);
+    transform: translateY(-1px);
 }
 
 #zoom-restore::after, #messageBoards::after {
@@ -423,7 +423,7 @@
 }
 
 #zoom-restore:active, #messageBoards:active {
-    background: #222;
+    background: rgba(15, 23, 42, 0.9);
     color: #fff;
     transform: scale(0.97);
 }
@@ -450,12 +450,12 @@
     .map-controls {
     bottom: calc(20px + var(--safe-bottom));
         flex-wrap: wrap !important;
-        width: 85vw;
-        justify-content: flex-start !important;
-        row-gap: 12px !important;
-        padding: 6px !important;
-        border-radius: 10px !important;
-        /*gap: 10px !important;*/
+        width: min(92vw, 720px);
+        justify-content: center !important;
+        row-gap: 8px !important;
+        padding: 8px !important;
+        border-radius: 16px !important;
+        gap: 8px !important;
         font-size: 12px !important;
     }
 
@@ -488,14 +488,15 @@
     }
 
     #zoom-restore, #messageBoards, #timeline-btn {
-        padding: 4px 6px !important;
-        border-radius: 7px !important;
+        padding: 8px 12px !important;
+        border-radius: 999px !important;
         font-size: 12px !important;
+        min-height: 32px !important;
     }
 
     .zoom-btn {
-        width: 22px !important;
-        height: 22px !important;
+        width: 30px !important;
+        height: 30px !important;
         font-size: 13px !important;
     }
 
@@ -522,12 +523,12 @@
         flex-basis: 100%;
         width: 100%;
         justify-content: center;
-        margin-top: 2px;
+        margin-top: 0;
     }
 
     .control-btn {
-        padding: 4px 8px !important;
-        border-radius: 7px !important;
+        padding: 8px 12px !important;
+        border-radius: 999px !important;
         font-size: 12px !important;
         min-width: 0 !important;
     }
@@ -1164,42 +1165,44 @@
 .button-group {
     display: flex;
     align-items: center;
-    gap: 6px;
-    background: rgba(240, 240, 240, 0.85);
-    border-radius: 30px;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
     padding: 4px;
-    margin: 0 4px;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+    margin: 0;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08);
     position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* 分隔线 */
 .button-group:not(:last-child) {
-    border-right: 1px solid rgba(255, 255, 255, 0.2);
-    padding-right: 16px;
-    margin-right: 8px;
+    border-right: none;
+    padding-right: 0;
+    margin-right: 0;
 }
 
 /* 标准按钮样式 */
 .control-btn {
-    background: rgba(255, 255, 255, 0.1);
+    background: transparent;
     border: none;
-    color: #fff;
-    padding: 10px 18px;
-    border-radius: 20px;
-    font-size: 14px;
+    color: rgba(255, 255, 255, 0.86);
+    padding: 9px 14px;
+    border-radius: 999px;
+    font-size: 13px;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
     font-weight: 500;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+    line-height: 1;
+    min-height: 34px;
 }
 
 .control-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+    background: rgba(255, 255, 255, 0.12);
+    transform: translateY(-1px);
 }
 
 .control-btn::after {
@@ -1231,7 +1234,12 @@
 .zoom-buttons {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    padding: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08);
 }
 
 .hidden-important {
@@ -1239,22 +1247,22 @@
 }
 
 .zoom-btn {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     border: none;
     background: rgba(255, 255, 255, 0.1);
     color: #fff;
-    font-size: 18px;
+    font-size: 17px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.25s ease;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .zoom-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--primary-color, #42b983);
 }
 
 /* 比例尺文字样式 */
@@ -1280,14 +1288,14 @@
     -webkit-tap-highlight-color: transparent;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px;
-    border-radius: 20px;
-    transition: all 0.3s ease;
+    gap: 6px;
+    padding: 2px 4px;
+    border-radius: 999px;
+    transition: all 0.25s ease;
 }
 
 .plane-switch:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .plane-switch .switch-text {
@@ -1478,29 +1486,29 @@
 
 #timeline-btn {
     position: relative;
-    padding: 10px 18px;
-    background: var(--primary-color);
-    color: white;
+    padding: 9px 14px;
+    min-height: 34px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
     border: none;
-    border-radius: 20px;
-    font-size: 14px;
-    font-weight: 600;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
     display: flex;
     align-items: center;
-    gap: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), inset 0 1px 2px rgba(255, 255, 255, 0.2);
+    gap: 6px;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08);
     overflow: hidden;
-    letter-spacing: 0.3px;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    letter-spacing: 0.2px;
 }
 
 #timeline-btn::before {
     content: '';
     display: inline-block;
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E");
     background-size: contain;
     background-repeat: no-repeat;
@@ -1508,10 +1516,10 @@
 }
 
 #timeline-btn:hover {
-    transform: translateY(-3px) scale(1.03);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2), inset 0 1px 3px rgba(255, 255, 255, 0.3);
-    background: var(--primary-color-hover);
-    filter: brightness(1.1);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(66, 185, 131, 0.2), inset 0 1px 3px rgba(255, 255, 255, 0.2);
+    background: var(--primary-color, #42b983);
+    color: #fff;
 }
 
 #timeline-btn::after {
@@ -1535,8 +1543,8 @@
 }
 
 #timeline-btn:active {
-    transform: translateY(1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transform: scale(0.98);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08);
 }
 
 /* 移动端适配 */
