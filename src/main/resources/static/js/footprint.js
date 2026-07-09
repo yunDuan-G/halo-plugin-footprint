@@ -1710,7 +1710,7 @@ const initializeApp = async () => {
     try {
         // 创建地图实例
         const map = new AMap.Map('footprint-map', {
-            zoom: 4,
+            zoom: 4.1,
             center: [116.397428, 39.90923],
             zooms: [2, 26],
             // mapStyle: 'amap://styles/whitesmoke',
