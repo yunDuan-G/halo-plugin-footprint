@@ -2010,11 +2010,16 @@
 }
 
 .map-controls.open {
-    left: 25%;
-    transform: translateX(-50%);
-    transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s, background 0.3s;
+    left: auto;
+    right: calc(500px + 12px + var(--safe-right));
+    transform: translateX(0);
+    transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s, background 0.3s;
     border-radius: 22px 0 0 22px;
     background: rgba(30, 41, 59, 0.78);
+}
+
+.map-controls.open:hover {
+    transform: translateY(-2px);
 }
 
 .zIndex13 {
@@ -2288,6 +2293,15 @@
     }
     .timeline-drawer.open {
         right: 0;
+    }
+    .map-controls.open {
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        border-radius: 16px;
+    }
+    .map-controls.open:hover {
+        transform: translateX(-50%) translateY(-2px);
     }
     .drawer-header {
         padding: 14px 10px;
