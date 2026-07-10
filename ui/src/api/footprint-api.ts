@@ -1,5 +1,5 @@
-import type { AxiosInstance } from "axios";
-import type {Footprint, FootprintList, Option} from "./models";
+﻿import type { AxiosInstance } from "axios";
+import type {Footprint, FootprintList, Option, StatsResult, GeoInfo} from "./models";
 import {consoleApiClient} from "@halo-dev/api-client";
 
 export class FootprintApi {
@@ -82,6 +82,26 @@ export class FootprintApi {
   async deleteFootprints(names: string[]): Promise<void> {
     const promises = names.map((name) => this.deleteFootprint(name));
     await Promise.all(promises);
+  }
+
+  /**
+   * 获取足迹统计（按省份/城市分组）
+   */
+  async getStats(): Promise<StatsResult> {
+    const { data } = await this.axios.get(
+      "/apis/api.footprint.lik.cc/v1alpha1/footprints/stats"
+    );
+    return data;
+  }
+
+  /**
+   * 对指定足迹执行逆地理编码，填充省/市信息
+   */
+  async geocodeFootprint(name: string): Promise<Footprint> {
+    const { data } = await this.axios.post(
+      `/apis/api.footprint.lik.cc/v1alpha1/footprints/${name}/geocode`
+    );
+    return data;
   }
 
   /**

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 元数据接口
  */
 export interface Metadata {
@@ -41,6 +41,26 @@ export interface FootprintSpec {
   address?: string;
 
   /**
+   * 省级行政区名称（省/直辖市/自治区/特别行政区）
+   */
+  province?: string;
+
+  /**
+   * 城市名称
+   */
+  city?: string;
+
+  /**
+   * 省级行政区编码
+   */
+  provinceAdcode?: string;
+
+  /**
+   * 城市编码
+   */
+  cityAdcode?: string;
+
+  /**
    * 足迹类型
    */
   footprintType?: string;
@@ -73,7 +93,7 @@ export interface FootprintSpec {
 
   /**
    * 旋转角度  -360到360
-   * 3D地图俯启用
+   * 3D地图启用
    */
   rotationAngle: string;
 
@@ -130,4 +150,45 @@ export interface FootprintList {
 export interface Option {
   label: string;
   value: string;
+}
+
+/**
+ * 城市统计
+ */
+export interface CityStat {
+  name: string;
+  adcode: string;
+  province: string;
+  count: number;
+}
+
+/**
+ * 省份统计
+ */
+export interface ProvinceStat {
+  name: string;
+  adcode: string;
+  count: number;
+  cities: CityStat[];
+}
+
+/**
+ * 统计结果
+ */
+export interface StatsResult {
+  totalFootprints: number;
+  totalProvinces: number;
+  totalCities: number;
+  provinces: ProvinceStat[];
+  cities: CityStat[];
+}
+
+/**
+ * 逆地理编码结果
+ */
+export interface GeoInfo {
+  province: string;
+  city: string;
+  provinceAdcode: string;
+  cityAdcode: string;
 }

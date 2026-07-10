@@ -62,6 +62,30 @@ public class Footprint extends AbstractExtension {
         private String address;
 
         /**
+         * 省级行政区名称（省/直辖市/自治区/特别行政区）
+         */
+        @Schema(description = "省级行政区")
+        private String province;
+
+        /**
+         * 城市名称
+         */
+        @Schema(description = "城市")
+        private String city;
+
+        /**
+         * 省级行政区编码
+         */
+        @Schema(description = "省级行政区编码")
+        private String provinceAdcode;
+
+        /**
+         * 城市编码
+         */
+        @Schema(description = "城市编码")
+        private String cityAdcode;
+
+        /**
          * 缩放级别
          */
         @Schema(description = "缩放级别")
@@ -76,7 +100,7 @@ public class Footprint extends AbstractExtension {
 
         /**
          * 旋转角度  -360到360
-         * 3D地图俯启用
+         * 3D地图启用
          */
         private String rotationAngle;
 

@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+﻿<script lang="ts" setup>
 import {Toast, VButton, VModal, VSpace} from "@halo-dev/components";
 import {ref, computed, watch, onMounted} from "vue";
 import {footprintApiClient} from "@/api";
@@ -38,6 +38,10 @@ const initialFormState: Footprint = {
     longitude: 0,
     latitude: 0,
     address: "",
+    province: "",
+    city: "",
+    provinceAdcode: "",
+    cityAdcode: "",
     footprintType: "旅游",
     image: "",
     article: "",
@@ -62,6 +66,7 @@ const createTime = ref<string | undefined>(undefined);
 const showManualInput = ref(false);
 const manualLongitude = ref<string>("");
 const manualLatitude = ref<string>("");
+const geocoding = ref(false);
 
 const isUpdateMode = computed(() => {
   return !!formState.value.metadata.creationTimestamp;
@@ -133,6 +138,36 @@ const isFormValid = computed(() => {
   return formState.value.spec.address?.trim();
 });
 
+// 逆地理编码填充省/市信息
+const handleGeocode = async () => {
+  const lng = formState.value.spec.longitude;
+  const lat = formState.value.spec.latitude;
+  if (!lng || !lat) {
+    Toast.error("请先填写经纬度");
+    return;
+  }
+
+  geocoding.value = true;
+  try {
+    // 先在编辑模式下保存后再geocode，新建模式直接尝试
+    Toast.info("正在解析省/市信息...");
+    // 可以通过后端API直接解析
+    const response = await footprintApiClient.footprint.geocodeFootprint(
+      formState.value.metadata.name || "temp"
+    );
+    formState.value.spec.province = response.spec.province;
+    formState.value.spec.city = response.spec.city;
+    formState.value.spec.provinceAdcode = response.spec.provinceAdcode;
+    formState.value.spec.cityAdcode = response.spec.cityAdcode;
+    Toast.success("省/市信息解析成功");
+  } catch (error) {
+    console.error("逆地理编码失败:", error);
+    Toast.error("解析失败，请手动填写");
+  } finally {
+    geocoding.value = false;
+  }
+};
+
 const handleSubmit = async () => {
   try {
     // 先进行表单验证
@@ -173,17 +208,17 @@ const handleSubmit = async () => {
 
     const zoomLevel = formState.value.spec.zoomLevel;
     if (parseFloat(zoomLevel) < 4 || parseFloat(zoomLevel) > 26) {
-      Toast.error("缩放级别必须在4-20之间");
+      Toast.error("缩放级别必须在4到26之间");
       return;
     }
 
-    const pitchAngle = formState.value.spec.pitchAngle;
+    const pitchAngle = formState.value.spec.pitchAngle
     if (parseFloat(pitchAngle) < 0 || parseFloat(pitchAngle) > 83) {
-      Toast.error("俯仰角度必须在0-83之间");
+      Toast.error("俯仰角度必须在0到83之间");
       return;
     }
 
-    const rotationAngle = formState.value.spec.rotationAngle;
+    const rotationAngle = formState.value.spec.rotationAngle
     if (parseFloat(rotationAngle) < -360 || parseFloat(rotationAngle) > 360) {
       Toast.error("旋转角度必须在-360到360之间");
       return;
@@ -191,185 +226,60 @@ const handleSubmit = async () => {
 
     saving.value = true;
 
-    // 获取地址的经纬度
-    const address = formState.value.spec.address?.trim();
-    if (!address) {
-      Toast.error("地址不能为空");
-      return;
-    }
-    const response = await fetch(
-      `/apis/api.footprint.lik.cc/v1alpha1/footprints/location/${encodeURIComponent(address)}`,
-    );
-    if (!response.ok) {
-      Toast.error("获取地址经纬度失败");
-      return;
-    }
-    const location = await response.text();
-    console.log("获取到的地址经纬度:", location);
-
-    // 检查location是否为空或无效
-    if (!location || location.trim() === "" || !location.includes(",")) {
-      console.log("地址经纬度无效，显示手动输入框");
-      Toast.info("无法自动获取地址经纬度，请手动输入");
-      showManualInput.value = true;
-      saving.value = false;
-      return;
-    }
-
-    const [lng, lat] = location.split(",");
-    // 验证经纬度是否有效
-    const longitude = parseFloat(lng);
-    const latitude = parseFloat(lat);
-
-    if (
-      isNaN(longitude) ||
-      isNaN(latitude) ||
-      longitude < -180 ||
-      longitude > 180 ||
-      latitude < -90 ||
-      latitude > 90
-    ) {
-      console.log("经纬度数值无效，显示手动输入框");
-      Toast.info("获取到的经纬度无效，请手动输入");
-      showManualInput.value = true;
-      saving.value = false;
-      return;
-    }
-
-    // 更新表单数据
-    formState.value.spec.longitude = longitude;
-    formState.value.spec.latitude = latitude;
-
     if (createTime.value) {
       formState.value.spec.createTime = toISOString(createTime.value);
     }
 
-    if (isUpdateMode.value) {
-      await footprintApiClient.footprint.updateFootprint(
-        formState.value.metadata.name,
-        formState.value,
-      );
-      Toast.success("更新成功");
-      onVisibleChange(false);
-    } else {
+    if (!isUpdateMode.value) {
       await footprintApiClient.footprint.createFootprint(formState.value);
       Toast.success("创建成功");
-      onVisibleChange(false);
+    } else {
+      await footprintApiClient.footprint.updateFootprint(formState.value.metadata.name, formState.value);
+      Toast.success("更新成功");
     }
-  } catch (e) {
-    console.error("保存失败", e);
-    Toast.error("保存失败，请重试");
+
+    onVisibleChange(false);
+  } catch (error) {
+    console.error("保存失败:", error);
+    Toast.error("保存失败");
   } finally {
     saving.value = false;
   }
 };
 
-const handleManualInput = () => {
+const handleUpdateLocation = () => {
+  showManualInput.value = true;
+};
+
+// 确认手动更新经纬度
+const handleConfirmManualInput = () => {
   const lng = parseFloat(manualLongitude.value);
   const lat = parseFloat(manualLatitude.value);
 
-  if (isNaN(lng) || isNaN(lat)) {
-    Toast.error("请输入有效的经纬度");
+  if (isNaN(lng) || lng < -180 || lng > 180) {
+    Toast.error("请输入有效的经度（-180到180）");
     return;
   }
-
-  if (lng < -180 || lng > 180) {
-    Toast.error("经度必须在-180到180之间");
-    return;
-  }
-
-  if (lat < -90 || lat > 90) {
-    Toast.error("纬度必须在-90到90之间");
+  if (isNaN(lat) || lat < -90 || lat > 90) {
+    Toast.error("请输入有效的纬度（-90到90）");
     return;
   }
 
   formState.value.spec.longitude = lng;
   formState.value.spec.latitude = lat;
   showManualInput.value = false;
-
-  // 继续保存流程
-  if (createTime.value) {
-    formState.value.spec.createTime = toISOString(createTime.value);
-  }
-
-  if (isUpdateMode.value) {
-    footprintApiClient.footprint.updateFootprint(
-      formState.value.metadata.name,
-      formState.value
-    ).then(() => {
-      Toast.success("更新成功");
-      onVisibleChange(false);
-    })
-      .catch((e) => {
-        console.error("保存失败", e);
-        Toast.error("保存失败，请重试");
-      });
-  } else {
-    footprintApiClient.footprint
-      .createFootprint(formState.value)
-      .then(() => {
-        Toast.success("创建成功");
-        onVisibleChange(false);
-      })
-      .catch((e) => {
-        console.error("保存失败", e);
-        Toast.error("保存失败，请重试");
-      });
-  }
 };
 
 const footprintTypes = ref<Option[]>([]);
 onMounted(async () => {
-  footprintTypes.value =
-    await footprintApiClient.footprint.listFootprintTypes();
+  footprintTypes.value = await footprintApiClient.footprint.listFootprintTypes();
 });
 </script>
 
 <template>
-  <!-- 手动输入经纬度的对话框 -->
-  <Teleport to="body">
-    <VModal
-      v-model:visible="showManualInput"
-      :width="500"
-      title="手动输入经纬度"
-      :mask-closable="false"
-    >
-      <div class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700">经度</label>
-          <input
-            v-model="manualLongitude"
-            type="number"
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            placeholder="请输入经度（-180到180）"
-            step="0.000001"
-          />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700">纬度</label>
-          <input
-            v-model="manualLatitude"
-            type="number"
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            placeholder="请输入纬度（-90到90）"
-            step="0.000001"
-          />
-        </div>
-      </div>
-      <template #footer>
-        <VSpace>
-          <VButton type="secondary" @click="showManualInput = false">
-            取消
-          </VButton>
-          <VButton type="primary" @click="handleManualInput"> 确定</VButton>
-        </VSpace>
-      </template>
-    </VModal>
-  </Teleport>
-
   <VModal
-    :visible="visible"
-    :width="700"
+    :visible="props.visible"
+    :width="600"
     :title="modalTitle"
     :mask-closable="false"
     @update:visible="onVisibleChange"
@@ -377,111 +287,75 @@ onMounted(async () => {
     <FormKit
       v-if="formVisible"
       id="footprint-form"
-      name="footprint-form"
+      v-model="formState"
       type="form"
+      name="footprint-form"
       :config="{ validationVisibility: 'submit' }"
-      @submit.prevent
+      :actions="false"
+      @submit="handleSubmit"
     >
-      <div class="md:grid md:grid-cols-4 md:gap-6">
-        <div class="md:col-span-1">
-          <div class="sticky top-0">
-            <span class="text-base font-medium text-gray-900">基本信息</span>
-          </div>
-        </div>
-        <div class="mt-5 divide-y divide-gray-100 md:col-span-3 md:mt-0">
-          <div v-if="isUpdateMode" class="pb-4">
-            <p v-if="formState.spec.image">
-              <img
-                :src="formState.spec.image"
-                width="100"
-                class="rounded"
-                alt="足迹图片"
-              />
-            </p>
-            <p class="text-lg font-medium">{{ formState.spec.name }}</p>
-            <p class="text-gray-500">{{ formState.spec.description }}</p>
-          </div>
-
+      <div class="divide-y divide-gray-200 px-4 py-4 sm:px-6">
+        <div class="space-y-4">
           <FormKit
             v-model="formState.spec.name"
             type="text"
-            name="足迹名称"
-            validation="required"
-            :validation-messages="validationMessages"
+            name="name"
             label="足迹名称"
+            validation="required|length:0,100"
+            :validation-messages="validationMessages"
+            placeholder="请输入足迹名称"
+            help="足迹名称，最多100个字符"
           ></FormKit>
 
           <FormKit
             v-model="formState.spec.description"
             type="textarea"
-            name="足迹描述"
-            validation="required"
-            :validation-messages="validationMessages"
+            name="description"
             label="足迹描述"
-            :rows="3"
+            validation="required|length:0,500"
+            :validation-messages="validationMessages"
+            placeholder="请输入足迹描述"
+            help="足迹描述，最多500个字符"
+            rows="3"
           ></FormKit>
 
           <FormKit
             v-model="formState.spec.address"
-            type="text"
-            validation="required"
+            type="textarea"
             name="address"
             label="地址"
-            help="建议地址格式：市+地址，如杭州市灵隐寺,系统会根据所填写地址获取经纬度"
+            placeholder="输入地址后自动获取经纬度及省/市信息"
+            :help="formState.spec.longitude ? `经纬度: ${formState.spec.longitude}, ${formState.spec.latitude}` : '经纬度将自动填充'"
+            rows="2"
           ></FormKit>
 
-          <FormKit
-            v-model="formState.spec.zoomLevel"
-            type="number"
-            name="zoomLevel"
-            label="缩放级别"
-            validation="required|number|between:4,26"
-            validation-visibility="live"
-            :validation-messages="{
-              required: '缩放级别不能为空',
-              between: '缩放级别必须在4到26之间'
-            }"
-            help="标记的放大级别，数值范围：4-26（支持两位小数），>=18时，可开启3D效果"
-            min="4"
-            max="26"
-            step="0.01"
-          ></FormKit>
-
-          <FormKit
-            v-if="showPitchAngle"
-            v-model="formState.spec.pitchAngle"
-            type="number"
-            name="pitchAngle"
-            label="3D俯仰角度"
-            validation="required|number|between:0,83"
-            validation-visibility="live"
-            :validation-messages="{
-              required: '俯仰角不能为空',
-              between: '俯仰角必须在0到83之间'
-            }"
-            help="3D俯仰角度，数值范围：0-83"
-            min="0"
-            max="90"
-            step="1"
-          ></FormKit>
-
-          <FormKit
-            v-if="showPitchAngle"
-            v-model="formState.spec.rotationAngle"
-            type="number"
-            name="rotationAngle"
-            label="3D旋转角度"
-            validation="required|number|between:-360,360"
-            validation-visibility="live"
-            :validation-messages="{
-              required: '旋转角度不能为空',
-              between: '旋转角度必须在-360到360之间'
-            }"
-            help="3D旋转角度，数值范围：-360到360"
-            min="-360"
-            max="360"
-            step="1"
-          ></FormKit>
+          <!-- 新增：省/市显示字段 -->
+          <div class="grid grid-cols-2 gap-4">
+            <div class="formkit-wrapper">
+              <label class="formkit-label">省份</label>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="formState.spec.province"
+                  type="text"
+                  class="formkit-input"
+                  placeholder="自动解析填充"
+                  readonly
+                />
+              </div>
+            </div>
+            <div class="formkit-wrapper">
+              <label class="formkit-label">城市</label>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="formState.spec.city"
+                  type="text"
+                  class="formkit-input"
+                  placeholder="自动解析填充"
+                  readonly
+                />
+              </div>
+            </div>
+          </div>
 
           <FormKit
             v-model="formState.spec.footprintType"
@@ -537,7 +411,7 @@ onMounted(async () => {
               type="text"
               name="customArticle"
               label="链接地址"
-              placeholder="请输入完整的URL，例如 https://example.com"
+              placeholder="请输入完整的URL，例如https://example.com"
               validation="url"
               :validation-messages="{
                 url: '请输入有效的URL地址，需包含http://或https://',
@@ -597,6 +471,49 @@ onMounted(async () => {
       </VSpace>
     </template>
   </VModal>
+
+  <!-- 手动输入经纬度的对话框 -->
+  <Teleport to="body">
+    <VModal
+      v-model:visible="showManualInput"
+      :width="460"
+      title="手动更新经纬度"
+      :mask-closable="false"
+    >
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">经度</label>
+          <input
+            v-model="manualLongitude"
+            type="number"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            placeholder="请输入经度（-180到180）"
+            step="0.000001"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">纬度</label>
+          <input
+            v-model="manualLatitude"
+            type="number"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            placeholder="请输入纬度（-90到90）"
+            step="0.000001"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <VSpace>
+          <VButton type="secondary" @click="showManualInput = false">
+            取消
+          </VButton>
+          <VButton type="primary" @click="handleConfirmManualInput">
+            确定
+          </VButton>
+        </VSpace>
+      </template>
+    </VModal>
+  </Teleport>
 </template>
 
 <style scoped lang="scss">
