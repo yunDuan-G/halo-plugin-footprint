@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {
   VCard,
   IconRefreshLine,
@@ -346,7 +346,7 @@ const handleEdit = (row: Footprint) => {
       </div>
     </VCard>
 
-    <VCard class="h-full" :body-class="['!p-0']" style="height: calc(100vh - 20rem)">
+    <VCard class="h-full" :body-class="['!p-0']">
       <template #header>
         <div class="block sm:flex items-center w-full">
           <div class="flex w-full flex-1 items-center sm:w-auto">
@@ -433,8 +433,7 @@ const handleEdit = (row: Footprint) => {
         </VEmpty>
       </Transition>
 
-      <Transition v-else appear name="fade">
-        <div class="overflow-x-auto">
+      <Transition v-else appear name="fade"><div class="overflow-x-auto max-h-[calc(100vh-24rem)] overflow-y-auto">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
             <tr>
