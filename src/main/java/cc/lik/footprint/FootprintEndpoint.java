@@ -1,7 +1,5 @@
 package cc.lik.footprint;
 
-import cc.lik.footprint.dto.GeoInfo;
-import cc.lik.footprint.dto.StatsResult;
 import cc.lik.footprint.model.Footprint;
 import cc.lik.footprint.service.FootprintService;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +14,7 @@ import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ListResult;
 import run.halo.app.extension.ReactiveExtensionClient;
+import run.halo.app.extension.router.QueryParamBuildUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,20 +43,6 @@ public class FootprintEndpoint implements CustomEndpoint {
                     .response(responseBuilder()
                         .implementation(ListResult.generateGenericClass(Footprint.class)));
                 FootprintQuery.buildParameters(builder);
-            })
-            .GET("/footprints/stats", this::getStats, builder -> {
-                builder.operationId("GetFootprintStats")
-                    .tag(footprintTag)
-                    .description("获取足迹统计信息（按省份/城市分组）")
-                    .response(responseBuilder()
-                        .implementation(StatsResult.class));
-            })
-            .POST("/footprints/{name}/geocode", this::geocodeFootprint, builder -> {
-                builder.operationId("GeocodeFootprint")
-                    .tag(footprintTag)
-                    .description("对指定足迹执行逆地理编码，填充省/市信息")
-                    .response(responseBuilder()
-                        .implementation(Footprint.class));
             })
             .GET("/footprints/location/{address}", this::getLocation, builder -> {
                 builder.operationId("GetLocation")
@@ -111,53 +96,6 @@ public class FootprintEndpoint implements CustomEndpoint {
             .flatMap(listResult -> ServerResponse.ok().bodyValue(listResult));
     }
 
-    private Mono<ServerResponse> getStats(ServerRequest request) {
-        return footprintService.getStats()
-            .flatMap(stats -> ServerResponse.ok().bodyValue(stats))
-            .onErrorResume(e -> {
-                log.error("获取足迹统计失败: {}", e.getMessage());
-                return ServerResponse.status(500).bodyValue("获取足迹统计失败: " + e.getMessage());
-            });
-    }
-
-    private Mono<ServerResponse> geocodeFootprint(ServerRequest request) {
-        String name = request.pathVariable("name");
-
-        return footprintService.getConfigByGroupName()
-            .switchIfEmpty(Mono.error(new RuntimeException("未找到足迹配置")))
-            .flatMap(config -> {
-                if (config.getGaoDeWebKey() == null || config.getGaoDeWebKey().trim().isEmpty()) {
-                    return Mono.error(new RuntimeException("高德地图Key未配置"));
-                }
-
-                return client.fetch(Footprint.class, name)
-                    .switchIfEmpty(Mono.error(new RuntimeException("足迹不存在: " + name)))
-                    .flatMap(footprint -> {
-                        Double lng = footprint.getSpec().getLongitude();
-                        Double lat = footprint.getSpec().getLatitude();
-                        if (lng == null || lat == null) {
-                            return Mono.error(new RuntimeException("足迹经纬度为空"));
-                        }
-
-                        return footprintService.reverseGeocode(lng, lat, config.getGaoDeWebKey())
-                            .flatMap(geoInfo -> {
-                                footprint.getSpec().setProvince(geoInfo.getProvince());
-                                footprint.getSpec().setCity(geoInfo.getCity());
-                                footprint.getSpec().setProvinceAdcode(geoInfo.getProvinceAdcode());
-                                footprint.getSpec().setCityAdcode(geoInfo.getCityAdcode());
-                                return client.update(footprint);
-                            });
-                    });
-            })
-            .flatMap(updated -> ServerResponse.ok().bodyValue(updated))
-            .onErrorResume(e -> {
-                log.error("逆地理编码填充失败: {}", e.getMessage());
-                if (e instanceof RuntimeException) {
-                    return ServerResponse.badRequest().bodyValue(e.getMessage());
-                }
-                return ServerResponse.status(500).bodyValue("逆地理编码填充失败: " + e.getMessage());
-            });
-    }
 
     private Mono<ServerResponse> getLocation(ServerRequest request) {
         String address = request.pathVariable("address");
