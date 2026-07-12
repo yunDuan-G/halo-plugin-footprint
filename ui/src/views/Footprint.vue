@@ -118,73 +118,23 @@ const {
   },
 });
 
-const stats = computed<StatsResult | null>(() => {
-  const list = footprints.value;
-  if (!list || !Array.isArray(list)) return null;
+const stats = ref<StatsResult | null>(null);
 
-  const provinceMap = new Map<string, { name: string; count: number; cities: string[] }>();
-  const cityMap = new Map<string, { name: string; count: number; province: string }>();
-
-  for (const fp of list) {
-    const spec = fp.spec;
-    if (!spec) continue;
-
-    const pAdcode = spec.provinceAdcode;
-    const pName = spec.province;
-    const cAdcode = spec.cityAdcode;
-    const cName = spec.city;
-
-    if (pAdcode) {
-      const p = provinceMap.get(pAdcode);
-      if (p) {
-        p.count++;
-      } else {
-        provinceMap.set(pAdcode, { name: pName || '', count: 1, cities: [] });
-      }
+const fetchStats = async () => {
+  try {
+    const result = await footprintApiClient.footprint.getStats();
+    if (result) {
+      // 按数量倒序排列
+      result.provinces.sort((a, b) => b.count - a.count);
+      result.cities.sort((a, b) => b.count - a.count);
+      stats.value = JSON.parse(JSON.stringify(result));
     }
-
-    if (cAdcode) {
-      const c = cityMap.get(cAdcode);
-      if (c && c.name !== cName) {
-        // same adcode, different name - keep first
-        c.count++;
-      } else if (c) {
-        c.count++;
-      } else {
-        cityMap.set(cAdcode, { name: cName || '', count: 1, province: pName || '' });
-      }
-    }
-
-    // add city to province's city list
-    if (pAdcode && cName && provinceMap.has(pAdcode)) {
-      const cities = provinceMap.get(pAdcode)!.cities;
-      if (!cities.includes(cName)) cities.push(cName);
-    }
+  } catch (error) {
+    console.error("获取足迹统计失败:", error);
   }
+};
 
-  const provinces = Array.from(provinceMap.entries()).map(([adcode, p]) => ({
-    name: p.name,
-    adcode,
-    count: p.count,
-    cities: p.cities,
-  }));
-
-  const cities = Array.from(cityMap.entries()).map(([adcode, c]) => ({
-    name: c.name,
-    adcode,
-    province: c.province,
-    provinceAdcode: '',
-    count: c.count,
-  }));
-
-  return {
-    totalFootprints: list.length,
-    totalProvinces: provinces.length,
-    totalCities: cities.length,
-    provinces,
-    cities,
-  };
-});
+fetchStats();
 
 const handleCheckAllChange = (e: Event) => {
   const { checked } = e.target as HTMLInputElement;
@@ -199,25 +149,29 @@ const handleCheckAllChange = (e: Event) => {
   }
 };
 
-const handleDeleteInBatch = () => {
+const handleDeleteInBatch = async () => {
   if (selectedFootprints.value.length === 0) return;
+
+  const names = [...selectedFootprints.value];
   Dialog.warning({
     title: "是否确认删除所选的足迹",
     description: "删除之后将无法恢复此操作不可恢复。",
     async onConfirm() {
       try {
-        await footprintApiClient.footprint.deleteFootprints(selectedFootprints.value);
+        await footprintApiClient.footprint.deleteFootprints(names);
         Toast.success("删除成功");
         selectedFootprints.value.length = 0;
         checkedAll.value = false;
+        // 删除成功后延迟刷新，确保服务端数据已更新
+        setTimeout(async () => {
+          await refetch();
+          await fetchStats();
+        }, 300);
       } catch (e) {
         console.error("删除失败", e);
         Toast.error("删除失败");
-        return;
       }
-      // 删除成功后刷新列表和统计
-      await refetch();
-          },
+    },
   });
 };
 
@@ -229,7 +183,8 @@ const handleOpenCreateModal = (footprint?: Footprint) => {
 const onEditingModalClose = async () => {
   selectedFootprint.value = undefined;
   await refetch();
-  };
+  await fetchStats();
+};
 
 const handleTypeSelect = (type: string | undefined) => {
   selectedFootprintType.value = type;
@@ -287,7 +242,8 @@ const handleManualInput = async () => {
 
 const handleRefreshAll = async () => {
   await refetch();
-  };
+  await fetchStats();
+};
 
 const handleEdit = (footprint: Footprint) => {
   selectedFootprint.value = footprint;
@@ -302,7 +258,8 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
     await footprintApiClient.footprint.geocodeFootprint(footprint.metadata.name);
     Toast.success("逆地理编码成功，省/市信息已更新");
     await refetch();
-      } catch (error) {
+      await fetchStats();
+    } catch (error) {
     console.error("逆地理编码失败:", error);
     Toast.error("逆地理编码失败");
   } finally {

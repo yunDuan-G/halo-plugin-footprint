@@ -214,12 +214,17 @@ public class FootprintServiceImpl implements FootprintService {
                         }
                     }
 
+                                        List<StatsResult.ProvinceStat> sortedProvinces = new ArrayList<>(provinceMap.values());
+                    sortedProvinces.sort((a, b) -> Long.compare(b.getCount(), a.getCount()));
+                    List<StatsResult.CityStat> sortedCities = new ArrayList<>(cityMap.values());
+                    sortedCities.sort((a, b) -> Long.compare(b.getCount(), a.getCount()));
+
                     return StatsResult.builder()
                             .totalFootprints(totalFootprints)
                             .totalProvinces(provinceMap.size())
                             .totalCities(cityMap.size())
-                            .provinces(new ArrayList<>(provinceMap.values()))
-                            .cities(new ArrayList<>(cityMap.values()))
+                            .provinces(sortedProvinces)
+                            .cities(sortedCities)
                             .build();
                 });
     }

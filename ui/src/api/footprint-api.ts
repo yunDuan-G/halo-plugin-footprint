@@ -1,4 +1,4 @@
-﻿import type { AxiosInstance } from "axios";
+import type { AxiosInstance } from "axios";
 import type {Footprint, FootprintList, Option, StatsResult, GeoInfo} from "./models";
 import {consoleApiClient} from "@halo-dev/api-client";
 
@@ -118,7 +118,7 @@ export class FootprintApi {
 
   async getStats(): Promise<StatsResult> {
     const { data } = await this.axios.get(
-      "/apis/api.footprint.lik.cc/v1alpha1/footprints/stats"
+      "/apis/api.footprint.lik.cc/v1alpha1/footprints/stats", { params: { _t: Date.now() } }
     );
     return data;
   }
