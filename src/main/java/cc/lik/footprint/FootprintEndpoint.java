@@ -1,5 +1,7 @@
 package cc.lik.footprint;
 
+import cc.lik.footprint.dto.GeoInfo;
+import cc.lik.footprint.dto.StatsResult;
 import cc.lik.footprint.model.Footprint;
 import cc.lik.footprint.service.FootprintService;
 import lombok.RequiredArgsConstructor;
@@ -52,15 +54,27 @@ public class FootprintEndpoint implements CustomEndpoint {
                         .implementation(String.class)
                         .description("返回经纬度信息，格式：经度,纬度"));
             })
+            .GET("/footprints/stats", this::getStats, builder -> {
+                builder.operationId("GetStats")
+                    .tag(footprintTag)
+                    .description("获取足迹统计信息")
+                    .response(responseBuilder()
+                        .implementation(StatsResult.class));
+            })
+            .POST("/footprints/{name}/geocode", this::geocodeFootprint, builder -> {
+                builder.operationId("GeocodeFootprint")
+                    .tag(footprintTag)
+                    .description("对指定足迹执行逆地理编码")
+                    .response(responseBuilder()
+                        .implementation(GeoInfo.class));
+            })
             .build();
     }
 
     private Mono<ServerResponse> listFootprints(ServerRequest request) {
         FootprintQuery query = new FootprintQuery(request);
         
-        // 将ListOptions转换为Predicate
         Predicate<Footprint> predicate = footprint -> {
-            // 处理关键词搜索
             if (query.getKeyword() != null && !query.getKeyword().isEmpty()) {
                 if (footprint.getSpec().getName() == null || 
                     !footprint.getSpec().getName().contains(query.getKeyword())) {
@@ -68,7 +82,6 @@ public class FootprintEndpoint implements CustomEndpoint {
                 }
             }
             
-            // 处理类型过滤
             if (query.getFootprintType() != null && !query.getFootprintType().isEmpty()) {
                 if (footprint.getSpec().getFootprintType() == null || 
                     !footprint.getSpec().getFootprintType().equals(query.getFootprintType())) {
@@ -118,6 +131,56 @@ public class FootprintEndpoint implements CustomEndpoint {
                     return ServerResponse.badRequest().bodyValue(e.getMessage());
                 }
                 return ServerResponse.status(500).bodyValue("获取地址位置失败: " + e.getMessage());
+            });
+    }
+
+    private Mono<ServerResponse> getStats(ServerRequest request) {
+        return footprintService.getStats()
+            .flatMap(stats -> ServerResponse.ok().bodyValue(stats))
+            .onErrorResume(e -> {
+                log.error("获取足迹统计失败: {}", e.getMessage());
+                return ServerResponse.status(500).bodyValue("获取足迹统计失败: " + e.getMessage());
+            });
+    }
+
+    private Mono<ServerResponse> geocodeFootprint(ServerRequest request) {
+        String name = request.pathVariable("name");
+
+        return footprintService.getConfigByGroupName()
+            .switchIfEmpty(Mono.error(new RuntimeException("未找到足迹配置")))
+            .flatMap(config -> {
+                if (config.getGaoDeWebKey() == null || config.getGaoDeWebKey().trim().isEmpty()) {
+                    return Mono.error(new RuntimeException("高德地图Key未配置"));
+                }
+                return client.get(Footprint.class, name)
+                    .switchIfEmpty(Mono.error(new RuntimeException("足迹不存在: " + name)))
+                    .flatMap(footprint -> {
+                        Double lng = footprint.getSpec().getLongitude();
+                        Double lat = footprint.getSpec().getLatitude();
+                        if (lng == null || lat == null) {
+                            return Mono.error(new RuntimeException("足迹缺少经纬度信息"));
+                        }
+                        return footprintService.reverseGeocode(lng, lat, config.getGaoDeWebKey())
+                            .flatMap(geoInfo -> {
+                                if (geoInfo == null) {
+                                    return Mono.error(new RuntimeException("逆地理编码失败"));
+                                }
+                                footprint.getSpec().setProvince(geoInfo.getProvince());
+                                footprint.getSpec().setCity(geoInfo.getCity());
+                                footprint.getSpec().setProvinceAdcode(geoInfo.getProvinceAdcode());
+                                footprint.getSpec().setCityAdcode(geoInfo.getCityAdcode());
+                                return client.update(footprint)
+                                    .thenReturn(geoInfo);
+                            });
+                    });
+            })
+            .flatMap(geoInfo -> ServerResponse.ok().bodyValue(geoInfo))
+            .onErrorResume(e -> {
+                log.error("逆地理编码失败: {}", e.getMessage());
+                if (e instanceof RuntimeException) {
+                    return ServerResponse.badRequest().bodyValue(e.getMessage());
+                }
+                return ServerResponse.status(500).bodyValue("逆地理编码失败: " + e.getMessage());
             });
     }
 

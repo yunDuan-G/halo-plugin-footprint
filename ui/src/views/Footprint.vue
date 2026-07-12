@@ -20,10 +20,9 @@ import {computed, h, onMounted, ref, watch} from "vue";
 import { formatDatetime } from "@/utils/date";
 import FootprintEditingModal from "../components/FootprintEditingModal.vue";
 import { footprintApiClient } from "@/api";
-import type {Footprint, Option} from "@/api/models";
+import type {Footprint, Option, StatsResult} from "@/api/models";
 import { FormKit } from "@formkit/vue";
 
-// 定义组件名称
 defineOptions({
   name: "FootprintManagement"
 });
@@ -45,7 +44,8 @@ const currentFootprint = ref<Footprint | null>(null);
 const manualLongitude = ref("");
 const manualLatitude = ref("");
 
-// 添加 queryClient
+const showStatsDetail = ref(false);
+
 const queryClient = useQueryClient();
 
 watch(
@@ -108,7 +108,6 @@ const {
   },
   refetchInterval: (data) => {
     if (!data) return false;
-    // 检查是否有正在删除的足迹
     let hasDeletingFootprints = false;
     if (Array.isArray(data)) {
       hasDeletingFootprints = data.some((footprint: Footprint) => 
@@ -116,6 +115,21 @@ const {
       );
     }
     return hasDeletingFootprints ? 500 : false;
+  },
+});
+
+const {
+  data: stats,
+  refetch: refetchStats,
+} = useQuery({
+  queryKey: ["footprintStats"],
+  queryFn: async () => {
+    try {
+      return await footprintApiClient.footprint.getStats();
+    } catch (error) {
+      console.error("获取足迹统计失败:", error);
+      return null;
+    }
   },
 });
 
@@ -150,12 +164,13 @@ const handleDeleteInBatch = () => {
         Toast.error("删除失败");
       } finally {
         refetch();
+        refetchStats();
       }
     },
   });
 };
 
-const handleOpenCreateModal = (footprint: Footprint) => {
+const handleOpenCreateModal = (footprint?: Footprint) => {
   selectedFootprint.value = footprint;
   editingModal.value = true;
 };
@@ -163,9 +178,9 @@ const handleOpenCreateModal = (footprint: Footprint) => {
 const onEditingModalClose = async () => {
   selectedFootprint.value = undefined;
   refetch();
+  refetchStats();
 };
 
-// 处理类型选择
 const handleTypeSelect = (type: string | undefined) => {
   selectedFootprintType.value = type;
   refetch();
@@ -193,217 +208,225 @@ const handleManualInput = async () => {
   }
   
   if (lng < -180 || lng > 180) {
-    Toast.error("经度必须在-180到180之间");
+    Toast.error("经度范围应在-180到180之间");
     return;
   }
   
   if (lat < -90 || lat > 90) {
-    Toast.error("纬度必须在-90到90之间");
+    Toast.error("纬度范围应在-90到90之间");
     return;
   }
   
   try {
-    const updatedFootprint = {
-      ...currentFootprint.value,
-      spec: {
-        ...currentFootprint.value.spec,
-        longitude: lng,
-        latitude: lat,
-      },
-    };
+    currentFootprint.value.spec.longitude = lng;
+    currentFootprint.value.spec.latitude = lat;
     
     await footprintApiClient.footprint.updateFootprint(
       currentFootprint.value.metadata.name,
-      updatedFootprint
+      currentFootprint.value
     );
     
-    Toast.success("更新成功");
+    Toast.success("经纬度更新成功");
     showManualInput.value = false;
-    handleFetchData();
-  } catch (e) {
-    console.error("更新失败", e);
-    Toast.error("更新失败，请重试");
+    refetch();
+  } catch (error) {
+    console.error("更新经纬度失败:", error);
+    Toast.error("更新经纬度失败");
   }
 };
 
-const handleFetchData = () => {
-  refetch();
+const handleEdit = (footprint: Footprint) => {
+  selectedFootprint.value = footprint;
+  editingModal.value = true;
 };
 
-const handleEdit = (row: Footprint) => {
-  handleOpenCreateModal(row);
+const awaitingGeocode = ref<string | null>(null);
+
+const handleGeocodeFootprint = async (footprint: Footprint) => {
+  try {
+    awaitingGeocode.value = footprint.metadata.name;
+    await footprintApiClient.footprint.geocodeFootprint(footprint.metadata.name);
+    Toast.success("逆地理编码成功，省/市信息已更新");
+    refetch();
+    refetchStats();
+  } catch (error) {
+    console.error("逆地理编码失败:", error);
+    Toast.error("逆地理编码失败");
+  } finally {
+    awaitingGeocode.value = null;
+  }
 };
+
 </script>
 
 <template>
-  <FootprintEditingModal
-    v-model:visible="editingModal"
-    :footprint="selectedFootprint"
-    @close="onEditingModalClose"
-  >
-  </FootprintEditingModal>
-  <VPageHeader title="足迹">
-    <template #actions>
-      <VSpace>
-        <VButton
-          type="secondary"
-          @click="editingModal = true"
-        >
+  <div>
+    <VPageHeader title="足迹管理">
+      <template #actions>
+        <VButton type="secondary" @click="editingModal = true">
           <template #icon>
-            <IconAddCircle class="h-full w-full" />
+            <IconAddCircle />
           </template>
-          新建
+          新建足迹
         </VButton>
-      </VSpace>
-    </template>
-  </VPageHeader>
+      </template>
+    </VPageHeader>
 
-  <div class="m-0 md:m-4">
-    <VCard :body-class="['!p-0']">
-      <template #header>
-        <div class="block w-full bg-gray-50 px-4 py-3">
-          <div class="relative flex flex-col flex-wrap items-start gap-4 sm:flex-row sm:items-center">
-            <div class="hidden items-center sm:flex">
-              <input
-                v-model="checkedAll"
-                type="checkbox"
-                @change="handleCheckAllChange"
+    <!-- 统计概览卡片 -->
+    <div v-if="stats" class="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <VCard
+        class="cursor-pointer hover:shadow-md transition-shadow"
+        @click="showStatsDetail = !showStatsDetail"
+      >
+        <div class="p-4 text-center">
+          <div class="text-3xl font-bold text-indigo-600">{{ stats.totalFootprints }}</div>
+          <div class="text-sm text-gray-500 mt-1">总足迹数</div>
+        </div>
+      </VCard>
+      <VCard
+        class="cursor-pointer hover:shadow-md transition-shadow"
+        @click="showStatsDetail = !showStatsDetail"
+      >
+        <div class="p-4 text-center">
+          <div class="text-3xl font-bold text-indigo-600">{{ stats.totalProvinces }}</div>
+          <div class="text-sm text-gray-500 mt-1">去过省级行政区</div>
+        </div>
+      </VCard>
+      <VCard
+        class="cursor-pointer hover:shadow-md transition-shadow"
+        @click="showStatsDetail = !showStatsDetail"
+      >
+        <div class="p-4 text-center">
+          <div class="text-3xl font-bold text-indigo-600">{{ stats.totalCities }}</div>
+          <div class="text-sm text-gray-500 mt-1">去过城市</div>
+        </div>
+      </VCard>
+    </div>
+
+    <!-- 统计详情 -->
+    <Transition name="fade">
+      <div v-if="showStatsDetail && stats" class="mb-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <VCard title="省份详情">
+          <div class="p-2 max-h-64 overflow-y-auto">
+            <div
+              v-for="province in stats.provinces"
+              :key="province.adcode"
+              class="flex items-center justify-between py-2 px-3 border-b last:border-none hover:bg-gray-50"
+            >
+              <div>
+                <span class="font-medium">{{ province.name }}</span>
+                <span v-if="province.cities && province.cities.length > 0" class="text-xs text-gray-400 ml-2">
+                  {{ province.cities.slice(0, 5).join('、') }}<template v-if="province.cities.length > 5">等</template>
+                </span>
+              </div>
+              <span class="text-sm text-indigo-600 font-medium">{{ province.count }} 条</span>
+            </div>
+            <VEmpty v-if="!stats.provinces || stats.provinces.length === 0" message="暂无省份数据" />
+          </div>
+        </VCard>
+        <VCard title="城市详情">
+          <div class="p-2 max-h-64 overflow-y-auto">
+            <div
+              v-for="city in stats.cities"
+              :key="city.adcode"
+              class="flex items-center justify-between py-2 px-3 border-b last:border-none hover:bg-gray-50"
+            >
+              <div>
+                <span class="font-medium">{{ city.name }}</span>
+                <span class="text-xs text-gray-400 ml-2">{{ city.province }}</span>
+              </div>
+              <span class="text-sm text-indigo-600 font-medium">{{ city.count }} 条</span>
+            </div>
+            <VEmpty v-if="!stats.cities || stats.cities.length === 0" message="暂无城市数据" />
+          </div>
+        </VCard>
+      </div>
+    </Transition>
+
+    <div class="m-0 md:m-4">
+      <VCard>
+        <div class="flex justify-between bg-white py-4 px-4">
+          <div class="flex flex-row items-center gap-3">
+            <!-- 排序 -->
+            <div class="flex flex-row items-center gap-1 text-sm text-gray-500">
+              <FilterDropdown
+                v-model="selectedSort"
+                :items="[
+                  { label: '创建时间升序', value: 'spec.createTime,asc' },
+                  { label: '创建时间降序', value: 'spec.createTime,desc' },
+                ]"
+                label="排序"
               />
             </div>
-            <div class="flex w-full flex-1 items-center sm:w-auto">
-              <FormKit
-                v-if="!selectedFootprints.length"
-                v-model="searchText"
-                placeholder="输入关键词搜索"
-                type="text"
-                outer-class="!moments-p-0 moments-mr-2"
-                @keyup.enter="onKeywordChange"
-              >
-                <template v-if="keyword" #suffix>
-                  <div
-                    class="group flex h-full cursor-pointer items-center bg-white px-2 transition-all hover:bg-gray-50"
-                    @click="handleReset"
-                  >
-                    <IconCloseCircle
-                      class="h-4 w-4 text-gray-500 group-hover:text-gray-700"
-                    />
-                  </div>
-                </template>
-              </FormKit>
-              <VSpace v-else>
-                <VButton type="danger" @click="handleDeleteInBatch">
-                  删除
-                </VButton>
-              </VSpace>
+
+            <!-- 类型 -->
+            <div class="flex flex-row items-center gap-1 text-sm text-gray-500">
+              <FilterDropdown
+                v-model="selectedFootprintType"
+                :items="[...footprintTypes.map(t => ({ label: t.label, value: t.value }))]"
+                label="类型"
+              />
             </div>
-            <VSpace spacing="lg" class="flex-wrap">
-              <button
-                v-if="hasFilters"
-                class="inline-flex items-center rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                @click="handleClearFilters"
+
+            <!-- 搜索输入框，回车搜索 -->
+            <div class="flex items-center gap-1">
+              <input
+                v-model="searchText"
+                type="text"
+                class="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                placeholder="搜索足迹名称"
+                @keyup.enter="onKeywordChange"
+              />
+              <VButton type="secondary" size="sm" @click="handleReset">
+                清空搜索
+              </VButton>
+            </div>
+
+            <!-- 清空所有过滤条件 -->
+            <FilterCleanButton v-if="hasFilters" @click="handleClearFilters" />
+          </div>
+
+          <div class="flex flex-row items-center gap-3">
+            <!-- 批量删除按钮 -->
+            <VSpace>
+              <VButton
+                v-if="selectedFootprints.length"
+                type="danger"
+                @click="handleDeleteInBatch"
               >
-                <span>清除筛选</span>
-              </button>
-              <div class="relative inline-block text-left">
-                <VDropdown>
-                  <button
-                    type="button"
-                    class="inline-flex items-center rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                  >
-                    <span>类型：{{ selectedFootprintType || '全部' }}</span>
-                  </button>
-                  <template #popper>
-                    <div class="w-36 max-h-60 overflow-auto">
-                      <VDropdownItem
-                          :selected="selectedFootprintType === undefined"
-                          @click="handleTypeSelect(undefined)"
-                      >
-                        全部
-                      </VDropdownItem>
-                      <VDropdownItem
-                          v-for="type in footprintTypes"
-                          :key="type.value"
-                          :selected="selectedFootprintType === type.value"
-                          @click="handleTypeSelect(type.value)"
-                      >
-                        {{ type.label }}
-                      </VDropdownItem>
-                    </div>
-                  </template>
-                </VDropdown>
-              </div>
-              <div class="relative inline-block text-left">
-                <VDropdown>
-                  <button
-                    type="button"
-                    class="inline-flex items-center rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                  >
-                    <span>排序：{{ selectedSort === 'metadata.creationTimestamp,desc' ? '较近创建' : selectedSort === 'metadata.creationTimestamp,asc' ? '较早创建' : '默认' }}</span>
-                  </button>
-                  <template #popper>
-                    <div class="w-36 max-h-60 overflow-auto">
-                      <VDropdownItem
-                        :selected="selectedSort === undefined"
-                        @click="() => { selectedSort = undefined; refetch(); }"
-                      >
-                        默认
-                      </VDropdownItem>
-                      <VDropdownItem
-                        :selected="selectedSort === 'metadata.creationTimestamp,desc'"
-                        @click="() => { selectedSort = 'metadata.creationTimestamp,desc'; refetch(); }"
-                      >
-                        较近创建
-                      </VDropdownItem>
-                      <VDropdownItem
-                        :selected="selectedSort === 'metadata.creationTimestamp,asc'"
-                        @click="() => { selectedSort = 'metadata.creationTimestamp,asc'; refetch(); }"
-                      >
-                        较早创建
-                      </VDropdownItem>
-                    </div>
-                  </template>
-                </VDropdown>
-              </div>
-              <div class="flex flex-row gap-2">
-                <div
-                  class="group cursor-pointer rounded p-1 hover:bg-gray-200"
-                  @click="refetch()"
-                >
-                  <IconRefreshLine
-                    v-tooltip="'刷新'"
-                    :class="{ 'animate-spin text-gray-900': isFetching }"
-                    class="h-4 w-4 text-gray-600 group-hover:text-gray-900"
-                  />
-                </div>
-              </div>
+                删除选中
+              </VButton>
             </VSpace>
+            <div
+              class="cursor-pointer rounded p-1 text-gray-600 transition-all hover:text-gray-900"
+              :class="{ 'rolling': isFetching }"
+              @click="refetch(); refetchStats();"
+            >
+              <IconRefreshLine />
+            </div>
           </div>
         </div>
-      </template>
-      <VLoading v-if="isLoading" />
 
-      <Transition v-else-if="!footprints?.length" appear name="fade">
-        <VEmpty
-          message="暂无足迹记录"
-          title="暂无足迹记录"
-        >
-          <template #actions>
-            <VSpace>
-              <VButton @click="refetch()"> 刷新 </VButton>
-            </VSpace>
-          </template>
-        </VEmpty>
-      </Transition>
-
-      <Transition v-else appear name="fade">
-        <div class="w-full relative overflow-x-auto">
-          <table class="w-full text-sm text-left text-gray-500 widefat">
-            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+        <div class="table-container relative min-h-[200px]">
+          <Transition name="fade" mode="out-in">
+            <VLoading v-if="isLoading" />
+            <VEmpty v-else-if="!footprints?.length" message="暂无足迹数据" />
+            <table v-else class="widefat min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
             <tr>
-              <th scope="col" class="px-4 py-3"><div class="w-max flex items-center"> </div></th>
-              <th scope="col" class="px-4 py-3"><div class="w-max flex items-center">名称 </div></th>
-              <th scope="col" class="px-4 py-3"><div class="w-max flex items-center">图片 </div></th>
+              <th scope="col" class="px-4 py-3 w-10">
+                <input
+                  v-model="checkedAll"
+                  class="h-4 w-4 rounded border-gray-300 text-indigo-600"
+                  type="checkbox"
+                  @change="handleCheckAllChange"
+                />
+              </th>
+              <th scope="col" class="px-4 py-3"><div class="w-max flex items-center">足迹名称 </div></th>
+              <th scope="col" class="px-4 py-3"><div class="w-max flex items-center">足迹图片 </div></th>
               <th scope="col" class="px-4 py-3"><div class="w-max flex items-center">足迹类型 </div></th>
+              <th scope="col" class="px-4 py-3"><div class="w-max flex items-center">省份 </div></th>
+              <th scope="col" class="px-4 py-3"><div class="w-max flex items-center">城市 </div></th>
               <th scope="col" class="px-4 py-3"><div class="w-max flex items-center">经度 </div></th>
               <th scope="col" class="px-4 py-3"><div class="w-max flex items-center">纬度 </div></th>
               <th scope="col" class="px-4 py-3"><div class="w-max flex items-center">地址 </div></th>
@@ -427,6 +450,8 @@ const handleEdit = (row: Footprint) => {
                 <img v-if="footprint.spec.image" :src="footprint.spec.image" class="h-16 w-auto object-cover rounded">
               </td>
               <td class="px-4 py-4 table-td">{{footprint.spec.footprintType}}</td>
+              <td class="px-4 py-4 table-td">{{footprint.spec.province || '-'}}</td>
+              <td class="px-4 py-4 table-td">{{footprint.spec.city || '-'}}</td>
               <td class="px-4 py-4 table-td">{{footprint.spec.longitude}}</td>
               <td class="px-4 py-4 table-td">{{footprint.spec.latitude}}</td>
               <td class="px-4 py-4">{{footprint.spec.address}}</td>
@@ -447,6 +472,9 @@ const handleEdit = (row: Footprint) => {
                       <VDropdownItem @click="handleUpdateLocation(footprint)">
                         更新经纬度
                       </VDropdownItem>
+                      <VDropdownItem @click="handleGeocodeFootprint(footprint)">
+                        重新解析省/市
+                      </VDropdownItem>
                     </div>
                   </template>
                 </VDropdown>
@@ -454,18 +482,19 @@ const handleEdit = (row: Footprint) => {
             </tr>
             </tbody>
           </table>
+          </Transition>
         </div>
-      </Transition>
 
-      <template #footer>
-        <VPagination
-          v-model:page="page"
-          v-model:size="size"
-          :total="total"
-          :size-options="[20, 30, 50, 100]"
-        />
-      </template>
-    </VCard>
+        <template #footer>
+          <VPagination
+            v-model:page="page"
+            v-model:size="size"
+            :total="total"
+            :size-options="[20, 30, 50, 100]"
+          />
+        </template>
+      </VCard>
+    </div>
   </div>
 
   <!-- 手动输入经纬度的对话框 -->
@@ -516,6 +545,13 @@ const handleEdit = (row: Footprint) => {
       </template>
     </VModal>
   </Teleport>
+
+  <FootprintEditingModal
+    v-model:visible="editingModal"
+    :footprint="selectedFootprint"
+    @close="onEditingModalClose"
+  >
+  </FootprintEditingModal>
 </template>
 
 <style scoped lang="scss">

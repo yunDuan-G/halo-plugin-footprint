@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 元数据接口
  */
 export interface Metadata {
@@ -15,86 +15,30 @@ export interface Metadata {
  * 足迹规格接口
  */
 export interface FootprintSpec {
-  /**
-   * 足迹名称
-   */
   name: string;
-
-  /**
-   * 足迹描述
-   */
   description?: string;
-
-  /**
-   * 经度
-   */
   longitude: number;
-
-  /**
-   * 纬度
-   */
   latitude: number;
-
-  /**
-   * 地址
-   */
   address?: string;
-
-  /**
-   * 足迹类型
-   */
   footprintType?: string;
-
-  /**
-   * 足迹图片
-   */
   image?: string;
-
-  /**
-   * 关联文章URL
-   */
   article?: string;
-
-  /**
-   * 关联足迹
-   */
   metadataNames?: [];
-
-  /**
-   * 缩放级别 4-26
-   */
   zoomLevel: string;
-
-  /**
-   * 俯仰角度 0-83
-   * 3D地图启用 
-   */
   pitchAngle: string;
-
-  /**
-   * 旋转角度  -360到360
-   * 3D地图俯启用
-   */
   rotationAngle: string;
-
-  /**
-   * 创建时间
-   */
   createTime?: string;
+  province?: string;
+  city?: string;
+  provinceAdcode?: string;
+  cityAdcode?: string;
 }
 
 /**
  * 足迹状态接口
  */
 export interface FootprintStatus {
-  /**
-   * 是否已发布
-   */
   published?: boolean;
-
-  /**
-   * 发布时间
-   */
   publishTime?: string;
 }
 
@@ -130,4 +74,46 @@ export interface FootprintList {
 export interface Option {
   label: string;
   value: string;
+}
+
+/**
+ * 省份统计
+ */
+export interface ProvinceStat {
+  name: string;
+  adcode: string;
+  count: number;
+  cities: string[];
+}
+
+/**
+ * 城市统计
+ */
+export interface CityStat {
+  name: string;
+  adcode: string;
+  province: string;
+  provinceAdcode: string;
+  count: number;
+}
+
+/**
+ * 统计结果
+ */
+export interface StatsResult {
+  totalFootprints: number;
+  totalProvinces: number;
+  totalCities: number;
+  provinces: ProvinceStat[];
+  cities: CityStat[];
+}
+
+/**
+ * 逆地理编码结果
+ */
+export interface GeoInfo {
+  province: string;
+  city: string;
+  provinceAdcode: string;
+  cityAdcode: string;
 }

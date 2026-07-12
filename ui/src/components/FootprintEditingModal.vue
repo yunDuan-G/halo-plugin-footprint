@@ -50,8 +50,7 @@ const initialFormState: Footprint = {
   apiVersion: "footprint.lik.cc/v1alpha1",
 };
 
-// 使用JSON.parse(JSON.stringify())进行深拷贝，替代lodash.clonedeep
-const deepClone = <T, >(obj: T): T => {
+const deepClone = <T,>(obj: T): T => {
   return JSON.parse(JSON.stringify(obj));
 };
 
@@ -62,6 +61,7 @@ const createTime = ref<string | undefined>(undefined);
 const showManualInput = ref(false);
 const manualLongitude = ref<string>("");
 const manualLatitude = ref<string>("");
+const awaitingGeocode = ref(false);
 
 const isUpdateMode = computed(() => {
   return !!formState.value.metadata.creationTimestamp;
@@ -99,16 +99,16 @@ watch(
 watch(
   () => props.footprint,
   (footprint) => {
-    if (footprint) {
+    if (footprint && footprint.spec) {
       formState.value = deepClone(footprint);
-      createTime.value = toDatetimeLocal(formState.value.spec.createTime);
+      createTime.value = toDatetimeLocal(formState.value.spec?.createTime);
     } else {
+      handleResetForm();
       createTime.value = undefined;
     }
   },
 );
 
-// 添加一个计算属性来控制pitchAngle的显示
 const showPitchAngle = computed(() => {
   const zoomLevel = parseFloat(formState.value.spec.zoomLevel || '0')
   return zoomLevel >= 18
@@ -118,9 +118,7 @@ const validationMessages = {
   required: (ctx: { name: string }) => `${ctx.name}不能为空`,
 } as const;
 
-// 修改表单验证状态
 const isFormValid = computed(() => {
-  // 检查必填项
   if (!formState.value.spec.name?.trim()) return false;
   if (!formState.value.spec.description?.trim()) return false;
   if (!formState.value.spec.zoomLevel?.trim()) return false;
@@ -133,6 +131,92 @@ const isFormValid = computed(() => {
   return formState.value.spec.address?.trim();
 });
 
+const handleRegoecode = async () => {
+  if (!formState.value.spec.longitude || !formState.value.spec.latitude) {
+    Toast.error("请先填写地址以获取经纬度，或手动输入经纬度");
+    return;
+  }
+
+  // For new footprints, we need the footprint to be saved first to have a name
+  if (!isUpdateMode.value) {
+    Toast.warning("请先保存足迹后再解析省/市信息");
+    return;
+  }
+
+  try {
+    awaitingGeocode.value = true;
+    const geoInfo = await footprintApiClient.footprint.geocodeFootprint(
+      formState.value.metadata.name
+    );
+    formState.value.spec.province = geoInfo.province;
+    formState.value.spec.city = geoInfo.city;
+    formState.value.spec.provinceAdcode = geoInfo.provinceAdcode;
+    formState.value.spec.cityAdcode = geoInfo.cityAdcode;
+    Toast.success("省/市信息解析成功");
+  } catch (error) {
+    console.error("逆地理编码失败:", error);
+    Toast.error("逆地理编码失败");
+  } finally {
+    awaitingGeocode.value = false;
+  }
+};
+
+const handleManualInput = () => {
+  const lng = parseFloat(manualLongitude.value);
+  const lat = parseFloat(manualLatitude.value);
+
+  if (isNaN(lng) || isNaN(lat)) {
+    Toast.error("请输入有效的经纬度");
+    return;
+  }
+
+  if (lng < -180 || lng > 180) {
+    Toast.error("经度范围应在-180到180之间");
+    return;
+  }
+
+  if (lat < -90 || lat > 90) {
+    Toast.error("纬度范围应在-90到90之间");
+    return;
+  }
+
+  formState.value.spec.longitude = lng;
+  formState.value.spec.latitude = lat;
+  showManualInput.value = false;
+
+  if (createTime.value) {
+    formState.value.spec.createTime = toISOString(createTime.value);
+  }
+
+  saving.value = true;
+
+  if (isUpdateMode.value) {
+    footprintApiClient.footprint.updateFootprint(
+      formState.value.metadata.name,
+      formState.value,
+    ).then(() => {
+      Toast.success("编辑成功");
+      onVisibleChange(false);
+    }).catch((error) => {
+      console.error("保存足迹失败:", error);
+      Toast.error("保存足迹失败");
+    }).finally(() => {
+      saving.value = false;
+    });
+  } else {
+    footprintApiClient.footprint
+      .createFootprint(formState.value)
+      .then(() => {
+        Toast.success("创建成功");
+        onVisibleChange(false);
+      }).catch((error) => {
+        console.error("保存足迹失败:", error);
+        Toast.error("保存足迹失败");
+      }).finally(() => {
+        saving.value = false;
+      });
+  }
+};
 const handleSubmit = async () => {
   try {
     // 先进行表单验证
@@ -173,13 +257,13 @@ const handleSubmit = async () => {
 
     const zoomLevel = formState.value.spec.zoomLevel;
     if (parseFloat(zoomLevel) < 4 || parseFloat(zoomLevel) > 26) {
-      Toast.error("缩放级别必须在4-20之间");
+      Toast.error("缩放级别必须在4到26之间");
       return;
     }
 
     const pitchAngle = formState.value.spec.pitchAngle;
     if (parseFloat(pitchAngle) < 0 || parseFloat(pitchAngle) > 83) {
-      Toast.error("俯仰角度必须在0-83之间");
+      Toast.error("俯仰角度必须在0到83之间");
       return;
     }
 
@@ -188,8 +272,6 @@ const handleSubmit = async () => {
       Toast.error("旋转角度必须在-360到360之间");
       return;
     }
-
-    saving.value = true;
 
     // 获取地址的经纬度
     const address = formState.value.spec.address?.trim();
@@ -205,19 +287,16 @@ const handleSubmit = async () => {
       return;
     }
     const location = await response.text();
-    console.log("获取到的地址经纬度:", location);
 
     // 检查location是否为空或无效
     if (!location || location.trim() === "" || !location.includes(",")) {
       console.log("地址经纬度无效，显示手动输入框");
       Toast.info("无法自动获取地址经纬度，请手动输入");
       showManualInput.value = true;
-      saving.value = false;
       return;
     }
 
     const [lng, lat] = location.split(",");
-    // 验证经纬度是否有效
     const longitude = parseFloat(lng);
     const latitude = parseFloat(lat);
 
@@ -232,13 +311,14 @@ const handleSubmit = async () => {
       console.log("经纬度数值无效，显示手动输入框");
       Toast.info("获取到的经纬度无效，请手动输入");
       showManualInput.value = true;
-      saving.value = false;
       return;
     }
 
     // 更新表单数据
     formState.value.spec.longitude = longitude;
     formState.value.spec.latitude = latitude;
+
+    saving.value = true;
 
     if (createTime.value) {
       formState.value.spec.createTime = toISOString(createTime.value);
@@ -249,83 +329,28 @@ const handleSubmit = async () => {
         formState.value.metadata.name,
         formState.value,
       );
-      Toast.success("更新成功");
-      onVisibleChange(false);
+      Toast.success("编辑成功");
     } else {
       await footprintApiClient.footprint.createFootprint(formState.value);
       Toast.success("创建成功");
-      onVisibleChange(false);
     }
-  } catch (e) {
-    console.error("保存失败", e);
-    Toast.error("保存失败，请重试");
+    onVisibleChange(false);
+  } catch (error) {
+    console.error("保存足迹失败:", error);
+    Toast.error("保存足迹失败");
   } finally {
     saving.value = false;
   }
 };
 
-const handleManualInput = () => {
-  const lng = parseFloat(manualLongitude.value);
-  const lat = parseFloat(manualLatitude.value);
-
-  if (isNaN(lng) || isNaN(lat)) {
-    Toast.error("请输入有效的经纬度");
-    return;
-  }
-
-  if (lng < -180 || lng > 180) {
-    Toast.error("经度必须在-180到180之间");
-    return;
-  }
-
-  if (lat < -90 || lat > 90) {
-    Toast.error("纬度必须在-90到90之间");
-    return;
-  }
-
-  formState.value.spec.longitude = lng;
-  formState.value.spec.latitude = lat;
-  showManualInput.value = false;
-
-  // 继续保存流程
-  if (createTime.value) {
-    formState.value.spec.createTime = toISOString(createTime.value);
-  }
-
-  if (isUpdateMode.value) {
-    footprintApiClient.footprint.updateFootprint(
-      formState.value.metadata.name,
-      formState.value
-    ).then(() => {
-      Toast.success("更新成功");
-      onVisibleChange(false);
-    })
-      .catch((e) => {
-        console.error("保存失败", e);
-        Toast.error("保存失败，请重试");
-      });
-  } else {
-    footprintApiClient.footprint
-      .createFootprint(formState.value)
-      .then(() => {
-        Toast.success("创建成功");
-        onVisibleChange(false);
-      })
-      .catch((e) => {
-        console.error("保存失败", e);
-        Toast.error("保存失败，请重试");
-      });
-  }
-};
-
 const footprintTypes = ref<Option[]>([]);
 onMounted(async () => {
-  footprintTypes.value =
-    await footprintApiClient.footprint.listFootprintTypes();
+  footprintTypes.value = await footprintApiClient.footprint.listFootprintTypes();
 });
 </script>
 
 <template>
+
   <!-- 手动输入经纬度的对话框 -->
   <Teleport to="body">
     <VModal
@@ -366,160 +391,94 @@ onMounted(async () => {
       </template>
     </VModal>
   </Teleport>
-
   <VModal
-    :visible="visible"
-    :width="700"
+    :visible="props.visible"
+    :width="820"
     :title="modalTitle"
     :mask-closable="false"
     @update:visible="onVisibleChange"
   >
-    <FormKit
-      v-if="formVisible"
-      id="footprint-form"
-      name="footprint-form"
-      type="form"
-      :config="{ validationVisibility: 'submit' }"
-      @submit.prevent
-    >
-      <div class="md:grid md:grid-cols-4 md:gap-6">
-        <div class="md:col-span-1">
-          <div class="sticky top-0">
-            <span class="text-base font-medium text-gray-900">基本信息</span>
-          </div>
-        </div>
-        <div class="mt-5 divide-y divide-gray-100 md:col-span-3 md:mt-0">
-          <div v-if="isUpdateMode" class="pb-4">
-            <p v-if="formState.spec.image">
-              <img
-                :src="formState.spec.image"
-                width="100"
-                class="rounded"
-                alt="足迹图片"
+    <FormKit v-if="formVisible" v-slot="{ state: { valid: formValid } }" :actions="false"
+      :config="{ validationVisibility: 'submit' }" :messages="validationMessages" id="footprint-form"
+      type="form" @submit="handleSubmit">
+      <div class="md:grid md:grid-cols-2 md:gap-4">
+        <div class="p-4">
+          <FormKit v-model="formState.spec.name" label="足迹名称" name="name"
+            :validation="[['required']]" :validation-messages="{
+              required: '足迹名称不能为空',
+            }" help="足迹名称，用于标识不同的足迹" type="text"></FormKit>
+
+          <FormKit v-model="formState.spec.description" label="足迹描述" name="description"
+            :validation="[['required']]" :validation-messages="{
+              required: '足迹描述不能为空',
+            }" help="足迹描述，用于详细描述足迹信息" type="text"></FormKit>
+
+          <FormKit v-model="formState.spec.address" label="地址" name="address"
+            :validation="[['required']]" :validation-messages="{
+              required: '地址不能为空',
+            }" help="足迹地址，用于描述足迹的具体位置" type="text"></FormKit>
+
+          <!-- 省份/城市只读展示 -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700">省份 / 城市（自动解析）</label>
+            <div class="mt-1 flex items-center gap-2">
+              <input
+                :value="formState.spec.province || '未解析'"
+                readonly
+                class="block w-full rounded-md border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600"
               />
-            </p>
-            <p class="text-lg font-medium">{{ formState.spec.name }}</p>
-            <p class="text-gray-500">{{ formState.spec.description }}</p>
+              <input
+                :value="formState.spec.city || '未解析'"
+                readonly
+                class="block w-full rounded-md border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600"
+              />
+              <VButton
+                type="secondary"
+                size="sm"
+                :loading="awaitingGeocode"
+                :disabled="!isUpdateMode"
+                @click="handleRegoecode"
+              >
+                重新解析
+              </VButton>
+            </div>
+            <p v-if="!isUpdateMode" class="mt-1 text-xs text-gray-400">保存足迹后可使用"重新解析"自动填充省/市</p>
           </div>
 
-          <FormKit
-            v-model="formState.spec.name"
-            type="text"
-            name="足迹名称"
-            validation="required"
-            :validation-messages="validationMessages"
-            label="足迹名称"
-          ></FormKit>
-
-          <FormKit
-            v-model="formState.spec.description"
-            type="textarea"
-            name="足迹描述"
-            validation="required"
-            :validation-messages="validationMessages"
-            label="足迹描述"
-            :rows="3"
-          ></FormKit>
-
-          <FormKit
-            v-model="formState.spec.address"
-            type="text"
-            validation="required"
-            name="address"
-            label="地址"
-            help="建议地址格式：市+地址，如杭州市灵隐寺,系统会根据所填写地址获取经纬度"
-          ></FormKit>
-
-          <FormKit
-            v-model="formState.spec.zoomLevel"
-            type="number"
-            name="zoomLevel"
-            label="缩放级别"
-            validation="required|number|between:4,26"
-            validation-visibility="live"
-            :validation-messages="{
+          <FormKit v-model="formState.spec.zoomLevel" name="zoomLevel" validation="required|number|between:4,26" :help="showPitchAngle ? '缩放级别：4-26。缩放级别>=18时，可设置3D地图' : '缩放级别：4-26。缩放级别>=18时，可开启3D'" :validation-visibility="'live'" :validation-messages="{
               required: '缩放级别不能为空',
-              between: '缩放级别必须在4到26之间'
-            }"
-            help="标记的放大级别，数值范围：4-26（支持两位小数），>=18时，可开启3D效果"
-            min="4"
-            max="26"
-            step="0.01"
-          ></FormKit>
+              number: '缩放级别必须为数字',
+              between: '缩放级别必须在4到26之间',
+            }" label="缩放级别" type="number" min="4" max="26" step="1"></FormKit>
 
-          <FormKit
-            v-if="showPitchAngle"
-            v-model="formState.spec.pitchAngle"
-            type="number"
-            name="pitchAngle"
-            label="3D俯仰角度"
-            validation="required|number|between:0,83"
-            validation-visibility="live"
-            :validation-messages="{
-              required: '俯仰角不能为空',
-              between: '俯仰角必须在0到83之间'
-            }"
-            help="3D俯仰角度，数值范围：0-83"
-            min="0"
-            max="90"
-            step="1"
-          ></FormKit>
+          <template v-if="showPitchAngle">
+            <FormKit v-model="formState.spec.pitchAngle" label="3D俯仰角度" name="pitchAngle"
+              validation="required|number|between:0,83" validation-visibility="live" :validation-messages="{
+                required: '俯仰角度不能为空',
+                between: '俯仰角度必须在0到83之间',
+              }" help="3D地图启用，设置俯仰角度，数值范围：0-83" min="0" max="83" step="1"></FormKit>
 
-          <FormKit
-            v-if="showPitchAngle"
-            v-model="formState.spec.rotationAngle"
-            type="number"
-            name="rotationAngle"
-            label="3D旋转角度"
-            validation="required|number|between:-360,360"
-            validation-visibility="live"
-            :validation-messages="{
-              required: '旋转角度不能为空',
-              between: '旋转角度必须在-360到360之间'
-            }"
-            help="3D旋转角度，数值范围：-360到360"
-            min="-360"
-            max="360"
-            step="1"
-          ></FormKit>
+            <FormKit v-model="formState.spec.rotationAngle" label="3D旋转角度" name="rotationAngle"
+              validation="required|number|between:-360,360" validation-visibility="live" :validation-messages="{
+                required: '旋转角度不能为空',
+                between: '旋转角度必须在-360到360之间',
+              }" help="3D旋转角度，数值范围：-360到360" min="-360" max="360" step="1"></FormKit>
+          </template>
 
-          <FormKit
-            v-model="formState.spec.footprintType"
-            :options="footprintTypes"
-            label="足迹类型"
-            name="footprintType"
-            type="select"
-          ></FormKit>
+          <FormKit v-model="formState.spec.footprintType" :options="footprintTypes" label="足迹类型" name="footprintType"
+            type="select"></FormKit>
 
-          <FormKit
-            v-model="formState.spec.image"
-            :type="'attachment' as any"
-            name="image"
-            label="足迹图片"
-          ></FormKit>
+          <FormKit v-model="formState.spec.image" :type="'attachment' as any" name="image"
+            label="足迹图片"></FormKit>
 
-          <FormKit
-            v-model="articleType"
-            type="select"
-            name="articleType"
-            label="关联类型"
-            :options="[
+          <FormKit v-model="articleType" type="select" name="articleType" label="关联类型" :options="[
               { label: '文章', value: 'post' },
               { label: '自定义链接', value: 'custom' },
-            ]"
-          ></FormKit>
+            ]"></FormKit>
 
           <template v-if="articleType === 'post'">
-            <FormKit
-              v-model="formState.spec.article"
-              type="select"
-              name="article"
-              label="关联文章"
-              :multiple="false"
-              clearable
-              searchable
-              action="/apis/content.halo.run/v1alpha1/posts"
-              :request-option="{
+            <FormKit v-model="formState.spec.article" type="select" name="article" label="关联文章" :multiple="false"
+              clearable searchable action="/apis/content.halo.run/v1alpha1/posts" :request-option="{
                 method: 'GET',
                 pageField: 'page',
                 sizeField: 'size',
@@ -527,36 +486,19 @@ onMounted(async () => {
                 itemsField: 'items',
                 labelField: 'spec.title',
                 valueField: 'status.permalink',
-              }"
-            ></FormKit>
+              }"></FormKit>
           </template>
 
           <template v-else-if="articleType === 'custom'">
-            <FormKit
-              v-model="formState.spec.article"
-              type="text"
-              name="customArticle"
-              label="链接地址"
-              placeholder="请输入完整的URL，例如 https://example.com"
-              validation="url"
-              :validation-messages="{
+            <FormKit v-model="formState.spec.article" type="text" name="customArticle" label="链接地址"
+              placeholder="请输入完整的URL，例如https://example.com" validation="url" :validation-messages="{
                 url: '请输入有效的URL地址，需包含http://或https://',
-              }"
-            ></FormKit>
+              }"></FormKit>
           </template>
 
-          <FormKit
-            v-model="formState.spec.metadataNames"
-            type="select"
-            name="metadataNames"
-            label="关联足迹"
-            :multiple="true"
-            :debounce="300"
-            :min-chars="1"
-            clearable
-            searchable
-            action="/apis/api.footprint.lik.cc/v1alpha1/footprints"
-            :request-option="{
+          <FormKit v-model="formState.spec.metadataNames" type="select" name="metadataNames" label="关联足迹" :multiple="true"
+            :debounce="300" :min-chars="1" clearable searchable
+            action="/apis/api.footprint.lik.cc/v1alpha1/footprints" :request-option="{
               method: 'GET',
               pageField: 'page',
               sizeField: 'size',
@@ -564,19 +506,10 @@ onMounted(async () => {
               itemsField: 'items',
               labelField: 'spec.name',
               valueField: 'metadata.name',
-            }"
-          ></FormKit>
+            }"></FormKit>
 
-          <FormKit
-            v-model="createTime"
-            type="datetime-local"
-            min="0000-01-01T00:00"
-            max="9999-12-31T23:59"
-            name="createTime"
-            validation="required"
-            label="创建时间"
-            help="如果为空，则使用当前时间"
-          ></FormKit>
+          <FormKit v-model="createTime" type="datetime-local" min="0000-01-01T00:00" max="9999-12-31T23:59"
+            name="createTime" validation="required" label="创建时间" help="如果为空，则使用当前时间"></FormKit>
         </div>
       </div>
     </FormKit>
@@ -586,12 +519,7 @@ onMounted(async () => {
         <VButton type="secondary" @click="onVisibleChange(false)">
           取消
         </VButton>
-        <VButton
-          type="primary"
-          :loading="saving"
-          :disabled="!isFormValid"
-          @click="handleSubmit"
-        >
+        <VButton type="primary" :loading="saving" :disabled="!isFormValid" @click="handleSubmit">
           确定
         </VButton>
       </VSpace>

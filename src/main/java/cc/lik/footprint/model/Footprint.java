@@ -108,5 +108,17 @@ public class Footprint extends AbstractExtension {
          */
         @Schema(description = "创建时间")
         private Instant createTime;
+
+        @Schema(description = "省级行政区")
+        private String province;
+
+        @Schema(description = "城市")
+        private String city;
+
+        @Schema(description = "省级行政区编码")
+        private String provinceAdcode;
+
+        @Schema(description = "城市编码")
+        private String cityAdcode;
     }
 }
