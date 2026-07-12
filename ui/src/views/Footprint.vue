@@ -122,7 +122,12 @@ const stats = ref<StatsResult | null>(null);
 
 const fetchStats = async () => {
   try {
-    stats.value = await footprintApiClient.footprint.getStats();
+    const result = await footprintApiClient.footprint.getStats();
+    if (result) {
+      stats.value = JSON.parse(JSON.stringify(result));
+    } else {
+      stats.value = null;
+    }
   } catch (error) {
     console.error("获取足迹统计失败:", error);
     stats.value = null;
@@ -152,19 +157,18 @@ const handleDeleteInBatch = () => {
     description: "删除之后将无法恢复此操作不可恢复。",
     async onConfirm() {
       try {
-        await footprintApiClient.footprint.deleteFootprints(selectedFootprints.value)
-          .then(() => {
-            Toast.success("删除成功");
-            selectedFootprints.value.length = 0;
-            checkedAll.value = false;
-          });
+        await footprintApiClient.footprint.deleteFootprints(selectedFootprints.value);
+        Toast.success("删除成功");
+        selectedFootprints.value.length = 0;
+        checkedAll.value = false;
       } catch (e) {
         console.error("删除失败", e);
         Toast.error("删除失败");
-      } finally {
-        refetch();
-        await fetchStats();
+        return;
       }
+      // 删除成功后刷新列表和统计
+      await refetch();
+      await fetchStats();
     },
   });
 };

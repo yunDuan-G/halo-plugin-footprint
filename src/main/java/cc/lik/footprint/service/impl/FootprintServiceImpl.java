@@ -156,7 +156,7 @@ public class FootprintServiceImpl implements FootprintService {
 
     @Override
     public Mono<StatsResult> getStats() {
-        return client.list(Footprint.class, null, null)
+        return client.list(Footprint.class, fp -> true, null)
                 .collectList()
                 .map(footprints -> {
                     long totalFootprints = footprints.size();
