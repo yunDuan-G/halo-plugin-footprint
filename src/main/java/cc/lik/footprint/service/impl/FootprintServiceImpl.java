@@ -127,12 +127,20 @@ public class FootprintServiceImpl implements FootprintService {
                         }
                         geoInfo.setCity(city);
 
-                        // adcode
+                        // adcode：区级编码（如440305），需推导省/市级编码
                         String adcode = addressComponent.path("adcode").asText();
-                        if (adcode != null && adcode.length() >= 2) {
-                            geoInfo.setProvinceAdcode(adcode.substring(0, 2) + "0000");
+                        if (adcode != null && !adcode.isEmpty()) {
+                            // 省级编码：前2位 + "0000"（如440000=广东省）
+                            if (adcode.length() >= 2) {
+                                geoInfo.setProvinceAdcode(adcode.substring(0, 2) + "0000");
+                            }
+                            // 市级编码：前4位 + "00"（如440300=深圳市，而非440305=南山区）
+                            if (adcode.length() >= 4) {
+                                geoInfo.setCityAdcode(adcode.substring(0, 4) + "00");
+                            } else {
+                                geoInfo.setCityAdcode(adcode);
+                            }
                         }
-                        geoInfo.setCityAdcode(adcode);
 
                         return geoInfo;
                     } catch (Exception e) {
@@ -176,8 +184,12 @@ public class FootprintServiceImpl implements FootprintService {
                             ps.setCount(ps.getCount() + 1);
                         }
 
-                        // 城市统计
-                        String cAdcode = spec.getCityAdcode();
+                        // 城市统计：将cityAdcode归一化为市级编码（前4位+00），兼容旧数据
+                        String rawCAdcode = spec.getCityAdcode();
+                        String cAdcode = rawCAdcode;
+                        if (rawCAdcode != null && rawCAdcode.length() >= 4) {
+                            cAdcode = rawCAdcode.substring(0, 4) + "00";
+                        }
                         String cName = spec.getCity();
                         if (cAdcode != null && !cAdcode.isEmpty()) {
                             StatsResult.CityStat cs = cityMap.computeIfAbsent(cAdcode, k ->

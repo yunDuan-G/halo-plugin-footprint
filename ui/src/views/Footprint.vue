@@ -118,20 +118,19 @@ const {
   },
 });
 
-const {
-  data: stats,
-  refetch: refetchStats,
-} = useQuery({
-  queryKey: ["footprintStats"],
-  queryFn: async () => {
-    try {
-      return await footprintApiClient.footprint.getStats();
-    } catch (error) {
-      console.error("获取足迹统计失败:", error);
-      return null;
-    }
-  },
-});
+const stats = ref<StatsResult | null>(null);
+
+const fetchStats = async () => {
+  try {
+    stats.value = await footprintApiClient.footprint.getStats();
+  } catch (error) {
+    console.error("获取足迹统计失败:", error);
+    stats.value = null;
+  }
+};
+
+// 初始加载
+fetchStats();
 
 const handleCheckAllChange = (e: Event) => {
   const { checked } = e.target as HTMLInputElement;
@@ -164,7 +163,7 @@ const handleDeleteInBatch = () => {
         Toast.error("删除失败");
       } finally {
         refetch();
-        refetchStats();
+        await fetchStats();
       }
     },
   });
@@ -177,8 +176,8 @@ const handleOpenCreateModal = (footprint?: Footprint) => {
 
 const onEditingModalClose = async () => {
   selectedFootprint.value = undefined;
-  refetch();
-  refetchStats();
+  await refetch();
+  await fetchStats();
 };
 
 const handleTypeSelect = (type: string | undefined) => {
@@ -235,6 +234,11 @@ const handleManualInput = async () => {
   }
 };
 
+const handleRefreshAll = async () => {
+  await refetch();
+  await fetchStats();
+};
+
 const handleEdit = (footprint: Footprint) => {
   selectedFootprint.value = footprint;
   editingModal.value = true;
@@ -247,8 +251,8 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
     awaitingGeocode.value = footprint.metadata.name;
     await footprintApiClient.footprint.geocodeFootprint(footprint.metadata.name);
     Toast.success("逆地理编码成功，省/市信息已更新");
-    refetch();
-    refetchStats();
+    await refetch();
+    await fetchStats();
   } catch (error) {
     console.error("逆地理编码失败:", error);
     Toast.error("逆地理编码失败");
@@ -400,7 +404,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
             <div
               class="cursor-pointer rounded p-1 text-gray-600 transition-all hover:text-gray-900"
               :class="{ 'rolling': isFetching }"
-              @click="refetch(); refetchStats();"
+              @click="handleRefreshAll()"
             >
               <IconRefreshLine />
             </div>
