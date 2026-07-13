@@ -386,9 +386,7 @@ onMounted(async () => {
       </div>
       <template #footer>
         <VSpace>
-          <VButton type="secondary" @click="showManualInput = false">
-            取消
-          </VButton>
+          <VButton type="secondary" @click="showManualInput = false">取消</VButton>
           <VButton type="primary" @click="handleManualInput"> 确定</VButton>
         </VSpace>
       </template>
@@ -397,7 +395,7 @@ onMounted(async () => {
 
   <VModal
     :visible="visible"
-    :width="700"
+    :width="800"
     :title="modalTitle"
     :mask-closable="false"
     @update:visible="onVisibleChange"
@@ -410,26 +408,31 @@ onMounted(async () => {
       :config="{ validationVisibility: 'submit' }"
       @submit.prevent
     >
-      <div class="md:grid md:grid-cols-4 md:gap-6">
-        <div class="md:col-span-1">
-          <div class="sticky top-0">
-            <span class="text-base font-medium text-gray-900">基本信息</span>
+      <!-- 编辑模式预览 -->
+      <div v-if="isUpdateMode" class="mb-6 rounded-lg bg-gray-50 p-4">
+        <div class="flex items-center gap-4">
+          <img
+            v-if="formState.spec.image"
+            :src="formState.spec.image"
+            width="80"
+            class="rounded-lg object-cover"
+            alt="足迹图片"
+          />
+          <div>
+            <p class="text-lg font-semibold text-gray-900">{{ formState.spec.name }}</p>
+            <p class="mt-1 text-sm text-gray-500">{{ formState.spec.description }}</p>
           </div>
         </div>
-        <div class="mt-5 divide-y divide-gray-100 md:col-span-3 md:mt-0">
-          <div v-if="isUpdateMode" class="pb-4">
-            <p v-if="formState.spec.image">
-              <img
-                :src="formState.spec.image"
-                width="100"
-                class="rounded"
-                alt="足迹图片"
-              />
-            </p>
-            <p class="text-lg font-medium">{{ formState.spec.name }}</p>
-            <p class="text-gray-500">{{ formState.spec.description }}</p>
-          </div>
+      </div>
 
+      <!-- 基本信息 -->
+      <div class="md:grid md:grid-cols-4 md:gap-6">
+        <div class="md:col-span-1">
+          <div class="sticky top-0 pt-1">
+            <span class="text-sm font-semibold text-gray-700">基本信息</span>
+          </div>
+        </div>
+        <div class="divide-y divide-gray-100 md:col-span-3">
           <FormKit
             v-model="formState.spec.name"
             type="text"
@@ -437,8 +440,8 @@ onMounted(async () => {
             validation="required"
             :validation-messages="validationMessages"
             label="足迹名称"
+            placeholder="输入足迹名称"
           ></FormKit>
-
           <FormKit
             v-model="formState.spec.description"
             type="textarea"
@@ -447,32 +450,39 @@ onMounted(async () => {
             :validation-messages="validationMessages"
             label="足迹描述"
             :rows="3"
+            placeholder="描述一下这个足迹吧"
           ></FormKit>
-
           <FormKit
             v-model="formState.spec.address"
             type="text"
             validation="required"
             name="address"
             label="地址"
-            help="建议地址格式：市+地址，如杭州市灵隐寺,系统会根据所填写地址获取经纬度"
+            help="建议格式：市+地址，如杭州市灵隐寺，系统会根据地址自动获取经纬度"
+            placeholder="输入详细地址"
           ></FormKit>
 
-
-          <!-- 省份/城市只读展示 -->
-          <div class="py-4">
-            <label class="block text-sm font-medium text-gray-900">省份 / 城市（自动解析）</label>
-            <div class="mt-2 flex items-center gap-2">
-              <input
-                :value="formState.spec.province || '未解析'"
-                readonly
-                class="block w-full rounded-md border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600"
-              />
-              <input
-                :value="formState.spec.city || '未解析'"
-                readonly
-                class="block w-full rounded-md border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600"
-              />
+          <!-- 省份/城市 -->
+          <div class="formkit-outer py-5" data-type="text">
+            <label class="formkit-label">省份 / 城市（自动解析）</label>
+            <div class="mt-1.5 flex items-center gap-2">
+              <div class="relative flex-1">
+                <input
+                  :value="formState.spec.province || '—'"
+                  readonly
+                  class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-500"
+                  placeholder="省份"
+                />
+              </div>
+              <span class="text-gray-300 text-sm">/</span>
+              <div class="relative flex-1">
+                <input
+                  :value="formState.spec.city || '—'"
+                  readonly
+                  class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-500"
+                  placeholder="城市"
+                />
+              </div>
               <VButton
                 type="secondary"
                 size="sm"
@@ -480,11 +490,28 @@ onMounted(async () => {
                 :disabled="!isUpdateMode"
                 @click="handleRegoecode"
               >
-                重新解析
+                解析
               </VButton>
             </div>
-            <p v-if="!isUpdateMode" class="mt-1 text-xs text-gray-400">保存足迹后可使用"重新解析"自动填充省/市</p>
+            <p v-if="!isUpdateMode" class="formkit-help">保存后可使用"解析"自动填充省/市信息</p>
           </div>
+          <FormKit
+            v-model="formState.spec.image"
+            :type="'attachment' as any"
+            name="image"
+            label="足迹图片"
+          ></FormKit>
+        </div>
+      </div>
+
+      <!-- 地图设置 -->
+      <div class="mt-8 md:grid md:grid-cols-4 md:gap-6">
+        <div class="md:col-span-1">
+          <div class="sticky top-0 pt-1">
+            <span class="text-sm font-semibold text-gray-700">地图设置</span>
+          </div>
+        </div>
+        <div class="divide-y divide-gray-100 md:col-span-3">
           <FormKit
             v-model="formState.spec.zoomLevel"
             type="number"
@@ -496,48 +523,56 @@ onMounted(async () => {
               required: '缩放级别不能为空',
               between: '缩放级别必须在4到26之间'
             }"
-            help="标记的放大级别，数值范围：4-26（支持两位小数），>=18时，可开启3D效果"
+            help="标记的放大级别，4-26（支持两位小数），≥18时可开启3D效果"
             min="4"
             max="26"
             step="0.01"
           ></FormKit>
-
           <FormKit
             v-if="showPitchAngle"
             v-model="formState.spec.pitchAngle"
             type="number"
             name="pitchAngle"
-            label="3D俯仰角度"
+            label="3D 俯仰角度"
             validation="required|number|between:0,83"
             validation-visibility="live"
             :validation-messages="{
               required: '俯仰角不能为空',
               between: '俯仰角必须在0到83之间'
             }"
-            help="3D俯仰角度，数值范围：0-83"
+            help="3D 视图的俯仰角度，范围 0-83"
             min="0"
             max="90"
             step="1"
           ></FormKit>
-
           <FormKit
             v-if="showPitchAngle"
             v-model="formState.spec.rotationAngle"
             type="number"
             name="rotationAngle"
-            label="3D旋转角度"
+            label="3D 旋转角度"
             validation="required|number|between:-360,360"
             validation-visibility="live"
             :validation-messages="{
               required: '旋转角度不能为空',
               between: '旋转角度必须在-360到360之间'
             }"
-            help="3D旋转角度，数值范围：-360到360"
+            help="3D 视图的旋转角度，范围 -360 到 360"
             min="-360"
             max="360"
             step="1"
           ></FormKit>
+        </div>
+      </div>
 
+      <!-- 其他信息 -->
+      <div class="mt-8 md:grid md:grid-cols-4 md:gap-6">
+        <div class="md:col-span-1">
+          <div class="sticky top-0 pt-1">
+            <span class="text-sm font-semibold text-gray-700">其他信息</span>
+          </div>
+        </div>
+        <div class="divide-y divide-gray-100 md:col-span-3">
           <FormKit
             v-model="formState.spec.footprintType"
             :options="footprintTypes"
@@ -545,15 +580,7 @@ onMounted(async () => {
             name="footprintType"
             type="select"
           ></FormKit>
-
-          <FormKit
-            v-model="formState.spec.image"
-            :type="'attachment' as any"
-            name="image"
-            label="足迹图片"
-          ></FormKit>
-
-          <FormKit
+                   <FormKit
             v-model="articleType"
             type="select"
             name="articleType"
@@ -563,7 +590,6 @@ onMounted(async () => {
               { label: '自定义链接', value: 'custom' },
             ]"
           ></FormKit>
-
           <template v-if="articleType === 'post'">
             <FormKit
               v-model="formState.spec.article"
@@ -585,21 +611,19 @@ onMounted(async () => {
               }"
             ></FormKit>
           </template>
-
           <template v-else-if="articleType === 'custom'">
             <FormKit
               v-model="formState.spec.article"
               type="text"
               name="customArticle"
               label="链接地址"
-              placeholder="请输入完整的URL，例如 https://example.com"
+              placeholder="请输入完整URL，如 https://example.com"
               validation="url"
               :validation-messages="{
                 url: '请输入有效的URL地址，需包含http://或https://',
               }"
             ></FormKit>
           </template>
-
           <FormKit
             v-model="formState.spec.metadataNames"
             type="select"
@@ -621,7 +645,6 @@ onMounted(async () => {
               valueField: 'metadata.name',
             }"
           ></FormKit>
-
           <FormKit
             v-model="createTime"
             type="datetime-local"
@@ -638,64 +661,9 @@ onMounted(async () => {
 
     <template #footer>
       <VSpace>
-        <VButton type="secondary" @click="onVisibleChange(false)">
-          取消
-        </VButton>
-        <VButton
-          type="primary"
-          :loading="saving"
-          :disabled="!isFormValid"
-          @click="handleSubmit"
-        >
-          确定
-        </VButton>
+        <VButton type="secondary" @click="onVisibleChange(false)">取消</VButton>
+        <VButton type="primary" :loading="saving" :disabled="!isFormValid" @click="handleSubmit">确定</VButton>
       </VSpace>
     </template>
   </VModal>
 </template>
-
-<style scoped lang="scss">
-.divide-y td {
-  margin-bottom: 9px;
-  line-height: 1.3;
-  padding-bottom: 1rem;
-}
-
-.divide-y td p {
-  margin-bottom: 6px;
-}
-
-.formkit-wrapper {
-  margin-bottom: 1rem;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.formkit-label {
-  display: block;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 0.25rem;
-}
-
-.formkit-input {
-  display: block;
-  width: 100%;
-  border-radius: 0.375rem;
-  border: 1px solid #d1d5db;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  color: #111827;
-  background-color: #fff;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-}
-
-.formkit-input:focus {
-  outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-}
-</style>
