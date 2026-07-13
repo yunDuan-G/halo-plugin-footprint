@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+﻿<script lang="ts" setup>
 import {Toast, VButton, VModal, VSpace} from "@halo-dev/components";
 import {ref, computed, watch, onMounted} from "vue";
 import {footprintApiClient} from "@/api";
@@ -409,7 +409,7 @@ onMounted(async () => {
       @submit.prevent
     >
       <!-- 编辑模式预览 -->
-      <div v-if="isUpdateMode" class="mb-6 rounded-lg bg-gray-50 p-4">
+      <div v-if="isUpdateMode" class="mb-6 rounded-lg bg-gray-50 p-4" style="margin-bottom: 10px">
         <div class="flex items-center gap-4">
           <img
             v-if="formState.spec.image"
@@ -432,7 +432,7 @@ onMounted(async () => {
             <span class="text-sm font-semibold text-gray-700">基本信息</span>
           </div>
         </div>
-        <div class="divide-y divide-gray-100 md:col-span-3">
+        <div class="divide-y divide-gray-100 md:col-span-3" style="margin-top: 10px">
           <FormKit
             v-model="formState.spec.name"
             type="text"
@@ -465,24 +465,20 @@ onMounted(async () => {
           <!-- 省份/城市 -->
           <div class="formkit-outer py-5" data-type="text">
             <label class="formkit-label">省份 / 城市（自动解析）</label>
-            <div class="mt-1.5 flex items-center gap-2">
-              <div class="relative flex-1">
-                <input
-                  :value="formState.spec.province || '—'"
-                  readonly
-                  class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-500"
-                  placeholder="省份"
-                />
-              </div>
-              <span class="text-gray-300 text-sm">/</span>
-              <div class="relative flex-1">
-                <input
-                  :value="formState.spec.city || '—'"
-                  readonly
-                  class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-500"
-                  placeholder="城市"
-                />
-              </div>
+            <div class="flex items-center gap-2 w-full" style="max-width: 31em">
+              <input
+                :value="formState.spec.province || '—'"
+                readonly
+                class="flex-1 min-w-0 w-0 rounded border px-3 py-1.5 text-base bg-white text-gray-900 border-gray-300 outline-none"
+                placeholder="省份"
+              />
+              <span class="shrink-0 text-gray-300 text-sm">/</span>
+              <input
+                :value="formState.spec.city || '—'"
+                readonly
+                class="flex-1 min-w-0 w-0 rounded border px-3 py-1.5 text-base bg-white text-gray-900 border-gray-300 outline-none"
+                placeholder="城市"
+              />
               <VButton
                 type="secondary"
                 size="sm"
