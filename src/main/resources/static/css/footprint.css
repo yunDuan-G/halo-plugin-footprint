@@ -261,7 +261,7 @@
     align-items: center;
     gap: 10px;
     background: #fff;
-    
+
     border-radius: 10px;
     padding: 10px 14px;
     z-index: 1000;
@@ -2379,7 +2379,7 @@
         display: none;
     }
 }
-}
+
 @media (prefers-reduced-motion: reduce) {
     .map-stats-panel {
         transition: none;
