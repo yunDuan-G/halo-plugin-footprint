@@ -76,8 +76,14 @@ public class FootprintEndpoint implements CustomEndpoint {
         
         Predicate<Footprint> predicate = footprint -> {
             if (query.getKeyword() != null && !query.getKeyword().isEmpty()) {
-                if (footprint.getSpec().getName() == null || 
-                    !footprint.getSpec().getName().contains(query.getKeyword())) {
+                String kw = query.getKeyword();
+                String name = footprint.getSpec().getName();
+                String province = footprint.getSpec().getProvince();
+                String city = footprint.getSpec().getCity();
+                boolean nameMatch = name != null && name.contains(kw);
+                boolean provinceMatch = province != null && province.contains(kw);
+                boolean cityMatch = city != null && city.contains(kw);
+                if (!nameMatch && !provinceMatch && !cityMatch) {
                     return false;
                 }
             }

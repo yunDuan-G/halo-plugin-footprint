@@ -43,6 +43,17 @@ const manualLatitude = ref("");
 
 const showStatsDetail = ref(false);
 
+// 详情 Tab 切换
+const activeDetailTab = ref<'province' | 'city'>('province');
+
+// 详情内搜索
+const provinceSearchText = ref('');
+const citySearchText = ref('');
+
+// 点击筛选
+const activeProvinceFilter = ref<string | null>(null);
+const activeCityFilter = ref<string | null>(null);
+
 const queryClient = useQueryClient();
 
 watch(
@@ -58,17 +69,26 @@ watch(
 function handleClearFilters() {
   selectedSort.value = undefined;
   selectedFootprintType.value = undefined;
+  activeProvinceFilter.value = null;
+  activeCityFilter.value = null;
+  keyword.value = "";
+  searchText.value = "";
 }
+
 const hasFilters = computed(() => {
   return (
     selectedSort.value ||
-    selectedFootprintType.value
+    selectedFootprintType.value ||
+    activeProvinceFilter.value ||
+    activeCityFilter.value
   );
 });
+
 function onKeywordChange() {
   keyword.value = searchText.value;
   refetch();
 }
+
 function handleReset() {
   keyword.value = "";
   searchText.value = "";
@@ -144,7 +164,56 @@ const provinceCategoryStats = computed(() => {
   }
 
   return categoryDefs;
+  return categoryDefs;
 });
+
+// 过滤后的省份列表
+const filteredProvinces = computed(() => {
+  if (!stats.value) return [];
+  const q = provinceSearchText.value.trim().toLowerCase();
+  if (!q) return stats.value.provinces;
+  return stats.value.provinces.filter(p => p.name.toLowerCase().includes(q));
+});
+
+// 过滤后的城市列表
+const filteredCities = computed(() => {
+  if (!stats.value) return [];
+  const q = citySearchText.value.trim().toLowerCase();
+  if (!q) return stats.value.cities;
+  return stats.value.cities.filter(c => c.name.toLowerCase().includes(q) || c.province.toLowerCase().includes(q));
+});
+
+// 点击省份筛选表格
+const handleProvinceClick = (name: string) => {
+  if (activeProvinceFilter.value === name) {
+    activeProvinceFilter.value = null;
+    activeCityFilter.value = null;
+    keyword.value = '';
+    searchText.value = '';
+  } else {
+    activeProvinceFilter.value = name;
+    activeCityFilter.value = null;
+    keyword.value = name;
+    searchText.value = name;
+  }
+  refetch();
+};
+
+// 点击城市筛选表格
+const handleCityClick = (name: string) => {
+  if (activeCityFilter.value === name) {
+    activeCityFilter.value = null;
+    activeProvinceFilter.value = null;
+    keyword.value = '';
+    searchText.value = '';
+  } else {
+    activeCityFilter.value = name;
+    activeProvinceFilter.value = null;
+    keyword.value = name;
+    searchText.value = name;
+  }
+  refetch();
+};
 const handleCheckAllChange = (e: Event) => {
   const { checked } = e.target as HTMLInputElement;
   checkedAll.value = checked;
@@ -326,42 +395,97 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
     </div>
     <!-- 统计详情 -->
     <Transition name="fade">
-      <div v-if="showStatsDetail && stats" class="mb-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <VCard v-if="showStatsDetail" title="省份详情">
-          <div class="p-2 max-h-64 overflow-y-auto">
+      <VCard v-if="showStatsDetail && stats" class="mb-4">
+        <!-- Tab 切换 -->
+        <div class="flex border-b border-gray-200 px-4 pt-3">
+          <button
+            class="pb-2 px-3 text-sm font-medium border-b-2 transition-colors"
+            :class="activeDetailTab === 'province'
+              ? 'border-indigo-500 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'"
+            @click="activeDetailTab = 'province'"
+          >
+            省份详情 ({{ stats.provinces.length }})
+          </button>
+          <button
+            class="pb-2 px-3 text-sm font-medium border-b-2 transition-colors"
+            :class="activeDetailTab === 'city'
+              ? 'border-indigo-500 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'"
+            @click="activeDetailTab = 'city'"
+          >
+            城市详情 ({{ stats.cities.length }})
+          </button>
+        </div>
+
+        <!-- 省份列表 -->
+        <div v-show="activeDetailTab === 'province'">
+          <!-- 搜索 -->
+          <div class="px-4 pt-3">
+            <input
+              v-model="provinceSearchText"
+              type="text"
+              class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              placeholder="搜索省份..."
+            />
+          </div>
+          <div class="px-2 py-2 max-h-72 overflow-y-auto">
             <div
-              v-for="province in stats.provinces"
+              v-for="province in filteredProvinces"
               :key="province.adcode"
-              class="flex items-center justify-between py-2 px-3 border-b last:border-none hover:bg-gray-50"
+              class="flex items-center justify-between py-2 px-3 rounded cursor-pointer transition-colors"
+              :class="activeProvinceFilter === province.name
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'hover:bg-gray-50'"
+              @click="handleProvinceClick(province.name)"
             >
-              <div>
-                <span class="font-medium">{{ province.name }}</span>
+              <div class="min-w-0 flex-1">
+                <span class="font-medium text-sm">{{ province.name }}</span>
                 <span v-if="province.cities && province.cities.length > 0" class="text-xs text-gray-400 ml-2">
                   {{ province.cities.slice(0, 5).join('、') }}<template v-if="province.cities.length > 5">等</template>
                 </span>
               </div>
-              <span class="text-sm text-indigo-600 font-medium">{{ province.count }} 条</span>
+              <span class="text-sm font-medium shrink-0 ml-3"
+                :class="activeProvinceFilter === province.name ? 'text-indigo-600' : 'text-indigo-500'"
+              >{{ province.count }} 条</span>
             </div>
-            <VEmpty v-if="!stats.provinces || stats.provinces.length === 0" message="暂无省份数据" />
+            <VEmpty v-if="filteredProvinces.length === 0" message="无匹配省份" />
           </div>
-        </VCard>
-        <VCard v-if="showStatsDetail" title="城市详情">
-          <div class="p-2 max-h-64 overflow-y-auto">
+        </div>
+
+        <!-- 城市列表 -->
+        <div v-show="activeDetailTab === 'city'">
+          <!-- 搜索 -->
+          <div class="px-4 pt-3">
+            <input
+              v-model="citySearchText"
+              type="text"
+              class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              placeholder="搜索城市..."
+            />
+          </div>
+          <div class="px-2 py-2 max-h-72 overflow-y-auto">
             <div
-              v-for="city in stats.cities"
+              v-for="city in filteredCities"
               :key="city.adcode"
-              class="flex items-center justify-between py-2 px-3 border-b last:border-none hover:bg-gray-50"
+              class="flex items-center justify-between py-2 px-3 rounded cursor-pointer transition-colors"
+              :class="activeCityFilter === city.name
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'hover:bg-gray-50'"
+              @click="handleCityClick(city.name)"
             >
-              <div>
-                <span class="font-medium">{{ city.name }}</span>
+              <div class="min-w-0 flex-1">
+                <span class="font-medium text-sm">{{ city.name }}</span>
                 <span class="text-xs text-gray-400 ml-2">{{ city.province }}</span>
               </div>
-              <span class="text-sm text-indigo-600 font-medium">{{ city.count }} 条</span>
+              <span class="text-sm font-medium shrink-0 ml-3"
+                :class="activeCityFilter === city.name ? 'text-indigo-600' : 'text-indigo-500'"
+              >{{ city.count }} 条</span>
             </div>
-            <VEmpty v-if="!stats.cities || stats.cities.length === 0" message="暂无城市数据" />
+            <VEmpty v-if="filteredCities.length === 0" message="无匹配城市" />
           </div>
-        </VCard>
-      </div>
+        </div>
+      </VCard>
     </Transition>
 
       <VCard>
@@ -392,7 +516,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
                 v-model="searchText"
                 type="text"
                 class="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                placeholder="搜索足迹名称"
+                placeholder="搜索足迹名称/省份/城市"
                 @keyup.enter="onKeywordChange"
               />
               <VButton type="secondary" size="sm" @click="handleReset">
@@ -400,7 +524,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
               </VButton>
             </div>
             <!-- 清空所有过滤条件 -->
-            <FilterCleanButton v-if="hasFilters" @click="handleClearFilters" />
+<!--            <FilterCleanButton v-if="hasFilters" @click="handleClearFilters" />-->
             <!-- 详情开关 -->
             <button
               class="inline-flex items-center rounded-md border px-2.5 py-1.5 text-xs font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
