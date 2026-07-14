@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import {
   VCard,
   IconRefreshLine,
@@ -22,17 +22,14 @@ import FootprintEditingModal from "../components/FootprintEditingModal.vue";
 import { footprintApiClient } from "@/api";
 import type {Footprint, Option, StatsResult} from "@/api/models";
 import { FormKit } from "@formkit/vue";
-
 defineOptions({
   name: "FootprintManagement"
 });
-
 const selectedFootprint = ref<Footprint | undefined>();
 const selectedFootprints = ref<string[]>([]);
 const checkedAll = ref(false);
 const selectedSort = ref<string | undefined>(undefined);
 const selectedFootprintType = ref<string | undefined>(undefined);
-
 const page = ref(1);
 const size = ref(20);
 const keyword = ref("");
@@ -58,30 +55,25 @@ watch(
     page.value = 1;
   }
 );
-
 function handleClearFilters() {
   selectedSort.value = undefined;
   selectedFootprintType.value = undefined;
 }
-
 const hasFilters = computed(() => {
   return (
     selectedSort.value ||
     selectedFootprintType.value
   );
 });
-
 function onKeywordChange() {
   keyword.value = searchText.value;
   refetch();
 }
-
 function handleReset() {
   keyword.value = "";
   searchText.value = "";
   refetch();
 }
-
 const {
   data: footprints,
   isLoading,
@@ -117,9 +109,7 @@ const {
     return hasDeletingFootprints ? 500 : false;
   },
 });
-
 const stats = ref<StatsResult | null>(null);
-
 const fetchStats = async () => {
   try {
     const result = await footprintApiClient.footprint.getStats();
@@ -133,9 +123,28 @@ const fetchStats = async () => {
     console.error("获取足迹统计失败:", error);
   }
 };
-
 fetchStats();
 
+const provinceCategoryStats = computed(() => {
+  if (!stats.value) return null;
+  const categoryDefs = [
+    { key: 'municipality', label: '直辖市', total: 4, prefixes: ['11','12','31','50'], visited: 0 },
+    { key: 'autonomous',  label: '自治区', total: 5, prefixes: ['15','45','54','64','65'], visited: 0 },
+    { key: 'sar',         label: '特别行政区', total: 2, prefixes: ['81','82'], visited: 0 },
+    { key: 'province',    label: '省份', total: 23, prefixes: [], visited: 0 },
+  ];
+
+  for (const p of stats.value.provinces) {
+    const prefix = p.adcode?.substring(0, 2) || '';
+    const cat = categoryDefs.find(
+      c => c.prefixes.length > 0 && c.prefixes.includes(prefix)
+    );
+    if (cat) cat.visited++;
+    else categoryDefs[3].visited++; // province
+  }
+
+  return categoryDefs;
+});
 const handleCheckAllChange = (e: Event) => {
   const { checked } = e.target as HTMLInputElement;
   checkedAll.value = checked;
@@ -148,10 +157,8 @@ const handleCheckAllChange = (e: Event) => {
     selectedFootprints.value.length = 0;
   }
 };
-
 const handleDeleteInBatch = async () => {
   if (selectedFootprints.value.length === 0) return;
-
   const names = [...selectedFootprints.value];
   Dialog.warning({
     title: "是否确认删除所选的足迹",
@@ -174,33 +181,27 @@ const handleDeleteInBatch = async () => {
     },
   });
 };
-
 const handleOpenCreateModal = (footprint?: Footprint) => {
   selectedFootprint.value = footprint;
   editingModal.value = true;
 };
-
 const onEditingModalClose = async () => {
   selectedFootprint.value = undefined;
   await refetch();
   await fetchStats();
 };
-
 const handleTypeSelect = (type: string | undefined) => {
   selectedFootprintType.value = type;
   refetch();
 };
-
 const footprintTypes = ref<Option[]>([]);
 onMounted(async () => {
   footprintTypes.value = await footprintApiClient.footprint.listFootprintTypes();
 });
-
 const handleUpdateLocation = (row: Footprint) => {
   showManualInput.value = true;
   currentFootprint.value = row;
 };
-
 const handleManualInput = async () => {
   if (!currentFootprint.value) return;
   
@@ -239,19 +240,15 @@ const handleManualInput = async () => {
     Toast.error("更新经纬度失败");
   }
 };
-
 const handleRefreshAll = async () => {
   await refetch();
   await fetchStats();
 };
-
 const handleEdit = (footprint: Footprint) => {
   selectedFootprint.value = footprint;
   editingModal.value = true;
 };
-
 const awaitingGeocode = ref<string | null>(null);
-
 const handleGeocodeFootprint = async (footprint: Footprint) => {
   try {
     awaitingGeocode.value = footprint.metadata.name;
@@ -266,9 +263,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
     awaitingGeocode.value = null;
   }
 };
-
 </script>
-
 <template>
   <div>
     <VPageHeader title="足迹管理">
@@ -281,7 +276,6 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
         </VButton>
       </template>
     </VPageHeader>
-
     <!-- 统计概览卡片 -->
     <div v-if="stats" class="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
       <VCard
@@ -298,7 +292,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
         @click="showStatsDetail = !showStatsDetail"
       >
         <div class="p-4 text-center">
-          <div class="text-3xl font-bold text-indigo-600">{{ stats.totalProvinces }}</div>
+          <div class="text-2xl font-bold text-indigo-600">{{ stats.totalProvinces }} / 34</div>
           <div class="text-sm text-gray-500 mt-1">去过省级行政区</div>
         </div>
       </VCard>
@@ -313,10 +307,26 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
       </VCard>
     </div>
 
+    <!-- 省级行政区类别统计 -->
+    <div v-if="provinceCategoryStats" class="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div
+        v-for="cat in provinceCategoryStats"
+        :key="cat.key"
+        class="rounded-lg border border-gray-200 bg-white p-3 text-center shadow-sm"
+      >
+        <div
+          class="text-lg font-semibold"
+          :class="cat.visited > 0 ? 'text-indigo-600' : 'text-gray-400'"
+        >
+          {{ cat.visited }} / {{ cat.total }}
+        </div>
+        <div class="text-xs text-gray-500 mt-0.5">{{ cat.label }}</div>
+      </div>
+    </div>
     <!-- 统计详情 -->
     <Transition name="fade">
       <div v-if="showStatsDetail && stats" class="mb-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <VCard title="省份详情">
+        <VCard v-if="showStatsDetail" title="省份详情">
           <div class="p-2 max-h-64 overflow-y-auto">
             <div
               v-for="province in stats.provinces"
@@ -334,7 +344,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
             <VEmpty v-if="!stats.provinces || stats.provinces.length === 0" message="暂无省份数据" />
           </div>
         </VCard>
-        <VCard title="城市详情">
+        <VCard v-if="showStatsDetail" title="城市详情">
           <div class="p-2 max-h-64 overflow-y-auto">
             <div
               v-for="city in stats.cities"
@@ -352,7 +362,6 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
         </VCard>
       </div>
     </Transition>
-
     <div class="m-0 md:m-4">
       <VCard>
         <div class="flex justify-between bg-white py-4 px-4">
@@ -368,7 +377,6 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
                 label="排序"
               />
             </div>
-
             <!-- 类型 -->
             <div class="flex flex-row items-center gap-1 text-sm text-gray-500">
               <FilterDropdown
@@ -377,7 +385,6 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
                 label="类型"
               />
             </div>
-
             <!-- 搜索输入框，回车搜索 -->
             <div class="flex items-center gap-1">
               <input
@@ -391,11 +398,17 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
                 清空搜索
               </VButton>
             </div>
-
             <!-- 清空所有过滤条件 -->
             <FilterCleanButton v-if="hasFilters" @click="handleClearFilters" />
+            <!-- 详情开关 -->
+            <button
+              class="inline-flex items-center rounded-md border px-2.5 py-1.5 text-xs font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+              :class="showStatsDetail ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'"
+              @click="showStatsDetail = !showStatsDetail"
+            >
+              省/市详情
+            </button>
           </div>
-
           <div class="flex flex-row items-center gap-3">
             <!-- 批量删除按钮 -->
             <VSpace>
@@ -416,7 +429,6 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
             </div>
           </div>
         </div>
-
         <div class="table-container relative min-h-[200px]">
           <Transition name="fade" mode="out-in">
             <VLoading v-if="isLoading" />
@@ -494,7 +506,6 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
           </table>
           </Transition>
         </div>
-
         <template #footer>
           <VPagination
             v-model:page="page"
@@ -506,7 +517,6 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
       </VCard>
     </div>
   </div>
-
   <!-- 手动输入经纬度的对话框 -->
   <Teleport to="body">
     <VModal
@@ -555,7 +565,6 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
       </template>
     </VModal>
   </Teleport>
-
   <FootprintEditingModal
     v-model:visible="editingModal"
     :footprint="selectedFootprint"
@@ -563,19 +572,16 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
   >
   </FootprintEditingModal>
 </template>
-
 <style scoped lang="scss">
 .widefat * {
   word-wrap: break-word;
 }
-
 .poster img {
   width: 64px;
   height: 64px;
   border-radius: 4px;
   object-fit: cover;
 }
-
 .table-td {
   white-space: nowrap;
 }
