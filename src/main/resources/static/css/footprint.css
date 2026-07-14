@@ -2332,6 +2332,7 @@
 /* 响应式 */
 @media (max-width: 768px) {
     .map-stats-panel {
+        top: calc(10px + env(safe-area-inset-top, 0px));
         right: 10px;
         width: auto;
         padding: 8px 14px;
