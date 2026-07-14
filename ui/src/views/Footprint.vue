@@ -276,6 +276,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
         </VButton>
       </template>
     </VPageHeader>
+    <div class="m-0 md:m-4">
     <!-- 统计概览卡片 -->
     <div v-if="stats" class="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
       <VCard
@@ -362,7 +363,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
         </VCard>
       </div>
     </Transition>
-    <div class="m-0 md:m-4">
+
       <VCard>
         <div class="flex justify-between bg-white py-4 px-4">
           <div class="flex flex-row items-center gap-3">
