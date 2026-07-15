@@ -719,22 +719,20 @@ const populateTimeline = async (map) => {
                                     f => f._position.lng === value.spec.longitude && f._position.lat === value.spec.latitude
                             ))
                             .filter(Boolean);
+                    // 第一阶段：缩放到能同时看到当前和上一次悬停的所有标记点
+                    const mergedOverlays = [...new Set([...newOverlays, ...lastPositions])];
+                    const mergedFit = map.getFitZoomAndCenterByOverlays(mergedOverlays, [350, 120, 120, 120]);
+                    const mergedPos = new AMap.LngLat(mergedFit[1].lng, mergedFit[1].lat);
+                    await moveToLocation(map, mergedPos, mergedFit[0], 5);
+                    await new Promise(resolve => setTimeout(resolve, 300));
+
+                    // 第二阶段：使用原有zoom链缩放到目标标记点并播放抛物线
+                    const targetFit = map.getFitZoomAndCenterByOverlays(newOverlays, [350, 120, 120, 120]);
+                    const targetPos = new AMap.LngLat(targetFit[1].lng, targetFit[1].lat);
                     lastPositions = newOverlays;
-
-                    //获取多个标记点的 地图中心点 和 缩放级别
-                    const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [350, 120, 120, 120]);
-                    // 提取坐标
-                    const newPosition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
-
-                    //判断是否需要移动地图
-                    if (!byOverlays[0].toString().startsWith(currentZoom)) {
-                        //第一次 绑定地图 缩放事件
-                        zoomOn(map, card, newPosition, byOverlays[0], 1);
-                        await moveToLocation(map, newPosition, byOverlays[0], 0);
-                    } else {
-                        loadParabolaAnimation(card, map);
-                        zoomOff(map);
-                    }
+                    frequency = 1;
+                    zoomOn(map, card, targetPos, targetFit[0], 1);
+                    moveToLocation(map, targetPos, targetFit[0], 0);
                 } else {
                     if (needsMovement) {
                         //第一次 绑定地图 缩放事件
