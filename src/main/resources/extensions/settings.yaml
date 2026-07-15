@@ -1,4 +1,4 @@
-apiVersion: v1alpha1
+﻿apiVersion: v1alpha1
 kind: Setting
 metadata:
   name: plugin-footprint-settings
@@ -120,6 +120,17 @@ spec:
               value: amap://styles/darkblue
             - label: 酱籽
               value: amap://styles/wine
+        - $formkit: select
+          name: markerStyle
+          label: 标记点样式
+          value: 'pin'
+          options:
+            - label: 水滴标记
+              value: pin
+            - label: 简约圆形
+              value: circle
+            - label: 卡片标记
+              value: card
 
     - group: advanced
       label: 高级设置

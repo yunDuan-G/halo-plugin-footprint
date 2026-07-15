@@ -1108,11 +1108,14 @@ const createMarker = (spec) => {
     const compressedImageUrl = spec.image ? image + "/fw/200" : 'https://www.lik.cc/upload/loading8.gif';
 
     markerContent.innerHTML = `
+        <div class="marker-label">${spec.name || ''}</div>
         <div class="marker-image">
             <img src="${compressedImageUrl}"
                  alt="${spec.name || '足迹标记'}"
                  decoding="async">
         </div>
+        <div class="marker-badge">${spec.footprintType ? spec.footprintType.charAt(0) : ''}</div>
+        <div class="marker-arrow"></div>
     `;
 
     return markerContent;

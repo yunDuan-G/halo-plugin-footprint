@@ -40,7 +40,8 @@ public class FootprintServiceImpl implements FootprintService {
                     item.path("describe").asText("每一处足迹都充满了故事，那是对人生的思考和无限的风光。"),
                     item.path("hsla").asText("109,42%,60%"),
                     item.path("logoName").asText(),
-                    item.path("mapStyle").asText()
+                    item.path("mapStyle").asText(),
+                    item.path("markerStyle").asText("pin")
                 );
                 return Mono.just(config);
             });

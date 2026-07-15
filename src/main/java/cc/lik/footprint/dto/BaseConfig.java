@@ -15,5 +15,6 @@ public class BaseConfig {
     private String hsla;
     private String logoName;
     private String mapStyle;
+    private String markerStyle;
 }
 

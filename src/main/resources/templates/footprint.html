@@ -704,12 +704,13 @@
             logoName: /*[[${settings.logoName}]]*/ '足迹',
             describe: /*[[${settings.describe}]]*/ '描述',
             hsla: /*[[${settings.hsla}]]*/ '1,75%,88%',
-            mapStyle: /*[[${settings.mapStyle}]]*/ 'amap://styles/whitesmoke'
+            mapStyle: /*[[${settings.mapStyle}]]*/ 'amap://styles/whitesmoke',
+            markerStyle: /*[[${settings.markerStyle}]]*/ 'pin'
         };
         // console.log('Footprint Config:', window.FOOTPRINT_CONFIG);
     </script>
 </head>
-<body id="footprint-page">
+<body id="footprint-page" th:class="'marker-style-' + ${settings.markerStyle}">
 <canvas id="canvas"></canvas>
 <div class="footprint-container">
     <!-- 地图容器 -->
