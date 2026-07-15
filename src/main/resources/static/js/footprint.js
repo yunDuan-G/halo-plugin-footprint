@@ -14,6 +14,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const footprintPage = document.getElementById('footprint-page');
     if (footprintPage && window.FOOTPRINT_CONFIG) {
         footprintPage.style.setProperty('--footprint-hsla', window.FOOTPRINT_CONFIG.hsla);
+        // 设置标记点样式类
+        if (window.FOOTPRINT_CONFIG.markerStyle) {
+            document.body.classList.add('marker-style-' + window.FOOTPRINT_CONFIG.markerStyle);
+        }
     }
 
     // 打印插件信息
