@@ -790,7 +790,7 @@
 .marker-style-card .marker-image {
     width: 50px;
     height: 36px;
-    border-radius: 0;
+    border-radius: 4px;
     overflow: hidden;
     border: 2px solid #fff;
     box-shadow: none;

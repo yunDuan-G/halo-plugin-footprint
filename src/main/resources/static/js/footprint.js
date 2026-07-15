@@ -1452,7 +1452,7 @@ const addFootprintMarkers = async (map, footprintData) => {
                     position: position,
                     content: createMarker(footprint.spec),
                     anchor: 'bottom-center',
-                    offset: new AMap.Pixel(0, -15),
+                    offset: new AMap.Pixel(0, -6),
                     extData: footprint.spec // 存储额外数据
                 });
 
