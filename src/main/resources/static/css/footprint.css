@@ -2011,11 +2011,27 @@
 }
 .timeline-item {
     position: relative;
-    margin: 0 22px 26px 0;
+    margin: 0 22px 32px 0;
     padding-left: 72px;
     opacity: 0;
     transform: translateX(16px);
     transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.timeline-item::after {
+    content: '';
+    position: absolute;
+    left: 32px;
+    top: 40px;
+    bottom: -32px;
+    width: 3px;
+    background: linear-gradient(to bottom, hsl(var(--hsla-raw)), hsla(var(--hsla-raw), 0.05));
+    z-index: 0;
+    border-radius: 2px;
+}
+
+.timeline-item:last-child::after {
+    display: none;
 }
 .timeline-item.visible {
     opacity: 1;
@@ -2025,23 +2041,23 @@
     position: absolute;
     left: 0;
     top: 14px;
-    background: hsla(var(--hsla-raw), 0.12);
-    color: hsl(var(--hsla-raw));
+    background: hsl(var(--hsla-raw));
+    color: #fff;
     padding: 5px 10px;
     border-radius: 999px;
     font-weight: 600;
     min-width: 65px;
     font-size: 0.8rem;
     text-align: center;
-    border: 1px solid hsla(var(--hsla-raw), 0.25);
-    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+    border: none;
+    box-shadow: 0 4px 12px hsla(var(--hsla-raw), 0.35);
     z-index: 2;
     letter-spacing: 0.03em;
 }
 /* 卡片样式优化 */
 .timeline-content-card {
     background: var(--bg-color, #fff);
-    border-radius: 8px;
+    border-radius: 12px;
     border: 1px solid rgba(15, 23, 42, 0.06);
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
     overflow: hidden;
@@ -2051,9 +2067,22 @@
     margin-top: 10px;
     width: 320px;
 }
+
+.timeline-content-card::before {
+    content: '';
+    position: absolute;
+    left: -43px;
+    top: 20px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: hsl(var(--hsla-raw));
+    box-shadow: 0 0 0 3px hsla(var(--hsla-raw), 0.2);
+    z-index: 3;
+}
 .timeline-content-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
+    transform: translateY(-4px);
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
 }
 .timeline-media {
     position: relative;
@@ -2104,8 +2133,8 @@
     padding: 12px 0 0;
 }
 .timeline-desc {
-    color: rgba(255, 255, 255, 0.88);
-    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.92);
+    line-height: 1.6;
     margin: 0 0 12px 0;
     font-size: 0.82rem;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
@@ -2113,7 +2142,6 @@
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    height: 20px;
 }
 .detail-btn {
     /*background: rgba(12, 18, 28, 0.46);*/
