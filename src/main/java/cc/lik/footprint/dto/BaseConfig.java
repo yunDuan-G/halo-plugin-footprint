@@ -16,5 +16,6 @@ public class BaseConfig {
     private String logoName;
     private String mapStyle;
     private String markerStyle;
+    private Boolean enableHoverZoom;
 }
 

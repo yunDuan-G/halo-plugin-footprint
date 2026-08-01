@@ -1,4 +1,4 @@
-﻿apiVersion: v1alpha1
+apiVersion: v1alpha1
 kind: Setting
 metadata:
   name: plugin-footprint-settings
@@ -80,6 +80,11 @@ spec:
           validation: required
           value: '109,68%,60%'
           help: "全局配色 HSL格式：322,68%,60% (色相去掉deg,数值之间不要有空格)"
+        - $formkit: checkbox
+          label: 启用悬停缩放
+          name: enableHoverZoom
+          value: true
+          help: "悬停时间线卡片时，是否先缩放到对应位置再显示抛物线动画"
         - $formkit: text
           label: 高德JsKey
           name: gaoDeKey

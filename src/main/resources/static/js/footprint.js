@@ -1,4 +1,4 @@
-﻿// 等待DOM加载完成
+// 等待DOM加载完成
 document.addEventListener('DOMContentLoaded', () => {
     // 判断是否为移动端
 
@@ -727,7 +727,11 @@ const populateTimeline = async (map) => {
                     const newPosition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
 
                     //判断是否需要移动地图
-                    if (!byOverlays[0].toString().startsWith(currentZoom)) {
+                    if (!window.FOOTPRINT_CONFIG.enableHoverZoom) {
+                        // 关闭悬停缩放：直接渲染抛物线
+                        zoomOff(map);
+                        loadParabolaAnimation(card, map);
+                    } else if (!byOverlays[0].toString().startsWith(currentZoom)) {
                         //第一次 绑定地图 缩放事件
                         zoomOn(map, card, newPosition, byOverlays[0], 1);
                         await moveToLocation(map, newPosition, byOverlays[0], 0);
@@ -736,7 +740,11 @@ const populateTimeline = async (map) => {
                         zoomOff(map);
                     }
                 } else {
-                    if (needsMovement) {
+                    if (!window.FOOTPRINT_CONFIG.enableHoverZoom) {
+                        // 关闭悬停缩放：直接渲染抛物线
+                        zoomOff(map);
+                        loadParabolaAnimation(card, map);
+                    } else if (needsMovement) {
                         //第一次 绑定地图 缩放事件
                         zoomOn(map, card, position2, zoom, 1);
                         // 绑定次数
