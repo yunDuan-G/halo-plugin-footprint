@@ -1,4 +1,4 @@
-// 等待DOM加载完成
+﻿// 等待DOM加载完成
 document.addEventListener('DOMContentLoaded', () => {
     // 判断是否为移动端
 
@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // 设置标记点样式类
         if (window.FOOTPRINT_CONFIG.markerStyle) {
             document.body.classList.add('marker-style-' + window.FOOTPRINT_CONFIG.markerStyle);
+        }
+        if (window.FOOTPRINT_CONFIG.highlightScheme) {
+            document.body.classList.add('highlight-scheme-' + window.FOOTPRINT_CONFIG.highlightScheme);
         }
     }
 
@@ -198,6 +201,10 @@ const loadParabolaAnimation = (card, map) => {
         if (markerElement) {
             // 将card对应的标记点显示到最上层
             markerElement.classList.add('zIndex13');
+            // 主标记点（非关联标记点）额外突出显示
+            if (markerImg === markerImage) {
+                markerElement.classList.add('marker-highlight');
+            }
         }
     });
 
@@ -421,6 +428,11 @@ const loadParabolaAnimation = (card, map) => {
         window.removeEventListener('resize', resizeHandler);
         card.removeEventListener('mouseleave', handleLeave);
         // 清除引用
+        // 移除标记点的置顶和高亮
+        document.querySelectorAll('.amap-marker').forEach(marker => {
+            marker.classList.remove('zIndex13');
+            marker.classList.remove('marker-highlight');
+        });
         card = null;
     };
 
@@ -794,6 +806,7 @@ const populateTimeline = async (map) => {
             const amapMarker = document.querySelectorAll('.amap-marker');
             amapMarker.forEach(marker => {
                 marker.classList.remove('zIndex13');
+                marker.classList.remove('marker-highlight');
             });
             return new Promise((resolve) => {
                 debounceTimer = setTimeout(() => {
@@ -1316,6 +1329,11 @@ const handleScroll = debounce(() => {
     if (activeCard != null && activeCard.currentAnimationId) {
         cancelAnimationFrame(activeCard.currentAnimationId);
         activeCard.currentAnimationId = null;
+    // 清理标记点置顶和高亮
+    document.querySelectorAll('.amap-marker').forEach(marker => {
+        marker.classList.remove('zIndex13');
+        marker.classList.remove('marker-highlight');
+    });
     }
 
     // 清除画布
@@ -1456,9 +1474,10 @@ const addFootprintMarkers = async (map, footprintData) => {
 
             try {
                 const position = new AMap.LngLat(longitude, latitude);
+                const markerContent = createMarker(footprint.spec);
                 const marker = new AMap.Marker({
                     position: position,
-                    content: createMarker(footprint.spec),
+                    content: markerContent,
                     anchor: 'bottom-center',
                     offset: new AMap.Pixel(0, -15),
                     extData: footprint.spec // 存储额外数据
@@ -1561,14 +1580,13 @@ const addFootprintMarkers = async (map, footprintData) => {
                     markerElement.addEventListener('touchend', (e) => handleTouchEnd(e, marker, footprint));
                 }
 
-                map.add(marker);
-            } catch (error) {
-
                 // 缓存标记点DOM引用，供抛物线动画使用
                 const imgElement = markerContent.querySelector('img');
                 if (imgElement) {
                     markerCache.set(footprint.spec.name, imgElement);
                 }
+                map.add(marker);
+            } catch (error) {
                 console.error('创建标记失败:', error, footprint);
             }
         });

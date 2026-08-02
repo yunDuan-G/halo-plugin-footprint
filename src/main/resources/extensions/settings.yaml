@@ -1,4 +1,4 @@
-apiVersion: v1alpha1
+﻿apiVersion: v1alpha1
 kind: Setting
 metadata:
   name: plugin-footprint-settings
@@ -137,6 +137,20 @@ spec:
             - label: 卡片标记
               value: card
 
+
+        - $formkit: select
+          name: highlightScheme
+          label: 悬停高亮方案
+          value: 'glow'
+          options:
+            - label: 缩放光晕
+              value: glow
+            - label: 脉冲光环
+              value: pulse
+            - label: 弹跳动画
+              value: bounce
+            - label: 边框高亮环
+              value: ring
     - group: advanced
       label: 高级设置
       formSchema:
