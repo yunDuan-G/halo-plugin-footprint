@@ -2537,14 +2537,16 @@
 
 /* ===== 方案 A：脉冲光环（pulse） ===== */
 .highlight-scheme-pulse .amap-marker.marker-highlight .marker-image {
-    overflow: visible;
     transform: scale(1.15);
     transition: transform 0.25s ease;
 }
-.highlight-scheme-pulse .amap-marker.marker-highlight .marker-image::before {
+.highlight-scheme-pulse .amap-marker.marker-highlight .custom-marker {
+    position: relative;
+}
+.highlight-scheme-pulse .amap-marker.marker-highlight .custom-marker::before {
     content: '';
     position: absolute;
-    inset: -8px;
+    inset: -14px;
     border-radius: 50%;
     border: 3px solid hsla(var(--hsla-raw), 0.6);
     animation: highlight-pulse 1.2s ease-out infinite;
