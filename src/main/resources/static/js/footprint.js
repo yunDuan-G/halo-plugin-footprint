@@ -203,6 +203,7 @@ const loadParabolaAnimation = (card, map) => {
             markerElement.classList.add('zIndex13');
             // 主标记点（非关联标记点）额外突出显示
             if (markerImg === markerImage) {
+                markerElement.classList.add('zIndex14');
                 markerElement.classList.add('marker-highlight');
             }
         }
@@ -431,6 +432,7 @@ const loadParabolaAnimation = (card, map) => {
         // 移除标记点的置顶和高亮
         document.querySelectorAll('.amap-marker').forEach(marker => {
             marker.classList.remove('zIndex13');
+            marker.classList.remove('zIndex14');
             marker.classList.remove('marker-highlight');
         });
         card = null;
@@ -803,9 +805,12 @@ const populateTimeline = async (map) => {
         };
 
         const handleLeave = () => {
+            // 立即取消任何待执行的 handleEnter，避免竞态条件
+            animationInFlight = null;
             const amapMarker = document.querySelectorAll('.amap-marker');
             amapMarker.forEach(marker => {
                 marker.classList.remove('zIndex13');
+                marker.classList.remove('zIndex14');
                 marker.classList.remove('marker-highlight');
             });
             return new Promise((resolve) => {
@@ -828,10 +833,16 @@ const populateTimeline = async (map) => {
         };
 
         card.addEventListener('mouseenter', async () => {
+            card._hoverCancelled = false;
             await handleLeave();
+            // 快速切换时，handleLeave 已标记取消，跳过 handleEnter
+            if (card._hoverCancelled) return;
             handleEnter();
         });
-        card.addEventListener('mouseleave', handleLeave);
+        card.addEventListener('mouseleave', () => {
+            card._hoverCancelled = true;
+            handleLeave();
+        });
     });
 };
 
@@ -1332,6 +1343,7 @@ const handleScroll = debounce(() => {
     // 清理标记点置顶和高亮
     document.querySelectorAll('.amap-marker').forEach(marker => {
         marker.classList.remove('zIndex13');
+        marker.classList.remove('zIndex14');
         marker.classList.remove('marker-highlight');
     });
     }

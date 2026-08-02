@@ -17,5 +17,6 @@ public class BaseConfig {
     private String mapStyle;
     private String markerStyle;
     private Boolean enableHoverZoom;
+    private String highlightScheme;
 }
 

@@ -136,8 +136,6 @@ spec:
               value: circle
             - label: 卡片标记
               value: card
-
-
         - $formkit: select
           name: highlightScheme
           label: 悬停高亮方案

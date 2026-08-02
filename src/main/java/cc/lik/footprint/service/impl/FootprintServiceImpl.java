@@ -42,7 +42,8 @@ public class FootprintServiceImpl implements FootprintService {
                     item.path("logoName").asText(),
                     item.path("mapStyle").asText(),
                     item.path("markerStyle").asText("pin"),
-                    item.path("enableHoverZoom").asBoolean(true)
+                    item.path("enableHoverZoom").asBoolean(true),
+                    item.path("highlightScheme").asText("glow")
                 );
                 return Mono.just(config);
             });
