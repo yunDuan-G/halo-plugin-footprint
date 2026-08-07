@@ -2608,7 +2608,8 @@
 .stats-divider {
     height: 1px;
     margin: 14px 2px 11px;
-    background: linear-gradient(90deg, transparent, rgba(100, 116, 139, 0.2), transparent);
+    background: linear-gradient(90deg, transparent, hsla(var(--hsla-raw), 0.62), transparent);
+    box-shadow: 0 0 10px hsla(var(--hsla-raw), 0.2);
 }
 .stats-detail {
     display: flex;
