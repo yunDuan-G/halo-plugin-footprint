@@ -2990,3 +2990,107 @@
 .map-stats-panel .stats-label {
     white-space: nowrap;
 }
+/* ===== 时间线左侧连接线重设计：细轨道 + 横向连接 + 环形节点 ===== */
+.timeline::before {
+    left: 44px;
+    width: 1px;
+    background: linear-gradient(
+        to bottom,
+        transparent,
+        hsla(var(--hsla-raw), 0.24) 8%,
+        hsla(var(--hsla-raw), 0.24) 92%,
+        transparent
+    );
+}
+.timeline-item::after {
+    left: 44px;
+    top: 30px;
+    bottom: auto;
+    width: 28px;
+    height: 1px;
+    background: linear-gradient(90deg, hsla(var(--hsla-raw), 0.5), hsla(var(--hsla-raw), 0.16));
+    border-radius: 0;
+}
+.timeline-item:last-child::after {
+    display: block;
+}
+.timeline-content-card::before {
+    left: -33px;
+    top: 20px;
+    width: 10px;
+    height: 10px;
+    background: #fff;
+    border: 2px solid hsl(var(--hsla-raw));
+    box-shadow: 0 0 0 3px hsla(var(--hsla-raw), 0.13);
+    transition: background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+}
+.timeline-content-card:hover::before {
+    background: hsl(var(--hsla-raw));
+    box-shadow: 0 0 0 4px hsla(var(--hsla-raw), 0.16);
+    transform: scale(1.12);
+}
+@media (prefers-color-scheme: dark) {
+    .timeline::before {
+        background: linear-gradient(
+            to bottom,
+            transparent,
+            hsla(var(--hsla-raw), 0.34) 8%,
+            hsla(var(--hsla-raw), 0.34) 92%,
+            transparent
+        );
+    }
+    .timeline-item::after {
+        background: linear-gradient(90deg, hsla(var(--hsla-raw), 0.62), hsla(var(--hsla-raw), 0.22));
+    }
+    .timeline-content-card::before {
+        background: #1e2a3a;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .timeline-content-card::before {
+        transition: none;
+    }
+}
+/* ===== 时间线连接线增强版 ===== */
+.timeline::before {
+    left: 42px;
+    width: 4px;
+    background: linear-gradient(
+        to bottom,
+        hsla(var(--hsla-raw), 0.18),
+        hsla(var(--hsla-raw), 0.68) 12%,
+        hsla(var(--hsla-raw), 0.68) 88%,
+        hsla(var(--hsla-raw), 0.18)
+    );
+    border-radius: 999px;
+    box-shadow: 0 0 0 1px hsla(var(--hsla-raw), 0.08);
+}
+.timeline-item::after {
+    left: 42px;
+    top: 35px;
+    width: 30px;
+    height: 4px;
+    background: linear-gradient(90deg, hsl(var(--hsla-raw)), hsla(var(--hsla-raw), 0.54));
+    border-radius: 999px;
+    box-shadow: 0 2px 7px hsla(var(--hsla-raw), 0.2);
+}
+.timeline-content-card::before {
+    left: -35px;
+    top: 20px;
+    width: 14px;
+    height: 14px;
+    box-sizing: border-box;
+    background: hsl(var(--hsla-raw));
+    border: 3px solid #fff;
+    box-shadow: 0 0 0 3px hsla(var(--hsla-raw), 0.2), 0 2px 8px hsla(var(--hsla-raw), 0.24);
+}
+.timeline-content-card:hover::before {
+    background: hsl(var(--hsla-raw));
+    box-shadow: 0 0 0 4px hsla(var(--hsla-raw), 0.24), 0 3px 10px hsla(var(--hsla-raw), 0.3);
+    transform: scale(1.15);
+}
+@media (prefers-color-scheme: dark) {
+    .timeline-content-card::before {
+        border-color: #1e2a3a;
+    }
+}
