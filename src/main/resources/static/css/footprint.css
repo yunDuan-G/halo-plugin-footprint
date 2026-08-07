@@ -2900,3 +2900,81 @@
         border-color: rgba(255, 255, 255, 0.12);
     }
 }
+/* 修复控制按钮提示气泡被裁剪的问题 */
+.map-controls .control-btn {
+    overflow: visible;
+}
+.map-controls .control-btn .tooltip {
+    z-index: 1002;
+}
+/* ===== 路网 / 路况开关简化 ===== */
+.map-controls .plane-switch input + div {
+    width: 36px;
+    height: 20px;
+    padding: 2px;
+    overflow: hidden;
+    background: #cbd5e1;
+    background-image: none;
+    background-size: auto;
+    border-radius: 999px;
+    transition: background 0.25s ease;
+}
+.map-controls .plane-switch input + div::before,
+.map-controls .plane-switch input + div::after,
+.map-controls .plane-switch input + div span {
+    display: none;
+    animation: none;
+    box-shadow: none;
+}
+.map-controls .plane-switch input + div div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    background: #fff;
+    border-radius: 50%;
+    transform: translateX(0);
+    transition: transform 0.25s ease, background 0.25s ease;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
+}
+.map-controls .plane-switch input + div div svg {
+    width: 0;
+    height: 0;
+    opacity: 0;
+}
+.map-controls .plane-switch input:checked + div {
+    background: hsl(var(--hsla-raw));
+    --x: 16px;
+}
+.map-controls .plane-switch input:checked + div > div {
+    background: #fff;
+    transform: translateX(16px);
+}
+@media (prefers-color-scheme: dark) {
+    .map-controls .plane-switch input + div {
+        background: #475569;
+    }
+    .map-controls .plane-switch input:checked + div {
+        background: hsl(var(--hsla-raw));
+    }
+}
+/* 防止路网 / 路况开关点击后出现文本光标 */
+.map-controls .plane-switch,
+.map-controls .plane-switch * {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    caret-color: transparent;
+}
+.map-controls .plane-switch:focus,
+.map-controls .plane-switch:focus-visible,
+.map-controls .plane-switch input:focus,
+.map-controls .plane-switch input:focus-visible {
+    outline: none;
+    box-shadow: none;
+}
+.map-controls .plane-switch {
+    touch-action: manipulation;
+}
