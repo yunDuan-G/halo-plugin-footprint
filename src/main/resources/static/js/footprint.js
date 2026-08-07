@@ -32,6 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
             'color: #42b983; text-decoration: underline; padding: 2px 4px;'
     );
 
+    // 统计面板不依赖地图初始化，先渲染以避免地图加载阻塞显示
+    renderStats();
+
     // 等待AMap对象加载完成
     const checkAMap = () => {
         if (typeof AMap === 'undefined') {
