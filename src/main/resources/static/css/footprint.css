@@ -2978,3 +2978,14 @@
 .map-controls .plane-switch {
     touch-action: manipulation;
 }
+/* ===== 统计卡片对齐优化 ===== */
+.map-stats-panel .stats-main {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.map-stats-panel .stats-item {
+    align-items: center;
+    text-align: center;
+}
+.map-stats-panel .stats-label {
+    white-space: nowrap;
+}
