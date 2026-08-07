@@ -694,7 +694,7 @@ const populateTimeline = async (map) => {
                 });
 
 
-                const zoom = 14;
+                const zoom = 6;
 
                 const cardHeader = card.querySelector('.card-header');
                 const cardHeaderContent = cardHeader.textContent;
@@ -750,8 +750,8 @@ const populateTimeline = async (map) => {
                         loadParabolaAnimation(card, map);
                     } else if (!byOverlays[0].toString().startsWith(currentZoom)) {
                         //第一次 绑定地图 缩放事件
-                        zoomOn(map, card, newPosition, byOverlays[0], 1);
-                        await moveToLocation(map, newPosition, byOverlays[0], 0);
+                        zoomOn(map, card, newPosition, zoom, 1);
+                        await moveToLocation(map, newPosition, zoom, 0);
                     } else {
                         loadParabolaAnimation(card, map);
                         zoomOff(map);
@@ -788,7 +788,7 @@ const populateTimeline = async (map) => {
                         const newPosition2 = new AMap.LngLat(mergedOverlay[1].lng, mergedOverlay[1].lat);
 
                         //缩放到 多个标记点的 地图中心点 和 缩放级别
-                        await moveToLocation(map, newPosition2, mergedOverlay[0], 5);
+                        await moveToLocation(map, newPosition2, zoom, 5);
                         // await moveToLocation(map, position2, zoom, 0);
                     } else {
                         loadParabolaAnimation(card, map);
@@ -1113,7 +1113,7 @@ const moveToLocation = (map, position, Zoom, time) => {
         //防止缩放级别相同时，不执行抛物线问题
         const currentZoom = map.getZoom();
         if (currentZoom === Zoom) {
-            map.setZoom(Zoom + 1);
+            map.setZoom(Zoom + 2);
         }
 
         // 平移到目标位置
