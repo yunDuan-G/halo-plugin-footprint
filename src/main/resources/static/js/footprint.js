@@ -778,12 +778,12 @@ const populateTimeline = async (map) => {
                                         f => f._position.lng === value.getLng() && f._position.lat === value.getLat()
                                 ))
                                 .filter(Boolean);*/
-                        const mergedOverlays = [...new Set([...newOverlays2, ...lastPositions])];
+                        /*const mergedOverlays = [...new Set([...newOverlays2, ...lastPositions])];
 
-                        lastPositions = newOverlays2;
+                        lastPositions = newOverlays2;*/
 
                         //获取多个标记点的 地图中心点 和 缩放级别
-                        const mergedOverlay = map.getFitZoomAndCenterByOverlays(mergedOverlays, [350, 120, 120, 120]);
+                        const mergedOverlay = map.getFitZoomAndCenterByOverlays(newOverlays2, [350, 120, 120, 120]);
                         // 提取坐标
                         const newPosition2 = new AMap.LngLat(mergedOverlay[1].lng, mergedOverlay[1].lat);
 
