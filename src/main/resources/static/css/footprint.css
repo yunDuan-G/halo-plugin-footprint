@@ -3094,3 +3094,84 @@
         border-color: #1e2a3a;
     }
 }
+/* ===== 时间线轨道方案：分段主线 + 节拍点 + 渐变连接 ===== */
+.timeline::before {
+    left: 43px;
+    width: 2px;
+    background: repeating-linear-gradient(
+        to bottom,
+        hsla(var(--hsla-raw), 0.3) 0,
+        hsla(var(--hsla-raw), 0.3) 12px,
+        transparent 12px,
+        transparent 21px
+    );
+    border-radius: 999px;
+    box-shadow: none;
+}
+.timeline-item::before {
+    content: "";
+    position: absolute;
+    left: 56px;
+    top: 32px;
+    width: 9px;
+    height: 9px;
+    box-sizing: border-box;
+    background: #fff;
+    border: 2px solid hsla(var(--hsla-raw), 0.62);
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px hsla(var(--hsla-raw), 0.1);
+    z-index: 2;
+    transition: background 0.25s ease, border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+}
+.timeline-item::after {
+    left: 43px;
+    top: 35px;
+    width: 29px;
+    height: 3px;
+    background: linear-gradient(90deg, hsla(var(--hsla-raw), 0.28), hsl(var(--hsla-raw)) 72%, hsla(var(--hsla-raw), 0.7));
+    border-radius: 999px;
+    box-shadow: none;
+    z-index: 1;
+}
+.timeline-content-card::before {
+    left: -35px;
+    top: 20px;
+    width: 14px;
+    height: 14px;
+    box-sizing: border-box;
+    background: #fff;
+    border: 3px solid hsl(var(--hsla-raw));
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px hsla(var(--hsla-raw), 0.16);
+    transition: background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+}
+.timeline-item:has(.timeline-content-card:hover)::before {
+    background: hsl(var(--hsla-raw));
+    border-color: hsl(var(--hsla-raw));
+    box-shadow: 0 0 0 3px hsla(var(--hsla-raw), 0.2);
+    transform: scale(1.18);
+}
+.timeline-item:has(.timeline-content-card:hover)::after {
+    background: linear-gradient(90deg, hsl(var(--hsla-raw)), hsl(var(--hsla-raw)));
+    box-shadow: 0 0 8px hsla(var(--hsla-raw), 0.3);
+}
+.timeline-content-card:hover::before {
+    background: hsl(var(--hsla-raw));
+    box-shadow: 0 0 0 4px hsla(var(--hsla-raw), 0.2);
+    transform: scale(1.12);
+}
+@media (prefers-color-scheme: dark) {
+    .timeline-item::before {
+        background: #1e2a3a;
+    }
+    .timeline-content-card::before {
+        background: #1e2a3a;
+        border-color: hsl(var(--hsla-raw));
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .timeline-item::before,
+    .timeline-content-card::before {
+        transition: none;
+    }
+}
