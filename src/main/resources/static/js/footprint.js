@@ -751,7 +751,13 @@ const populateTimeline = async (map) => {
                     } else if (!byOverlays[0].toString().startsWith(currentZoom)) {
                         //第一次 绑定地图 缩放事件
                         zoomOn(map, card, newPosition, zoom, 1);
-                        await moveToLocation(map, newPosition, zoom, 0);
+                        const sameZoom = await moveToLocation(map, newPosition, zoom, 0);
+                        if (sameZoom) {
+                            // 同级缩放不会触发 zoomend，因此直接结束监听并启动抛物线
+                            zoomOff(map);
+                            zoomOff3(map);
+                            loadParabolaAnimation(card, map);
+                        }
                     } else {
                         loadParabolaAnimation(card, map);
                         zoomOff(map);
@@ -788,7 +794,13 @@ const populateTimeline = async (map) => {
                         const newPosition2 = new AMap.LngLat(mergedOverlay[1].lng, mergedOverlay[1].lat);
 
                         //缩放到 多个标记点的 地图中心点 和 缩放级别
-                        await moveToLocation(map, newPosition2, zoom, 5);
+                        const sameZoom = await moveToLocation(map, newPosition2, zoom, 5);
+                        if (sameZoom) {
+                            // 同级缩放不会触发 zoomend，因此直接结束监听并启动抛物线
+                            zoomOff(map);
+                            zoomOff3(map);
+                            loadParabolaAnimation(card, map);
+                        }
                         // await moveToLocation(map, position2, zoom, 0);
                     } else {
                         loadParabolaAnimation(card, map);
@@ -880,7 +892,12 @@ function zoomOff(map, card, newPosition, byOverlays) {
     if (card) {
         //第二次 绑定地图 缩放事件
         zoomOn3(map, card, newPosition, byOverlays, 2);
-        moveToLocation(map, newPosition, byOverlays, 0);
+        moveToLocation(map, newPosition, byOverlays, 0).then((sameZoom) => {
+            // 第二次移动若已处于目标级别，不会触发 zoomend，需主动结束监听并渲染抛物线
+            if (sameZoom) {
+                zoomOff3(map, card);
+            }
+        });
     }
 }
 
@@ -1110,29 +1127,43 @@ const moveToLocation = (map, position, Zoom, time) => {
         // 启用动画
         map.setStatus({animateEnable: true});
 
-        //防止缩放级别相同时，不执行抛物线问题
-        const currentZoom = map.getZoom();
-        if (currentZoom === Zoom) {
-            map.setZoom(Zoom + 2);
-        }
+        const sameZoom = Number(map.getZoom()) === Number(Zoom);
+        // 旧逻辑会先放大两级再缩回，造成额外的地图跳转。
+        // 这里统一使用一次 setZoomAndCenter 完成缩放和平移。
+        const requestedDuration = Number(time);
+        const duration = Number.isFinite(requestedDuration) && requestedDuration >= 100
+                ? requestedDuration
+                : 500;
+        const currentCenter = map.getCenter();
+        const centerChanged = currentCenter && typeof currentCenter.distance === 'function'
+                ? currentCenter.distance(position) > 1
+                : true;
+        const endEvent = centerChanged ? 'moveend' : (sameZoom ? null : 'zoomend');
+        let timeoutId;
+        let finished = false;
 
-        // 平移到目标位置
-        map.panTo(position);
-
-
-        // 强制设置新的缩放级别（即使相同也设置）
-        map.setZoom(Zoom); // 然后设置目标值
-
-
-        // 等待动画完成
-        const checkAnimation = () => {
-            if (!map.isMoving && !map.isZooming) {
-                resolve();
-            } else {
-                requestAnimationFrame(checkAnimation);
+        const finish = () => {
+            if (finished) return;
+            finished = true;
+            if (endEvent) {
+                map.off(endEvent, finish);
             }
+            clearTimeout(timeoutId);
+            resolve(sameZoom);
         };
-        checkAnimation();
+
+        if (endEvent) {
+            map.on(endEvent, finish);
+        }
+        timeoutId = setTimeout(finish, duration + 300);
+
+        // 单次完成缩放与平移，不再人为放大两级来触发 zoomend。
+        map.setZoomAndCenter(Zoom, position, false, duration);
+
+        // 目标中心和缩放级别都未变化时，高德不会触发结束事件。
+        if (!endEvent) {
+            requestAnimationFrame(finish);
+        }
     });
 };
 
