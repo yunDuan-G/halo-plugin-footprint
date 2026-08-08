@@ -2979,6 +2979,16 @@
 .map-controls .plane-switch {
     touch-action: manipulation;
 }
+/* 修复时间线按钮悬停时图标变白、与浅色背景对比不足的问题 */
+.map-controls #timeline-btn:hover::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23526176' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E");
+    opacity: 1;
+}
+@media (prefers-color-scheme: dark) {
+    .map-controls #timeline-btn:hover::before {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E");
+    }
+}
 /* ===== 统计卡片对齐优化 ===== */
 .map-stats-panel .stats-main {
     grid-template-columns: repeat(3, minmax(0, 1fr));

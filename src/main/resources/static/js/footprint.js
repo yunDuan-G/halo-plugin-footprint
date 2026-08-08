@@ -694,7 +694,7 @@ const populateTimeline = async (map) => {
                 });
 
 
-                const zoom = 6;
+                const zoom = 6.5;
 
                 const cardHeader = card.querySelector('.card-header');
                 const cardHeaderContent = cardHeader.textContent;
