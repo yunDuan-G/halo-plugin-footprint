@@ -1857,9 +1857,12 @@ const initializeApp = async () => {
             mapStyle: window.FOOTPRINT_CONFIG.mapStyle || 'amap://styles/grey',
             viewMode: '3D',
             pitch: 0,
+            pitchEnable: true, // 开启俯仰交互
+            rotateEnable: true, // 开启旋转交互
+            showBuildingBlock: true, // 显示3D楼房立体块
+            buildingAnimation: true, // 开启楼房出现动画
             terrain: true, // 开启地形图
             features: ['bg', 'road', 'building', 'point'],
-            rotateEnable: false,
             optimize: true, // 开启优化模式
             resizeEnable: true     // 启用自动适应容器尺寸
         });
