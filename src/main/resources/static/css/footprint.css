@@ -3353,3 +3353,19 @@
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffd4e6' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='8.5'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E");
     }
 }
+
+/* ===== 修复时间线装饰层的定位与高度显示 ===== */
+.timeline-drawer .timeline-content {
+    position: relative;
+    min-height: 0;
+}
+
+.timeline-drawer .timeline-decoration {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 150px;
+    min-height: 150px;
+    box-sizing: border-box;
+    pointer-events: none;
+}
