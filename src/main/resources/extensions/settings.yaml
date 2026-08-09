@@ -128,7 +128,7 @@ spec:
         - $formkit: select
           name: markerStyle
           label: 标记点样式
-          value: 'pin'
+          value: 'photo'
           options:
             - label: 水滴标记
               value: pin
@@ -136,10 +136,12 @@ spec:
               value: circle
             - label: 卡片标记
               value: card
+            - label: 照片徽章
+              value: photo
         - $formkit: select
           name: highlightScheme
           label: 悬停高亮方案
-          value: 'glow'
+          value: 'ring'
           options:
             - label: 缩放光晕
               value: glow

@@ -790,6 +790,115 @@
     border-top: 6px solid rgba(0, 0, 0, 0.75);
 }
 .marker-style-card .marker-badge { display: none; }
+
+/* ===== 照片徽章标记（photo） ===== */
+.marker-style-photo .custom-marker {
+    position: relative;
+    display: block;
+    width: 46px;
+    height: 44px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.2s ease, filter 0.2s ease;
+}
+.marker-style-photo .custom-marker:hover {
+    transform: translateY(-2px) scale(1.06);
+    filter: drop-shadow(0 5px 12px rgba(15, 23, 42, 0.22));
+}
+.marker-style-photo .marker-image {
+    position: absolute;
+    top: 0;
+    left: 5px;
+    z-index: 1;
+    width: 36px;
+    height: 36px;
+    overflow: hidden;
+    background: var(--bg-color);
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px hsl(var(--hsla-raw)), 0 4px 10px rgba(15, 23, 42, 0.2);
+    transition: box-shadow 0.2s ease;
+}
+.marker-style-photo .marker-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.marker-style-photo .marker-badge {
+    position: absolute;
+    top: 25px;
+    right: 1px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    color: #fff;
+    background: hsl(var(--hsla-raw));
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(15, 23, 42, 0.2);
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+}
+.marker-style-photo .marker-arrow {
+    position: absolute;
+    top: 32px;
+    left: 50%;
+    z-index: 0;
+    display: block;
+    width: 0;
+    height: 0;
+    border-top: 10px solid hsl(var(--hsla-raw));
+    border-right: 7px solid transparent;
+    border-left: 7px solid transparent;
+    transform: translateX(-50%);
+}
+.marker-style-photo .marker-label {
+    position: absolute;
+    bottom: calc(100% - 1px);
+    left: 50%;
+    z-index: 3;
+    max-width: 150px;
+    padding: 4px 8px;
+    overflow: hidden;
+    color: #fff;
+    background: rgba(15, 23, 42, 0.86);
+    border: 1px solid hsla(var(--hsla-raw), 0.4);
+    border-radius: 7px;
+    box-shadow: 0 5px 14px rgba(15, 23, 42, 0.18);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 4px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.marker-style-photo .custom-marker:hover .marker-label,
+.marker-style-photo .custom-marker:focus-visible .marker-label {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+.marker-style-photo .custom-marker:hover .marker-image {
+    box-shadow: 0 0 0 3px hsla(var(--hsla-raw), 0.26), 0 5px 14px rgba(15, 23, 42, 0.24);
+}
+@media (prefers-color-scheme: dark) {
+    .marker-style-photo .marker-image,
+    .marker-style-photo .marker-badge {
+        border-color: #1e2a3a;
+    }
+    .marker-style-photo .marker-label {
+        color: #f8fafc;
+        background: rgba(15, 23, 42, 0.94);
+        border-color: hsla(var(--hsla-raw), 0.52);
+    }
+}
 /* 移除地图 Logo */
 .amap-logo {
     display: none !important;
