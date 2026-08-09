@@ -415,28 +415,6 @@
         gap: 8px !important;
         font-size: 12px !important;
     }
-    .drawer {
-        width: 100%;
-        right: -100%;
-    }
-    .drawer-content {
-        padding: 20px;
-    }
-    .timeline-card {
-        /*padding: 14px;*/
-        padding: 12px;
-        min-height: 160px;
-    }
-    .timeline-card .card-header {
-        font-size: 16px;
-    }
-    .timeline-card .card-description {
-        font-size: 12px;
-    }
-    .timeline-card .view-button {
-        padding: 4px 10px;
-        font-size: 12px;
-    }
     #zoom-restore, #messageBoards, #timeline-btn {
         padding: 8px 12px !important;
         border-radius: 999px !important;
@@ -819,164 +797,13 @@
 .amap-copyright {
     display: none !important;
 }
-/* 主题控制样式 */
-.theme-control {
-    display: flex;
-    align-items: center;
-    padding: 0 15px;
-    border-right: 1px solid rgba(0, 0, 0, 0.1);
-}
-.theme-label {
-    color: rgba(0, 0, 0, 0.7);
-    font-size: 13px;
-    margin-right: 8px;
-}
-.theme-select {
-    background: rgba(0, 0, 0, 0.05);
-    border: none;
-    border-radius: 4px;
-    padding: 6px 24px 6px 8px;
-    font-size: 13px;
-    color: rgba(0, 0, 0, 0.7);
-    cursor: pointer;
-    appearance: none;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(0, 0, 0, 0.4)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right 8px center;
-    background-size: 16px;
-}
-.theme-select:hover {
-    background-color: rgba(0, 0, 0, 0.1);
-    color: rgba(0, 0, 0, 0.9);
-}
-.theme-select:focus {
-    outline: none;
-    background-color: rgba(0, 0, 0, 0.15);
-    color: rgba(0, 0, 0, 0.9);
-}
 /* 按钮点击效果 */
 .control-btn.btn-clicked {
     transform: scale(0.95) translateZ(0);
     opacity: 0.9;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-/* 加载指示器样式 */
-.loading-indicator {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.9);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-    transition: opacity 0.3s ease;
-}
-.loading-indicator.fade-out {
-    opacity: 0;
-}
-.loading-content {
-    text-align: center;
-    padding: 20px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-.loading-spinner {
-    width: 40px;
-    height: 40px;
-    margin: 0 auto 15px;
-    border: 3px solid #f3f3f3;
-    border-top: 3px solid var(--primary-color);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-.loading-text {
-    font-size: 16px;
-    color: #333;
-    margin-bottom: 10px;
-}
-.loading-progress {
-    font-size: 14px;
-    color: #666;
-}
-@keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-    100% {
-        transform: rotate(360deg);
-    }
-}
 /* 动画定义 */
-@keyframes logoEntrance {
-    0% {
-        opacity: 0;
-        transform: translate3d(0, 20px, 0);
-    }
-    100% {
-        opacity: 1;
-        transform: translate3d(0, 0, 0);
-    }
-}
-@keyframes textFadeIn {
-    0% {
-        opacity: 0;
-        transform: translate3d(0, 10px, 0);
-    }
-    50% {
-        opacity: 0;
-    }
-    100% {
-        opacity: 1;
-        transform: translate3d(0, 0, 0);
-    }
-}
-@keyframes slideIn {
-    0% {
-        opacity: 0;
-        transform: translateX(-30px);
-    }
-    100% {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-@keyframes colorFadeIn {
-    0% {
-        opacity: 0;
-        color: rgba(0, 0, 0, 0.2);
-    }
-    50% {
-        opacity: 1;
-        color: rgba(0, 0, 0, 0.5);
-    }
-    100% {
-        opacity: 1;
-        color: var(--primary-color);
-    }
-}
-@keyframes controlsFadeIn {
-    0% {
-        opacity: 0;
-        transform: translateX(-50%) translateY(20px);
-    }
-    100% {
-        opacity: 1;
-        transform: translateX(-50%) translateY(0);
-    }
-}
-@keyframes buttonColorFadeIn {
-    0% {
-        background: rgba(0, 0, 0, 0.1);
-    }
-    100% {
-        background: var(--primary-color);
-    }
-}
 /* 控制栏动画 */
 .map-controls {
     bottom: calc(20px + var(--safe-bottom));
@@ -1000,18 +827,6 @@
 .control-btn.scale-in {
     animation: scaleIn 0.3s ease-out;
 }
-.zoom-controls button {
-    opacity: 0;
-    transform: translateX(-20px);
-    transition: all 0.3s ease-out;
-}
-.zoom-controls button.show {
-    opacity: 1;
-    transform: translateX(0);
-}
-.zoom-controls button.slide-in {
-    animation: slideIn 0.3s ease-out;
-}
 /* 按钮点击动画 */
 .btn-pulse {
     animation: pulse 0.3s ease-out;
@@ -1026,16 +841,6 @@
     }
     100% {
         transform: scale(1);
-    }
-}
-@keyframes slideIn {
-    0% {
-        transform: translateX(-20px);
-        opacity: 0;
-    }
-    100% {
-        transform: translateX(0);
-        opacity: 1;
     }
 }
 @keyframes pulse {
@@ -1406,19 +1211,6 @@
         transform: translateX(0);
     }
 }
-/* 移动端适配 */
-@media screen and (max-width: 768px) {
-    .drawer {
-        width: 100%;
-        right: -100%;
-    }
-    .drawer-content {
-        padding: 20px;
-    }
-    .timeline-card {
-        padding: 14px;
-    }
-}
 #timeline-btn {
     position: relative;
     padding: 9px 14px;
@@ -1483,231 +1275,8 @@
         height: 14px;
     }
 }
-/* -------------------------  */
-.drawer {
-    position: fixed;
-    top: 0;
-    right: -650px; /* 增加宽度 */
-    width: 650px;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    box-shadow: -5px 0 25px rgba(0, 0, 0, 0.1);
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 1000;
-    border-left: 1px solid rgba(0, 0, 0, 0.05);
-}
-.drawer.open {
-    right: 0;
-    background: rgba(255, 255, 255, 0.1); /* 设置透明背景 */
-}
-.drawer-content {
-    padding: 20px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-}
-.drawer-content h2 {
-    margin: 0 0 -10px 0;
-    font-size: 24px;
-    font-weight: 600;
-    padding-bottom: 15px;
-    border-bottom: 2px solid rgba(0, 0, 0, 0.05);
-    color: var(--text-color);
-    position: relative;
-}
-.drawer-content h2::after {
-    content: '';
-    position: absolute;
-    bottom: -2px;
-    left: 0;
-    width: 60px;
-    height: 2px;
-    background: var(--primary-color);
-    transition: width 0.3s ease;
-}
-.drawer.open .drawer-content h2::after {
-    width: 100px;
-}
-#close-drawer {
-    position: absolute;
-    top: 25px;
-    right: 25px;
-    width: 36px;
-    height: 36px;
-    background: rgba(0, 0, 0, 0.03);
-    border: none;
-    border-radius: 50%;
-    color: var(--text-color);
-    font-size: 16px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-}
-#close-drawer:hover {
-    background: var(--primary-color);
-    color: white;
-    transform: rotate(90deg);
-}
-#timeline-container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    overflow-y: auto;
-    margin-right: -10px;
-    /*padding: 10px 10px 0 10px;*/
-}
-#timeline-container::-webkit-scrollbar {
-    width: 6px;
-}
-#timeline-container::-webkit-scrollbar-track {
-    background: rgba(15, 23, 42, 0.06);
-}
-#timeline-container::-webkit-scrollbar-thumb {
-    background: hsla(var(--hsla-raw), 0.25);
-    border-radius: 4px;
-}
-#timeline-container::-webkit-scrollbar-thumb:hover {
-    background: hsla(var(--hsla-raw), 0.42);
-}
-.timeline-card {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-    border-radius: 16px;
-    background-size: cover;
-    background-position: center;
-    color: white;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
-    min-height: 180px;
-    cursor: pointer;
-    width: 270px;
-}
-.timeline-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(to bottom,
-    rgba(0, 0, 0, 0.2) 0%,
-    rgba(0, 0, 0, 0.5) 50%,
-    rgba(0, 0, 0, 0.8) 100%);
-    z-index: 1;
-    transition: opacity 0.3s ease;
-}
-.timeline-card .card-header {
-    position: relative;
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 10px;
-    z-index: 2;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-    transition: transform 0.3s ease;
-    display: flex;
-}
-.timeline-card .card-time {
-    position: relative;
-    font-size: 14px;
-    margin-bottom: 12px;
-    opacity: 0.9;
-    z-index: 2;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-.timeline-card .card-time::before {
-    content: '';
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    background: var(--primary-color);
-    border-radius: 50%;
-}
-.timeline-card .card-description {
-    position: relative;
-    font-size: 13px;
-    line-height: 1.6;
-    opacity: 0.9;
-    z-index: 2;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    margin-bottom: 15px;
-    transition: opacity 0.3s ease;
-    display: flex;
-    height: 20px;
-}
-.timeline-card .view-button {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 20px;
-    color: white;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    z-index: 2;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    margin-top: auto;
-}
-.timeline-card .view-button svg {
-    width: 16px;
-    height: 16px;
-    transition: transform 0.3s ease;
-}
-.timeline-card .view-button:hover {
-    background: rgba(255, 255, 255, 0.25);
-    transform: translateY(-2px);
-}
-.timeline-card .view-button:active {
-    transform: translateY(0);
-}
 /* 移动端适配 */
 @media screen and (max-width: 768px) {
-    .drawer {
-        width: 100%;
-        right: -100%;
-    }
-    .drawer-content {
-        padding: 20px 10px 20px 20px;
-    }
-    .timeline-card {
-        padding: 16px;
-        min-height: 180px;
-    }
-    .timeline-card .card-header {
-        font-size: 18px;
-    }
-    .timeline-card .card-description {
-        font-size: 14px;
-    }
-    .timeline-card .view-button {
-        padding: 6px 12px;
-        font-size: 13px;
-    }
-    .timeline-card .view-button svg {
-        width: 14px;
-        height: 14px;
-    }
     .map-controls {
     bottom: calc(20px + var(--safe-bottom));
         display: flex !important; /* Ensure map-controls are visible */
@@ -1731,54 +1300,6 @@
         font-size: 0.8rem;
     }
 }
-.timeline-card .loading-indicator {
-    position: absolute;
-    top: 10px;
-    left: calc(100% - 36px);
-    width: 24px;
-    height: 24px;
-    border: 2px solid #ffffff;
-    border-top-color: transparent;
-    border-radius: 100%;
-    background: none;
-    animation: circle infinite 0.75s linear;
-    z-index: 3;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    pointer-events: none;
-}
-.timeline-card.loading .loading-indicator {
-    opacity: 1;
-}
-.timeline-card.loading {
-    background: rgba(0, 0, 0, 0.1) !important;
-}
-.timeline-card.loading::before {
-    opacity: 0.5;
-}
-@keyframes circle {
-    0% {
-        transform: rotate(0);
-    }
-    100% {
-        transform: rotate(360deg);
-    }
-}
-.timeLineBox {
-    width: 100%;
-    height: 100%;
-    /*padding: 20px;*/
-    box-sizing: border-box;
-    display: block;
-    position: relative;
-    overflow-y: auto;
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE和Edge */
-}
-/* Chrome/Safari/Opera */
-.timeLineBox::-webkit-scrollbar {
-    display: none;
-}
 .timeline {
     width: 96%;
     /*height: 255px; !* TODO *!*/
@@ -1786,95 +1307,6 @@
     /*display: flex; !* TODO *!*/
     justify-content: start;
     /*border-left: 5px solid gray; !* TODO *!*/
-}
-.timeline.reverse {
-    flex-direction: row-reverse;
-    justify-content: end;
-    border-right: 5px solid gray;
-    border-left: 0;
-}
-.timeline.on {
-    border-color: #254b87;
-}
-.timeline:first-child {
-    border: 0;
-}
-.timelineItem {
-    height: 100%;
-    border-bottom: 5px solid gray;
-    display: flex;
-    flex-direction: column;
-    justify-content: end;
-    align-items: center;
-    cursor: default;
-    position: relative;
-}
-.timelineItem.active {
-    border-color: #254b87;
-}
-.timelineItem.active .itemTitle {
-    color: #254b87;
-}
-.timelineItem.active .itemTitleDiv {
-    color: #254b87;
-}
-.timelineItem.active .itemDot {
-    background-color: #254b87;
-}
-.itemTitle {
-    position: absolute;
-    bottom: 4px;
-    left: 0;
-    width: 100%;
-    box-sizing: border-box;
-    padding: 10px;
-    text-align: center;
-    font-size: 18px;
-    overflow: visible; /* 需要改为 visible 才能显示完整卡片 */
-    display: flex;
-    justify-content: center; /* 水平居中 */
-    align-items: center; /* 垂直居中 */
-}
-.itemDot {
-    width: 20px;
-    height: 20px;
-    background-color: gray;
-    border-radius: 10px;
-    margin-bottom: -12px;
-    display: block;
-}
-.ellipsis {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.itemTitleDiv {
-    padding: 0 15px;
-}
-/* Arrow styles */
-.to_left {
-    width: 0;
-    height: 0;
-    border-right: 10px solid gray;
-    border-top: 10px solid transparent;
-    border-bottom: 10px solid transparent;
-}
-.to_right {
-    width: 0;
-    height: 0;
-    border-left: 10px solid gray;
-    border-top: 10px solid transparent;
-    border-bottom: 10px solid transparent;
-}
-.to-btn-left {
-    width: 100%;
-    transform: translate(-5px, 20px);
-}
-.to-btn-right {
-    display: flex;
-    justify-content: flex-end;
-    width: 100%;
-    transform: translate(5px, 20px);
 }
 .map-controls.open {
     left: auto;
@@ -2257,18 +1689,6 @@
         height: 16px;
     }
 }
-/* 动画 */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
-}
-.fade-in {
-    animation: fadeIn 1s ease forwards;
-}
 /* 时间线装饰 */
 .timeline-decoration {
     position: absolute;
@@ -2277,15 +1697,6 @@
     width: 100%;
     height: 150px;
     background: linear-gradient(to bottom, hsla(var(--hsla-raw), 0.12), transparent);
-    z-index: 1;
-}
-.timeline-end {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 100px;
-    background: linear-gradient(to top, hsla(var(--hsla-raw), 0.12), transparent);
     z-index: 1;
 }
 .timeline-content::-webkit-scrollbar {
@@ -2314,8 +1725,7 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  .animate-in,
-  .fade-in {
+  .animate-in {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
