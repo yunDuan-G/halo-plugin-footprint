@@ -132,9 +132,6 @@
     position: relative;
     content-visibility: auto;
     contain: layout style paint;
-    transform: translateZ(0);
-    will-change: transform;
-    backface-visibility: hidden;
     overflow: hidden;
 }
 #footprint-page #footprint-map {

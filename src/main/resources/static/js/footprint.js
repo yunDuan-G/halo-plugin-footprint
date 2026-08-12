@@ -1960,7 +1960,6 @@ const initializeApp = async () => {
             buildingAnimation: true, // 开启楼房出现动画
             terrain: true, // 开启地形图
             features: ['bg', 'road', 'building', 'point'],
-            optimize: true, // 开启优化模式
             resizeEnable: true     // 启用自动适应容器尺寸
         });
 
