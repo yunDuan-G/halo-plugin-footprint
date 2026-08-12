@@ -18,5 +18,5 @@ public class BaseConfig {
     private String markerStyle;
     private Boolean enableHoverZoom;
     private String highlightScheme;
+    private Boolean highlightVisitedCities;
 }
-
