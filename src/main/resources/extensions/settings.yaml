@@ -85,6 +85,11 @@ spec:
           name: enableHoverZoom
           value: true
           help: "悬停时间线卡片时，是否先缩放到对应位置再显示抛物线动画"
+        - $formkit: checkbox
+          label: 高亮已去过城市
+          name: highlightVisitedCities
+          value: true
+          help: "使用主题色显示已经去过的城市区域"
         - $formkit: text
           label: 高德JsKey
           name: gaoDeKey
