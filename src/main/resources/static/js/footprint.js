@@ -1838,23 +1838,32 @@ const addVisitedCityLayer = (map, footprintData) => {
         return Promise.resolve(null);
     }
 
+    // 异步加载行政区图层插件，确保插件加载完成后再创建高亮图层
     return new Promise(resolve => {
         AMap.plugin('AMap.DistrictLayer', () => {
             try {
+                // 创建中国行政区图层：depth 为 2 时可以显示到城市级别
                 const visitedCityLayer = new AMap.DistrictLayer.Country({
                     zIndex: 8,
                     SOC: 'CHN',
                     depth: 2,
                     styles: {
-                        // 不显示省级边框，只保留城市边界
+                        // 隐藏国家外围边框，避免与地图底图边界重复显示
+                        'nation-stroke': '',
+                        // 使用主题色显示海岸线，同时降低透明度避免过于抢眼
+                        'coastline-stroke': getThemeRgba(0.62),
+                        // 隐藏省级边框，只保留城市级别的边界
                         'province-stroke': '',
+                        // 统一设置行政区边界线宽度
                         'stroke-width': 1.5,
+                        // 根据城市是否去过，分别设置城市边框颜色
                         'city-stroke': properties => {
                             const cityAdcode = properties?.adcode_cit;
                             return visitedCitySet.has(String(cityAdcode))
                                 ? getThemeRgba(0.92)
                                 : 'rgba(148, 163, 184, 0.24)';
                         },
+                        // 只填充已去过的城市，未去过的城市保持透明
                         fill: properties => {
                             const cityAdcode = properties?.adcode_cit;
                             return visitedCitySet.has(String(cityAdcode))
@@ -1864,9 +1873,11 @@ const addVisitedCityLayer = (map, footprintData) => {
                     }
                 });
 
+                // 将创建好的行政区图层添加到地图，并返回图层实例
                 map.add(visitedCityLayer);
                 resolve(visitedCityLayer);
             } catch (error) {
+                // 图层创建失败时不阻塞页面其他功能，返回空值作为降级结果
                 console.warn('已去过城市高亮图层创建失败:', error);
                 resolve(null);
             }
