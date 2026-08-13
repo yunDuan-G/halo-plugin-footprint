@@ -1851,11 +1851,21 @@
     .timeline-content {
         padding: 10px 0 10px 5px;
     }
+    .timeline-item {
+        isolation: isolate;
+    }
+    .timeline-item::before {
+        display: none;
+    }
     .timeline-content-card {
         width: 65vw;
         min-width: unset;
         margin-top: 10px;
         border-radius: 10px;
+        z-index: 1;
+    }
+    .timeline-content-card::before {
+        display: none;
     }
     .timeline-media {
         height: 160px;
@@ -1872,10 +1882,14 @@
         transform: translateX(8px) translateY(-42px);
     }
     .timeline-date {
+        position: absolute;
+        z-index: 5;
+        box-sizing: border-box;
         min-width: 60px;
         font-size: 0.8rem;
         padding: 5px 7px;
         top: 8px;
+        background: hsl(var(--hsla-raw));
     }
     .timeline-desc {
         font-size: 0.75rem;
