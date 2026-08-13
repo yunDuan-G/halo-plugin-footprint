@@ -624,9 +624,14 @@ const populateTimeline = async (map) => {
 
         const footprintMap = document.getElementById('footprint-map');
         const timelineDrawer = document.getElementById('timelineDrawer');
-        const drawerRect = timelineDrawer.getBoundingClientRect();
-        const number = window.innerWidth - drawerRect.width;
-        footprintMap.style.width = number + "px";
+        if (isMobile) {
+            // 移动端抽屉覆盖在地图上，不压缩地图宽度，避免出现 0px 宽容器
+            footprintMap.style.width = '100%';
+        } else {
+            const drawerRect = timelineDrawer.getBoundingClientRect();
+            const number = Math.max(1, window.innerWidth - drawerRect.width);
+            footprintMap.style.width = number + "px";
+        }
         //还原仰角和旋转
         if (isElevation) {
             map.setPitch(0);
@@ -1353,13 +1358,19 @@ const handleResize = debounce(() => {
     if (!mapContainer || !timelineDrawer) return;
 
     if (isTimelineOpen) {
-        // 抽屉打开时的计算逻辑
-        const drawerRect = timelineDrawer.getBoundingClientRect();
-        const newMapWidth = window.innerWidth - drawerRect.width;
+        if (isMobile) {
+            // 移动端抽屉覆盖地图，保持地图有效宽度
+            mapContainer.style.transition = 'none';
+            mapContainer.style.width = '100%';
+        } else {
+            // 桌面端抽屉打开时，为抽屉预留地图宽度
+            const drawerRect = timelineDrawer.getBoundingClientRect();
+            const newMapWidth = Math.max(1, window.innerWidth - drawerRect.width);
 
-        // 应用新宽度（添加CSS过渡效果）
-        mapContainer.style.transition = 'width 0.3s ease';
-        mapContainer.style.width = `${newMapWidth}px`;
+            // 应用新宽度（添加CSS过渡效果）
+            mapContainer.style.transition = 'width 0.3s ease';
+            mapContainer.style.width = `${newMapWidth}px`;
+        }
 
     } else {
         // 全屏模式
@@ -1664,8 +1675,13 @@ const addFootprintMarkers = async (map, footprintData) => {
         }
     };
 
-    // 在组件卸载时清理事件监听器
-    window.addEventListener('unload', cleanup);
+    // 使用 pagehide 替代已被现代浏览器限制的 unload
+    // 进入浏览器返回缓存时暂不清理，避免返回页面后地图事件失效
+    window.addEventListener('pagehide', event => {
+        if (!event.persisted) {
+            cleanup();
+        }
+    });
 
 
     document.getElementById('messageBoards').addEventListener('click', () => {
@@ -1911,6 +1927,15 @@ const addButtonAnimation = (button) => {
         button.addEventListener('mouseleave', () => {
             tooltip.classList.remove('show');
         });
+
+        // 移动端没有稳定的 mouseleave，点击后主动关闭提示，避免气泡残留
+        button.addEventListener('click', () => {
+            tooltip.classList.remove('show');
+        });
+
+        button.addEventListener('touchstart', () => {
+            tooltip.classList.remove('show');
+        }, {passive: true});
     }
 };
 
