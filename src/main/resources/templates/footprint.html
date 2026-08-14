@@ -766,7 +766,7 @@
             <button class="control-btn" data-type="satellite" data-tooltip="切换到卫星地图">卫星图</button>
         </div>
         <div class="button-group" id="line">
-            <label class="plane-switch" data-tooltip="显示/隐藏道路网络" aria-label="切换路网显示">
+            <label class="plane-switch road-switch" data-tooltip="显示/隐藏道路网络" aria-label="切换路网显示">
                 <input type="checkbox" data-type="road">
                 <div>
                     <div>
@@ -780,7 +780,7 @@
                 </div>
                 <span class="switch-text">路网</span>
             </label>
-            <label class="plane-switch" data-tooltip="显示/隐藏实时路况" aria-label="切换实时路况显示">
+            <label class="plane-switch traffic-switch" data-tooltip="显示/隐藏实时路况" aria-label="切换实时路况显示">
                 <input type="checkbox" data-type="traffic">
                 <div>
                     <div>
@@ -793,6 +793,13 @@
                     <span class="cloud two"></span>
                 </div>
                 <span class="switch-text">路况</span>
+            </label>
+            <label class="plane-switch marker-switch" data-tooltip="显示/隐藏足迹标记点" aria-label="切换足迹标记点显示">
+                <input type="checkbox" data-type="markers" checked>
+                <div aria-hidden="true">
+                    <div></div>
+                </div>
+                <span class="switch-text">标记点</span>
             </label>
         </div>
         <button id="zoom-restore" data-tooltip="返回中国全图视图" aria-label="返回中国全图视图">中国地图</button>

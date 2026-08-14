@@ -122,6 +122,91 @@ let animationInFlight = null;
 // 标记点DOM缓存，避免重复querySelector查询
 const markerCache = new Map();
 
+const markerVisibilityStorageKey = 'footprint-markers-visible';
+let footprintMarkerController = null;
+
+const readMarkerVisibilityPreference = () => {
+    try {
+        const storedValue = window.localStorage.getItem(markerVisibilityStorageKey);
+        return storedValue === null ? true : storedValue !== 'false';
+    } catch (error) {
+        return true;
+    }
+};
+
+const saveMarkerVisibilityPreference = (visible) => {
+    try {
+        window.localStorage.setItem(markerVisibilityStorageKey, String(visible));
+    } catch (error) {
+        // 隐私模式或禁用本地存储时不影响当前页面使用
+    }
+};
+
+const createFootprintMarkerController = (map) => {
+    const markers = new Map();
+    let visible = readMarkerVisibilityPreference();
+    let onVisibilityChange = () => {};
+
+    const applyVisibility = (marker) => {
+        if (visible) {
+            if (typeof marker.show === 'function') marker.show();
+            else marker.setMap(map);
+        } else {
+            if (typeof marker.hide === 'function') marker.hide();
+            else marker.setMap(null);
+        }
+    };
+
+    return {
+        register(marker, footprint) {
+            const markerName = footprint?.metadata?.name;
+            if (markerName) markers.set(markerName, marker);
+            applyVisibility(marker);
+        },
+        find(footprint) {
+            const markerName = footprint?.metadata?.name;
+            if (markerName && markers.has(markerName)) return markers.get(markerName);
+
+            const longitude = Number(footprint?.spec?.longitude);
+            const latitude = Number(footprint?.spec?.latitude);
+            return [...markers.values()].find(marker => {
+                const position = marker.getPosition?.();
+                return position && position.lng === longitude && position.lat === latitude;
+            });
+        },
+        setVisible(nextVisible) {
+            visible = Boolean(nextVisible);
+            markers.forEach(applyVisibility);
+            saveMarkerVisibilityPreference(visible);
+            onVisibilityChange(visible);
+        },
+        isVisible() {
+            return visible;
+        },
+        setOnVisibilityChange(callback) {
+            onVisibilityChange = typeof callback === 'function' ? callback : () => {};
+        }
+    };
+};
+
+const clearMarkerInteractionState = () => {
+    animationInFlight = null;
+    activeCard = null;
+    isAnimating = false;
+
+    document.querySelectorAll('.amap-marker').forEach(marker => {
+        marker.classList.remove('zIndex13');
+        marker.classList.remove('zIndex14');
+        marker.classList.remove('marker-highlight');
+    });
+
+    const canvas = document.getElementById('canvas');
+    if (canvas) {
+        const context = canvas.getContext('2d');
+        context?.clearRect(0, 0, canvas.width, canvas.height);
+    }
+};
+
 //抛物线动画加载
 const loadParabolaAnimation = (card, map) => {
     // 如果当前卡片不是激活的卡片，则不执行动画
@@ -596,7 +681,7 @@ const populateTimeline = async (map) => {
             }
             if (footprint) {
                 // 查找并触发对应的标记点点击事件
-                const marker = map.getAllOverlays().find(
+                const marker = footprintMarkerController?.find(footprint) || map.getAllOverlays().find(
                         m => m._position.lng === parseFloat(footprint.spec.longitude) &&
                                 m._position.lat === parseFloat(footprint.spec.latitude)
                 );
@@ -615,6 +700,13 @@ const populateTimeline = async (map) => {
 
     // 打开抽屉
     timelineBtn.addEventListener('click', () => {
+        // 打开时间线时自动恢复标记点，方便时间线与地图足迹保持同步
+        if (footprintMarkerController && !footprintMarkerController.isVisible()) {
+            footprintMarkerController.setVisible(true);
+            const markerVisibilityToggle = document.querySelector('.marker-switch input[data-type="markers"]');
+            if (markerVisibilityToggle) markerVisibilityToggle.checked = true;
+        }
+
         const zoomButtons = document.getElementById('zoom-buttons');
         const line = document.getElementById('line');
         //隐藏时间线按钮/缩放按钮/线路按钮
@@ -1420,6 +1512,14 @@ const addFootprintMarkers = async (map, footprintData) => {
     let currentMarker = null;
     let isMapMoving = false;
 
+    footprintMarkerController?.setOnVisibilityChange((visible) => {
+        if (!visible) {
+            infoWindow.close();
+            currentMarker = null;
+            clearMarkerInteractionState();
+        }
+    });
+
     // 用于跟踪当前触摸状态
     let isDragging = false;
     let touchStartPos = null;
@@ -1536,7 +1636,7 @@ const addFootprintMarkers = async (map, footprintData) => {
                     position: position,
                     content: markerContent,
                     anchor: 'bottom-center',
-                    offset: new AMap.Pixel(0, -15),
+                    offset: new AMap.Pixel(0, -5),
                     extData: footprint.spec // 存储额外数据
                 });
 
@@ -1643,6 +1743,7 @@ const addFootprintMarkers = async (map, footprintData) => {
                     markerCache.set(footprint.spec.name, imgElement);
                 }
                 map.add(marker);
+                footprintMarkerController?.register(marker, footprint);
             } catch (error) {
                 console.error('创建标记失败:', error, footprint);
             }
@@ -1877,7 +1978,7 @@ const addVisitedCityLayer = (map, footprintData) => {
                             const cityAdcode = properties?.adcode_cit;
                             return visitedCitySet.has(String(cityAdcode))
                                 ? getThemeRgba(0.92)
-                                : 'rgba(148, 163, 184, 0.24)';
+                                : '';
                         },
                         // 只填充已去过的城市，未去过的城市保持透明
                         fill: properties => {
@@ -2007,6 +2108,7 @@ const initializeApp = async () => {
         });
 
         // 初始化地图功能
+        footprintMarkerController = createFootprintMarkerController(map);
         initializeMapFeatures(map, layers);
 
         // 添加已去过城市高亮图层
@@ -2085,6 +2187,7 @@ const initializeMapFeatures = (map, layers) => {
     // 处理飞机开关的变化事件
     document.querySelectorAll('.plane-switch input[type="checkbox"]').forEach(checkbox => {
         const type = checkbox.dataset.type;
+        if (type === 'markers') return;
         checkbox.addEventListener('change', () => {
             layerState.overlays[type] = checkbox.checked;
             updateLayers(layerState, layers);
@@ -2099,6 +2202,15 @@ const initializeMapFeatures = (map, layers) => {
             }
         });
     });
+
+    // 处理足迹标记点显示开关。标记点与已访问城市高亮是两个独立图层。
+    const markerVisibilityToggle = document.querySelector('.marker-switch input[data-type="markers"]');
+    if (markerVisibilityToggle && footprintMarkerController) {
+        markerVisibilityToggle.checked = footprintMarkerController.isVisible();
+        markerVisibilityToggle.addEventListener('change', () => {
+            footprintMarkerController.setVisible(markerVisibilityToggle.checked);
+        });
+    }
 
     // 处理缩放按钮点击
     document.getElementById('zoom-in').addEventListener('click', () => {
