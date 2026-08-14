@@ -2572,23 +2572,10 @@
     }
 }
 
-/* 移动端保留足迹标记点开关，路网和路况仍按原设计隐藏 */
+/* 移动端隐藏足迹标记点开关，标记点仍由时间线逻辑控制 */
 @media screen and (max-width: 768px) {
-    .map-controls #line {
-        display: flex !important;
-        grid-column: 1 / -1;
-        grid-row: 2;
-    }
-
-    .map-controls #line .road-switch,
-    .map-controls #line .traffic-switch {
-        display: none;
-    }
-
-    .map-controls #line .marker-switch {
-        display: flex;
-        flex: 1 1 auto;
-        justify-content: center;
+    .map-controls .marker-visibility-control {
+        display: none !important;
     }
 }
 
