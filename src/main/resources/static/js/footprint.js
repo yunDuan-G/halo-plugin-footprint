@@ -2071,6 +2071,16 @@ const addRippleEffect = (button) => {
 // 初始化应用
 const initializeApp = async () => {
     try {
+        // 使用独立楼块图层，避免自定义地图样式隐藏底图自带楼块
+        const buildingLayer = new AMap.Buildings({
+            zIndex: 10,
+            zooms: [16.8, 20],
+            heightFactor: 1.2,
+            // 雾蓝玻璃感楼块：楼顶略清晰，楼面更透明，接近浅色地图的视觉效果
+            wallColor: 'rgba(175,206,233,0.2)',
+            roofColor: 'rgba(175,206,233,0.5)'
+        });
+
         // 创建地图实例
         const map = new AMap.Map('footprint-map', {
             zoom: 4.1,
@@ -2082,10 +2092,12 @@ const initializeApp = async () => {
             pitch: 0,
             pitchEnable: true, // 开启俯仰交互
             rotateEnable: true, // 开启旋转交互
-            showBuildingBlock: true, // 显示3D楼房立体块
-            buildingAnimation: true, // 开启楼房出现动画
-            terrain: true, // 开启地形图
-            features: ['bg', 'road', 'building', 'point'],
+            // 关闭底图自带楼块，改用上方独立的 AMap.Buildings 图层
+            showBuildingBlock: false,
+            features: ['bg', 'road', 'point'],
+            layers: [
+                AMap.createDefaultLayer()
+            ],
             resizeEnable: true     // 启用自动适应容器尺寸
         });
 
@@ -2093,6 +2105,9 @@ const initializeApp = async () => {
         await new Promise(resolve => {
             map.on('complete', resolve);
         });
+
+        // 地图完成后显式挂载独立楼块图层，确保自定义地图样式不会覆盖楼块显示
+        map.add(buildingLayer);
 
         // 创建图层
         const layers = {
