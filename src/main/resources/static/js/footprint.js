@@ -1648,8 +1648,22 @@ const addFootprintMarkers = async (map, footprintData) => {
         }
 
         let handleKeydown;
+        let wheelUnlockTimer = null;
+        const changeLightboxImage = (action) => {
+            const imagesForLightbox = JSON.parse(lightbox.dataset.images || '[]');
+            if (!imagesForLightbox.length) return;
+            let nextIndex = Number(lightbox.dataset.index || 0);
+            nextIndex += action === 'next' ? 1 : -1;
+            if (nextIndex < 0) nextIndex = imagesForLightbox.length - 1;
+            if (nextIndex >= imagesForLightbox.length) nextIndex = 0;
+            lightbox.dataset.index = String(nextIndex);
+            const caption = lightbox.querySelector('.photo-lightbox-caption');
+            loadLightboxImage(nextIndex);
+            if (caption) caption.textContent = `${lightbox.dataset.name} · ${nextIndex + 1} / ${imagesForLightbox.length}`;
+        };
         const close = () => {
             lightbox.remove();
+            if (wheelUnlockTimer) window.clearTimeout(wheelUnlockTimer);
             if (handleKeydown) document.removeEventListener('keydown', handleKeydown);
         };
         lightbox.addEventListener('click', (event) => {
@@ -1661,16 +1675,18 @@ const addFootprintMarkers = async (map, footprintData) => {
                 close();
                 return;
             }
-            const imagesForLightbox = JSON.parse(lightbox.dataset.images || '[]');
-            let nextIndex = Number(lightbox.dataset.index || 0);
-            nextIndex += action === 'next' ? 1 : -1;
-            if (nextIndex < 0) nextIndex = imagesForLightbox.length - 1;
-            if (nextIndex >= imagesForLightbox.length) nextIndex = 0;
-            lightbox.dataset.index = String(nextIndex);
-            const caption = lightbox.querySelector('.photo-lightbox-caption');
-            loadLightboxImage(nextIndex);
-            if (caption) caption.textContent = `${lightbox.dataset.name} · ${nextIndex + 1} / ${imagesForLightbox.length}`;
+            changeLightboxImage(action);
         });
+
+        lightbox.addEventListener('wheel', (event) => {
+            if (Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+            event.preventDefault();
+            if (wheelUnlockTimer) return;
+            changeLightboxImage(event.deltaY > 0 ? 'next' : 'previous');
+            wheelUnlockTimer = window.setTimeout(() => {
+                wheelUnlockTimer = null;
+            }, 180);
+        }, {passive: false});
 
         handleKeydown = (event) => {
             if (!document.body.contains(lightbox)) {
@@ -1678,8 +1694,8 @@ const addFootprintMarkers = async (map, footprintData) => {
                 return;
             }
             if (event.key === 'Escape') close();
-            if (event.key === 'ArrowLeft') lightbox.querySelector('[data-lightbox-action="previous"]')?.dispatchEvent(new MouseEvent('click', {bubbles: true}));
-            if (event.key === 'ArrowRight') lightbox.querySelector('[data-lightbox-action="next"]')?.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+            if (event.key === 'ArrowLeft') changeLightboxImage('previous');
+            if (event.key === 'ArrowRight') changeLightboxImage('next');
         };
         document.addEventListener('keydown', handleKeydown);
     };
