@@ -2,7 +2,7 @@
 import {Toast, VButton, VModal, VSpace} from "@halo-dev/components";
 import {ref, computed, watch, onMounted} from "vue";
 import {footprintApiClient} from "@/api";
-import type {Footprint, Option} from "@/api/models";
+import type {Footprint, GalleryImage, Option} from "@/api/models";
 import {toDatetimeLocal, toISOString} from "@/utils/date";
 import {FormKit} from "@formkit/vue";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -57,6 +57,8 @@ const deepClone = <T, >(obj: T): T => {
 };
 
 const formState = ref<Footprint>(deepClone(initialFormState));
+const galleryImageUrls = ref<string[]>([]);
+const galleryImageItems = ref<GalleryImage[]>([]);
 const saving = ref<boolean>(false);
 const formVisible = ref(false);
 const createTime = ref<string | undefined>(undefined);
@@ -82,7 +84,54 @@ const onVisibleChange = (visible: boolean) => {
 
 const handleResetForm = () => {
   formState.value = deepClone(initialFormState);
+  galleryImageUrls.value = [];
+  galleryImageItems.value = [];
 };
+
+const normalizeAttachmentImageUrl = (url: unknown): string => {
+  const value = String(url ?? "").trim();
+  return value.replace(
+    /(\.(?:jpe?g|png|gif|webp|bmp|svg|avif|ico))(?:![^/?#]*)?(?=([?#]|$))/i,
+    "$1",
+  );
+};
+
+const normalizeGalleryImagesForEditor = (images: unknown): GalleryImage[] => {
+  if (!Array.isArray(images)) return [];
+  return images.map((item, index) => {
+    if (typeof item === "string") {
+      return {url: item, order: index + 1};
+    }
+    if (item && typeof item === "object") {
+      const image = item as {url?: string; src?: string; thumbnail?: string; order?: number};
+      const order = Number(image.order);
+      return {
+        url: image.url || image.src || image.thumbnail || "",
+        order: Number.isInteger(order) && order > 0 ? order : index + 1,
+      };
+    }
+    return {url: "", order: index + 1};
+  }).filter((item) => item.url).sort((a, b) => a.order - b.order);
+};
+
+const syncGalleryImageItems = (urls: string[]) => {
+  const existingUrls = new Map(
+    galleryImageItems.value.map((item) => [normalizeAttachmentImageUrl(item.url), item.url]),
+  );
+  const normalizedUrls = urls.map(normalizeAttachmentImageUrl).filter(Boolean);
+  const originalUrls = urls.map((url) => String(url ?? "").trim()).filter(Boolean);
+  galleryImageItems.value = normalizedUrls.map((url, index) => ({
+    url: existingUrls.get(url) ?? originalUrls[index] ?? url,
+    order: index + 1,
+  }));
+  if (normalizedUrls.length !== urls.length || normalizedUrls.some((url, index) => url !== urls[index])) {
+    galleryImageUrls.value = normalizedUrls;
+  }
+};
+
+watch(galleryImageUrls, (urls) => {
+  syncGalleryImageItems(urls);
+}, {deep: true});
 
 watch(
   () => props.visible,
@@ -104,8 +153,12 @@ watch(
     if (footprint) {
       formState.value = deepClone(footprint);
       createTime.value = toDatetimeLocal(formState.value.spec.createTime);
+      galleryImageItems.value = normalizeGalleryImagesForEditor(formState.value.spec.galleryImages);
+      galleryImageUrls.value = galleryImageItems.value.map((item) => normalizeAttachmentImageUrl(item.url));
     } else {
       createTime.value = undefined;
+      galleryImageUrls.value = [];
+      galleryImageItems.value = [];
     }
   },
 );
@@ -134,6 +187,32 @@ const isFormValid = computed(() => {
   }
   return formState.value.spec.address?.trim();
 });
+
+const getGalleryImagesForSubmit = (): GalleryImage[] => {
+  return galleryImageItems.value.filter((item) => item.url).map((item, index) => ({
+    url: item.url,
+    order: index + 1,
+  }));
+};
+
+const validateGalleryImageOrders = () => {
+  const galleryImages = getGalleryImagesForSubmit();
+  if (galleryImages.some((item) => !Number.isInteger(item.order) || item.order < 1)) {
+    Toast.error("图片墙显示顺序必须是大于 0 的整数");
+    return false;
+  }
+  if (new Set(galleryImages.map((item) => item.order)).size !== galleryImages.length) {
+    Toast.error("图片墙显示顺序不能重复");
+    return false;
+  }
+  return true;
+};
+
+const getSubmitFormState = (): Footprint => {
+  const submitState = deepClone(formState.value);
+  submitState.spec.galleryImages = getGalleryImagesForSubmit();
+  return submitState;
+};
 
 
 const handleRegoecode = async () => {
@@ -199,6 +278,8 @@ const handleSubmit = async () => {
       Toast.error("请检查表单填写是否正确");
       return;
     }
+
+    if (!validateGalleryImageOrders()) return;
 
     const zoomLevel = formState.value.spec.zoomLevel;
     if (parseFloat(zoomLevel) < 4 || parseFloat(zoomLevel) > 26) {
@@ -273,15 +354,16 @@ const handleSubmit = async () => {
       formState.value.spec.createTime = toISOString(createTime.value);
     }
 
+    const submitFormState = getSubmitFormState();
     if (isUpdateMode.value) {
       await footprintApiClient.footprint.updateFootprint(
         formState.value.metadata.name,
-        formState.value,
+        submitFormState,
       );
       Toast.success("更新成功");
       onVisibleChange(false);
     } else {
-      await footprintApiClient.footprint.createFootprint(formState.value);
+      await footprintApiClient.footprint.createFootprint(submitFormState);
       Toast.success("创建成功");
       onVisibleChange(false);
     }
@@ -321,10 +403,14 @@ const handleManualInput = () => {
     formState.value.spec.createTime = toISOString(createTime.value);
   }
 
+  if (!validateGalleryImageOrders()) return;
+
+  const submitFormState = getSubmitFormState();
+
   if (isUpdateMode.value) {
     footprintApiClient.footprint.updateFootprint(
       formState.value.metadata.name,
-      formState.value
+      submitFormState
     ).then(() => {
       Toast.success("更新成功");
       onVisibleChange(false);
@@ -335,7 +421,7 @@ const handleManualInput = () => {
       });
   } else {
     footprintApiClient.footprint
-      .createFootprint(formState.value)
+      .createFootprint(submitFormState)
       .then(() => {
         Toast.success("创建成功");
         onVisibleChange(false);
@@ -396,7 +482,7 @@ onMounted(async () => {
 
   <VModal
     :visible="visible"
-    :width="800"
+    :width="850"
     :title="modalTitle"
     :mask-closable="false"
     @update:visible="onVisibleChange"
@@ -499,12 +585,15 @@ onMounted(async () => {
             label="足迹图片"
           ></FormKit>
           <FormKit
-            v-model="formState.spec.galleryImages"
+            v-model="galleryImageUrls"
             :type="'attachment' as any"
             name="galleryImages"
             label="图片墙图片"
+            :accepts="['image/*']"
             :multiple="true"
-            help="选择用于标记点图片墙的多张图片"
+            width="140px"
+            aspect-ratio="1/1"
+            help="支持拖拽图片调整图片墙显示顺序"
           ></FormKit>
         </div>
       </div>

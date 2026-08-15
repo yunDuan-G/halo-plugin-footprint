@@ -1,8 +1,10 @@
 package cc.lik.footprint.model;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 import lombok.ToString;
 import run.halo.app.extension.AbstractExtension;
 import run.halo.app.extension.GVK;
@@ -95,8 +97,8 @@ public class Footprint extends AbstractExtension {
         /**
          * 图片墙图片
          */
-        @Schema(description = "图片墙图片URL列表")
-        private List<String> galleryImages;
+        @Schema(description = "图片墙图片及显示顺序")
+        private List<GalleryImage> galleryImages;
 
         /**
          * 足迹图片
@@ -127,5 +129,28 @@ public class Footprint extends AbstractExtension {
 
         @Schema(description = "城市编码")
         private String cityAdcode;
+    }
+
+    /**
+     * 图片墙图片
+     *
+     * <p>保留 String 构造方法以兼容旧版本保存的 URL 字符串数组。</p>
+     */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(name = "GalleryImage")
+    public static class GalleryImage {
+        @Schema(description = "图片地址", requiredMode = Schema.RequiredMode.REQUIRED)
+        private String url;
+
+        @Schema(description = "图片墙显示顺序", requiredMode = Schema.RequiredMode.REQUIRED)
+        private Integer order;
+
+        @com.fasterxml.jackson.annotation.JsonCreator(mode = com.fasterxml.jackson.annotation.JsonCreator.Mode.DELEGATING)
+        public GalleryImage(String url) {
+            this.url = url;
+            this.order = 0;
+        }
     }
 }

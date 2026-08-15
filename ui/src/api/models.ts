@@ -22,7 +22,7 @@ export interface FootprintSpec {
   address?: string;
   footprintType?: string;
   image?: string;
-  galleryImages?: string[];
+  galleryImages?: GalleryImage[] | string[];
   article?: string;
   metadataNames?: [];
   zoomLevel: string;
@@ -33,6 +33,14 @@ export interface FootprintSpec {
   city?: string;
   provinceAdcode?: string;
   cityAdcode?: string;
+}
+
+/**
+ * 图片墙图片及自定义显示顺序
+ */
+export interface GalleryImage {
+  url: string;
+  order: number;
 }
 
 /**

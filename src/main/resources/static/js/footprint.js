@@ -1417,21 +1417,24 @@ function createInfoWindow(spec) {
 }
 
 const PHOTO_WALL_LAYOUTS = [
-    {x: 8, y: 46, r: -8}, {x: 23, y: 19, r: 5}, {x: 38, y: 8, r: -3},
-    {x: 53, y: 17, r: 7}, {x: 69, y: 10, r: -6}, {x: 78, y: 40, r: 4},
-    {x: 63, y: 53, r: -5}, {x: 46, y: 57, r: 8}, {x: 29, y: 51, r: -4},
-    {x: 15, y: 68, r: 6}, {x: 38, y: 72, r: -7}, {x: 61, y: 72, r: 5}
+    {x: 8, y: 46, r: -12}, {x: 23, y: 19, r: 8}, {x: 38, y: 8, r: -5},
+    {x: 53, y: 17, r: 11}, {x: 69, y: 10, r: -9}, {x: 78, y: 40, r: 6},
+    {x: 63, y: 53, r: -12}, {x: 46, y: 57, r: 4}, {x: 29, y: 51, r: -7},
+    {x: 15, y: 68, r: 10}, {x: 38, y: 72, r: -3}, {x: 61, y: 72, r: 8}
 ];
 
 const normalizeGalleryImages = (images) => {
     if (!Array.isArray(images)) return [];
-    return images.map(item => {
-        if (typeof item === 'string') return item;
+    return images.map((item, index) => {
+        if (typeof item === 'string') return {url: item, order: index + 1};
         if (item && typeof item === 'object') {
-            return item.url || item.src || item.thumbnail || '';
+            return {
+                url: item.url || item.src || item.thumbnail || '',
+                order: Number.isFinite(Number(item.order)) ? Number(item.order) : index + 1
+            };
         }
-        return '';
-    }).filter(Boolean);
+        return {url: '', order: index + 1};
+    }).filter(item => item.url).sort((a, b) => a.order - b.order).map(item => item.url);
 };
 
 const getPhotoWallImageUrl = (url, width = 500) => {
