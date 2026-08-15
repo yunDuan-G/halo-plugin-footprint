@@ -19,4 +19,5 @@ public class BaseConfig {
     private Boolean enableHoverZoom;
     private String highlightScheme;
     private Boolean highlightVisitedCities;
+    private Integer photoWallPageSize;
 }

@@ -1269,7 +1269,7 @@ const createMarker = (spec) => {
     const markerContent = document.createElement('div');
     markerContent.className = 'custom-marker';
 
-    const image = spec.image.replace("!w100", "!A100");
+    const image = spec.image ? spec.image.replace("!w100", "!A100") : '';
 
     // 使用图片压缩服务
     const compressedImageUrl = spec.image ? image + "/fw/200" : 'https://www.lik.cc/upload/loading8.gif';
@@ -1416,6 +1416,76 @@ function createInfoWindow(spec) {
     `;
 }
 
+const PHOTO_WALL_LAYOUTS = [
+    {x: 8, y: 46, r: -8}, {x: 23, y: 19, r: 5}, {x: 38, y: 8, r: -3},
+    {x: 53, y: 17, r: 7}, {x: 69, y: 10, r: -6}, {x: 78, y: 40, r: 4},
+    {x: 63, y: 53, r: -5}, {x: 46, y: 57, r: 8}, {x: 29, y: 51, r: -4},
+    {x: 15, y: 68, r: 6}, {x: 38, y: 72, r: -7}, {x: 61, y: 72, r: 5}
+];
+
+const normalizeGalleryImages = (images) => {
+    if (!Array.isArray(images)) return [];
+    return images.map(item => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') {
+            return item.url || item.src || item.thumbnail || '';
+        }
+        return '';
+    }).filter(Boolean);
+};
+
+const getPhotoWallImageUrl = (url, width = 500) => {
+    return String(url || '') || 'https://www.lik.cc/upload/loading8.gif';
+};
+
+const createPhotoWall = (spec, page = 0) => {
+    const images = normalizeGalleryImages(spec.galleryImages);
+    const pageSize = Math.max(1, Math.min(12, Number(window.FOOTPRINT_CONFIG?.photoWallPageSize) || 6));
+    const totalPages = Math.max(1, Math.ceil(images.length / pageSize));
+    const currentPage = Math.max(0, Math.min(totalPages - 1, page));
+    const pageImages = images.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+    const cards = pageImages.map((url, index) => {
+        const layout = PHOTO_WALL_LAYOUTS[index % PHOTO_WALL_LAYOUTS.length];
+        const absoluteIndex = currentPage * pageSize + index;
+        const imageUrl = getPhotoWallImageUrl(url);
+        return `
+            <button class="photo-wall-card" type="button" data-photo-index="${absoluteIndex}"
+                    style="left:${layout.x}%;top:${layout.y}%;--card-rotation:${layout.r}deg;"
+                    aria-label="放大查看第 ${absoluteIndex + 1} 张图片">
+                <span class="photo-wall-card-inner">
+                    <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
+                    <span class="photo-wall-pin" aria-hidden="true"></span>
+                </span>
+            </button>`;
+    }).join('');
+
+    const hasPrevious = currentPage > 0;
+    const hasNext = currentPage < totalPages - 1;
+    return `
+        <div class="photo-wall-window" data-photo-page="${currentPage}" data-photo-total-pages="${totalPages}">
+            <div class="photo-wall-heading">
+                <div>
+                    <span class="photo-wall-kicker">MEMORY WALL</span>
+                    <h3>${escapeHtml(spec.name || '足迹')}</h3>
+                </div>
+                <span class="photo-wall-counter">${currentPage + 1} / ${totalPages}</span>
+            </div>
+            <div class="photo-wall-canvas">
+                <span class="photo-wall-thread" aria-hidden="true"></span>
+                ${cards}
+                <span class="photo-wall-center-mark" aria-hidden="true"></span>
+            </div>
+            <div class="photo-wall-footer">
+                <span>${images.length} 张图片 · 点击卡片放大</span>
+                <span class="photo-wall-navigation">
+                    <button type="button" class="photo-wall-nav" data-photo-action="previous" ${hasPrevious ? '' : 'disabled'} aria-label="上一页">←</button>
+                    <button type="button" class="photo-wall-nav" data-photo-action="next" ${hasNext ? '' : 'disabled'} aria-label="下一页">→</button>
+                </span>
+            </div>
+        </div>
+    `;
+};
+
 const getCachedImage = (src) => {
     if (!imageCache.has(src)) {
         const img = new Image();
@@ -1511,11 +1581,120 @@ const addFootprintMarkers = async (map, footprintData) => {
     // 用于存储当前打开的标记
     let currentMarker = null;
     let isMapMoving = false;
+    let photoWallState = null;
+    const photoWallLayer = document.getElementById('photo-wall-layer');
+    const logoContainer = document.querySelector('.logo-container');
+    let photoWallElement = null;
+    let photoWallConnector = null;
+
+    const closePhotoLightbox = () => {
+        const lightbox = document.querySelector('.photo-lightbox');
+        if (lightbox) lightbox.remove();
+    };
+
+    const openPhotoLightbox = (images, index, name) => {
+        const safeImages = normalizeGalleryImages(images);
+        if (!safeImages.length) return;
+        const currentIndex = Math.max(0, Math.min(safeImages.length - 1, index));
+        closePhotoLightbox();
+        const lightbox = document.createElement('div');
+        lightbox.className = 'photo-lightbox';
+        lightbox.innerHTML = `
+            <div class="photo-lightbox-backdrop" data-lightbox-action="close"></div>
+            <button class="photo-lightbox-close" type="button" data-lightbox-action="close" aria-label="关闭预览">×</button>
+            <button class="photo-lightbox-arrow photo-lightbox-prev" type="button" data-lightbox-action="previous" aria-label="上一张">←</button>
+            <div class="photo-lightbox-dialog" role="dialog" aria-modal="true" aria-label="${escapeHtml(name || '图片预览')}">
+                <span class="photo-lightbox-loader" role="status" aria-label="图片加载中"></span>
+                <img class="photo-lightbox-image" src="${escapeHtml(getPhotoWallImageUrl(safeImages[currentIndex], 1200))}" alt="${escapeHtml(name || '足迹图片')}">
+                <div class="photo-lightbox-caption">${escapeHtml(name || '足迹')} · ${currentIndex + 1} / ${safeImages.length}</div>
+            </div>
+            <button class="photo-lightbox-arrow photo-lightbox-next" type="button" data-lightbox-action="next" aria-label="下一张">→</button>
+        `;
+        lightbox.dataset.index = String(currentIndex);
+        lightbox.dataset.name = name || '足迹图片';
+        lightbox.dataset.images = JSON.stringify(safeImages);
+        document.body.appendChild(lightbox);
+
+        const imageElement = lightbox.querySelector('.photo-lightbox-image');
+        const setImageLoading = (loading) => {
+            lightbox.classList.toggle('is-loading', loading);
+            lightbox.classList.remove('is-error');
+        };
+        const loadLightboxImage = (index) => {
+            if (!(imageElement instanceof HTMLImageElement)) return;
+            setImageLoading(true);
+            imageElement.src = getPhotoWallImageUrl(safeImages[index], 1200);
+        };
+        if (imageElement instanceof HTMLImageElement) {
+            imageElement.addEventListener('load', () => setImageLoading(false));
+            imageElement.addEventListener('error', () => {
+                lightbox.classList.remove('is-loading');
+                lightbox.classList.add('is-error');
+            });
+            if (imageElement.complete && imageElement.naturalWidth > 0) {
+                setImageLoading(false);
+            } else {
+                setImageLoading(true);
+            }
+        }
+
+        let handleKeydown;
+        const close = () => {
+            lightbox.remove();
+            if (handleKeydown) document.removeEventListener('keydown', handleKeydown);
+        };
+        lightbox.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const action = target.closest('[data-lightbox-action]')?.getAttribute('data-lightbox-action');
+            if (!action) return;
+            if (action === 'close') {
+                close();
+                return;
+            }
+            const imagesForLightbox = JSON.parse(lightbox.dataset.images || '[]');
+            let nextIndex = Number(lightbox.dataset.index || 0);
+            nextIndex += action === 'next' ? 1 : -1;
+            if (nextIndex < 0) nextIndex = imagesForLightbox.length - 1;
+            if (nextIndex >= imagesForLightbox.length) nextIndex = 0;
+            lightbox.dataset.index = String(nextIndex);
+            const caption = lightbox.querySelector('.photo-lightbox-caption');
+            loadLightboxImage(nextIndex);
+            if (caption) caption.textContent = `${lightbox.dataset.name} · ${nextIndex + 1} / ${imagesForLightbox.length}`;
+        });
+
+        handleKeydown = (event) => {
+            if (!document.body.contains(lightbox)) {
+                document.removeEventListener('keydown', handleKeydown);
+                return;
+            }
+            if (event.key === 'Escape') close();
+            if (event.key === 'ArrowLeft') lightbox.querySelector('[data-lightbox-action="previous"]')?.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+            if (event.key === 'ArrowRight') lightbox.querySelector('[data-lightbox-action="next"]')?.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+        };
+        document.addEventListener('keydown', handleKeydown);
+    };
+
+    const closeCurrentMarker = () => {
+        infoWindow.close();
+        closePhotoLightbox();
+        photoWallElement?.remove();
+        photoWallConnector?.remove();
+        logoContainer?.classList.remove('photo-wall-active');
+        photoWallElement = null;
+        photoWallConnector = null;
+        currentMarker = null;
+        photoWallState = null;
+        if (isElevation) {
+            map.setPitch(0);
+            map.setRotation(0);
+            isElevation = false;
+        }
+    };
 
     footprintMarkerController?.setOnVisibilityChange((visible) => {
         if (!visible) {
-            infoWindow.close();
-            currentMarker = null;
+            closeCurrentMarker();
             clearMarkerInteractionState();
         }
     });
@@ -1550,20 +1729,149 @@ const addFootprintMarkers = async (map, footprintData) => {
 
     // 创建事件委托处理函数
     const handleMapClick = (e) => {
-        if (currentMarker) {
-            infoWindow.close();
-            currentMarker = null;
-            //还原仰角和旋转
-            if (isElevation) {
-                map.setPitch(0);
-                map.setRotation(0);
-            }
-        }
+        closeCurrentMarker();
     };
 
     // 创建信息窗口事件处理函数
     const handleInfoWindowClick = (e) => {
         e.stopPropagation();
+    };
+
+    const getMarkerLayerPoint = () => {
+        if (!currentMarker || !photoWallLayer) return null;
+        const mapContainer = document.getElementById('footprint-map');
+        const position = currentMarker.getPosition?.();
+        if (!mapContainer || !position || !map.lngLatToContainer) return null;
+
+        const pixel = map.lngLatToContainer(position);
+        const mapRect = mapContainer.getBoundingClientRect();
+        const layerRect = photoWallLayer.getBoundingClientRect();
+        const pixelX = typeof pixel?.getX === 'function' ? pixel.getX() : pixel?.x;
+        const pixelY = typeof pixel?.getY === 'function' ? pixel.getY() : pixel?.y;
+        if (!Number.isFinite(pixelX) || !Number.isFinite(pixelY)) return null;
+        const layerWidth = photoWallLayer.clientWidth || photoWallLayer.offsetWidth || window.innerWidth;
+        const layerHeight = photoWallLayer.clientHeight || photoWallLayer.offsetHeight || window.innerHeight;
+        return {
+            x: mapRect.left - layerRect.left + pixelX,
+            y: mapRect.top - layerRect.top + pixelY,
+            width: layerWidth,
+            height: layerHeight
+        };
+    };
+
+    const positionPhotoWall = () => {
+        if (!photoWallElement || !photoWallConnector) return;
+        const markerPoint = getMarkerLayerPoint();
+        if (!markerPoint) return;
+
+        const margin = 28;
+        const wallWidth = photoWallElement.offsetWidth || 620;
+        const wallHeight = photoWallElement.offsetHeight || 420;
+        const statsElement = document.getElementById('map-stats');
+        const layerRect = photoWallLayer.getBoundingClientRect();
+        const layerLeft = Number.isFinite(layerRect.left) ? layerRect.left : 0;
+        const layerTop = Number.isFinite(layerRect.top) ? layerRect.top : 0;
+        const statsRect = statsElement?.getBoundingClientRect();
+        const statsBox = statsRect && statsRect.width > 0 && statsRect.height > 0 ? {
+            left: statsRect.left - layerLeft,
+            top: statsRect.top - layerTop,
+            right: statsRect.right - layerLeft,
+            bottom: statsRect.bottom - layerTop
+        } : null;
+        const isInsideLayer = (candidate) => candidate.left >= margin
+            && candidate.top >= margin
+            && candidate.left + wallWidth <= markerPoint.width - margin
+            && candidate.top + wallHeight <= markerPoint.height - margin;
+        const overlapsStats = (candidate) => statsBox && candidate.left < statsBox.right + margin
+            && candidate.left + wallWidth > statsBox.left - margin
+            && candidate.top < statsBox.bottom + margin
+            && candidate.top + wallHeight > statsBox.top - margin;
+
+        // 默认固定在右上角；若与统计窗口冲突，则依次尝试统计窗口下方、左侧和右下角。
+        const candidates = [
+            {left: markerPoint.width - wallWidth - margin, top: margin},
+            {left: markerPoint.width - wallWidth - margin, top: statsBox ? statsBox.bottom + margin : margin},
+            {left: statsBox ? statsBox.left - wallWidth - margin : margin, top: margin},
+            {left: markerPoint.width - wallWidth - margin, top: markerPoint.height - wallHeight - margin}
+        ];
+        const selectedPosition = candidates.find(candidate => isInsideLayer(candidate) && !overlapsStats(candidate))
+            || candidates[0];
+        const left = Math.max(margin, Math.min(selectedPosition.left, markerPoint.width - wallWidth - margin));
+        const top = Math.max(margin, Math.min(selectedPosition.top, markerPoint.height - wallHeight - margin));
+        photoWallElement.style.left = `${left}px`;
+        photoWallElement.style.top = `${top}px`;
+
+        const anchorX = markerPoint.x < left ? left : markerPoint.x > left + wallWidth ? left + wallWidth : left + wallWidth / 2;
+        const anchorY = Math.max(top + 48, Math.min(markerPoint.y, top + wallHeight - 48));
+        const deltaX = anchorX - markerPoint.x;
+        const deltaY = anchorY - markerPoint.y;
+        const length = Math.max(1, Math.hypot(deltaX, deltaY));
+        photoWallConnector.style.left = `${markerPoint.x}px`;
+        photoWallConnector.style.top = `${markerPoint.y}px`;
+        photoWallConnector.style.width = `${length}px`;
+        photoWallConnector.style.transform = `rotate(${Math.atan2(deltaY, deltaX)}rad)`;
+    };
+
+    const renderPhotoWall = () => {
+        if (!photoWallLayer || !photoWallState) return;
+        photoWallElement?.remove();
+        photoWallConnector?.remove();
+
+        photoWallElement = document.createElement('div');
+        photoWallElement.className = 'photo-wall-window';
+        photoWallElement.innerHTML = createPhotoWall(photoWallState.spec, photoWallState.page);
+        photoWallElement.addEventListener('click', handlePhotoWallClick);
+        photoWallLayer.appendChild(photoWallElement);
+
+        photoWallConnector = document.createElement('span');
+        photoWallConnector.className = 'photo-wall-connector';
+        photoWallLayer.insertBefore(photoWallConnector, photoWallElement);
+        requestAnimationFrame(positionPhotoWall);
+    };
+
+    const handlePhotoWallClick = (e) => {
+        e.stopPropagation();
+        if (!photoWallState) return;
+        const target = e.target;
+        if (!(target instanceof Element)) return;
+        const actionTarget = target.closest('[data-photo-action]');
+        const cardTarget = target.closest('[data-photo-index]');
+
+        if (cardTarget) {
+            const index = Number(cardTarget.getAttribute('data-photo-index'));
+            openPhotoLightbox(photoWallState.images, index, photoWallState.spec.name);
+            return;
+        }
+
+        const action = actionTarget?.getAttribute('data-photo-action');
+        if (!action || !currentMarker) return;
+        const nextPage = photoWallState.page + (action === 'next' ? 1 : -1);
+        const totalPages = Math.ceil(photoWallState.images.length / photoWallState.pageSize);
+        if (nextPage < 0 || nextPage >= totalPages) return;
+        photoWallState.page = nextPage;
+
+        // 只替换图片墙中间的卡片区域，保留窗口、标题、连接线和当前位置。
+        if (!photoWallElement) return;
+        const nextPageContainer = document.createElement('div');
+        nextPageContainer.innerHTML = createPhotoWall(photoWallState.spec, nextPage);
+        const nextWall = nextPageContainer.firstElementChild;
+        const currentCanvas = photoWallElement.querySelector('.photo-wall-canvas');
+        const nextCanvas = nextWall?.querySelector('.photo-wall-canvas');
+        if (currentCanvas && nextCanvas) currentCanvas.replaceWith(nextCanvas);
+
+        const currentCounter = photoWallElement.querySelector('.photo-wall-counter');
+        const nextCounter = nextWall?.querySelector('.photo-wall-counter');
+        if (currentCounter && nextCounter) currentCounter.textContent = nextCounter.textContent || '';
+
+        const currentNavigation = photoWallElement.querySelectorAll('.photo-wall-nav');
+        const nextNavigation = nextWall?.querySelectorAll('.photo-wall-nav') || [];
+        currentNavigation.forEach((button, index) => {
+            const nextButton = nextNavigation[index];
+            if (nextButton instanceof HTMLButtonElement) {
+                button.disabled = nextButton.disabled;
+            }
+        });
+        photoWallElement.dataset.photoPage = String(nextPage);
     };
 
     const handleArticleClick = (e) => {
@@ -1588,7 +1896,16 @@ const addFootprintMarkers = async (map, footprintData) => {
         isMapMoving = true;
     });
 
-    map.on('moveend', debouncedUpdate);
+    map.on('moveend', () => {
+        debouncedUpdate();
+        positionPhotoWall();
+        if (!currentMarker) return;
+        const bounds = map.getBounds?.();
+        const position = currentMarker.getPosition?.();
+        if (bounds && position && !bounds.contains(position)) closeCurrentMarker();
+    });
+    map.on('mapmove', positionPhotoWall);
+    map.on('zoomchange', positionPhotoWall);
 
     // 添加全局点击事件监听器
     map.on('click', handleMapClick);
@@ -1644,18 +1961,20 @@ const addFootprintMarkers = async (map, footprintData) => {
                 const handleMarkerClick = async (marker) => {
                     // 如果当前标记已经打开，则关闭它
                     if (currentMarker === marker) {
-                        infoWindow.close();
-                        currentMarker = null;
+                        closeCurrentMarker();
                         return;
                     }
 
                     // 先关闭当前窗体
-                    if (currentMarker) {
-                        infoWindow.close();
-                    }
+                    closeCurrentMarker();
 
-                    // 构建信息窗体内容
-                    const content = createInfoWindow(footprint.spec);
+                    const galleryImages = normalizeGalleryImages(footprint.spec.galleryImages);
+                    photoWallState = galleryImages.length ? {
+                        images: galleryImages,
+                        page: 0,
+                        pageSize: Math.max(1, Math.min(12, Number(window.FOOTPRINT_CONFIG?.photoWallPageSize) || 6)),
+                        spec: footprint.spec
+                    } : null;
 
                     const zoomLevel = Number(footprint.spec.zoomLevel);
                     //时间线抽屉打开时设置中心点偏右
@@ -1674,8 +1993,14 @@ const addFootprintMarkers = async (map, footprintData) => {
                         zoomOn2(map, null);
                         await moveToLocation(map, position2, zoomLevel, 500);
                     }
-                    openInfoWindow(position, content);
                     currentMarker = marker;
+                    // 有图片墙时展示在地图外围；没有配置图片墙时保留原有详情卡片。
+                    if (galleryImages.length) {
+                        logoContainer?.classList.add('photo-wall-active');
+                        renderPhotoWall();
+                    } else {
+                        openInfoWindow(position, createInfoWindow(footprint.spec));
+                    }
                     if (zoomLevel >= 18) {
                         map.setPitch(Number(footprint.spec.pitchAngle));
                         map.setRotation(Number(footprint.spec.rotationAngle));
@@ -1762,8 +2087,11 @@ const addFootprintMarkers = async (map, footprintData) => {
 
     // 清理函数
     const cleanup = () => {
+        closeCurrentMarker();
         map.off('movestart');
-        map.off('moveend', debouncedUpdate);
+        map.off('moveend');
+        map.off('mapmove', positionPhotoWall);
+        map.off('zoomchange', positionPhotoWall);
         map.off('click', handleMapClick);
 
         const infoWindowElement = document.querySelector('.info-window');
@@ -2074,7 +2402,7 @@ const initializeApp = async () => {
         // 使用独立楼块图层，避免自定义地图样式隐藏底图自带楼块
         const buildingLayer = new AMap.Buildings({
             zIndex: 10,
-            zooms: [16.8, 20],
+            zooms: [16.8, 24],
             heightFactor: 1.2,
             // 雾蓝玻璃感楼块：楼顶略清晰，楼面更透明，接近浅色地图的视觉效果
             wallColor: 'rgba(175,206,233,0.2)',

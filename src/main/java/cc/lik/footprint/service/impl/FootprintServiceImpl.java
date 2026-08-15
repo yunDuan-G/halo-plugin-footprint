@@ -44,7 +44,8 @@ public class FootprintServiceImpl implements FootprintService {
                     item.path("markerStyle").asText("pin"),
                     item.path("enableHoverZoom").asBoolean(true),
                     item.path("highlightScheme").asText("glow"),
-                    item.path("highlightVisitedCities").asBoolean(true)
+                    item.path("highlightVisitedCities").asBoolean(true),
+                    item.path("photoWallPageSize").asInt(6)
                 );
                 return Mono.just(config);
             });

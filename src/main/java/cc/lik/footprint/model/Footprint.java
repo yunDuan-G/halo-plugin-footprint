@@ -91,6 +91,13 @@ public class Footprint extends AbstractExtension {
          */
         @Schema(description = "足迹图片URL")
         private String image;
+
+        /**
+         * 图片墙图片
+         */
+        @Schema(description = "图片墙图片URL列表")
+        private List<String> galleryImages;
+
         /**
          * 足迹图片
          */

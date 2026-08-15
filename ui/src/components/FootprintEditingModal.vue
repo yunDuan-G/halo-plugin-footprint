@@ -40,6 +40,7 @@ const initialFormState: Footprint = {
     address: "",
     footprintType: "旅游",
     image: "",
+    galleryImages: [],
     article: "",
     zoomLevel: "14",
     pitchAngle: "0",
@@ -496,6 +497,14 @@ onMounted(async () => {
             :type="'attachment' as any"
             name="image"
             label="足迹图片"
+          ></FormKit>
+          <FormKit
+            v-model="formState.spec.galleryImages"
+            :type="'attachment' as any"
+            name="galleryImages"
+            label="图片墙图片"
+            :multiple="true"
+            help="选择用于标记点图片墙的多张图片"
           ></FormKit>
         </div>
       </div>

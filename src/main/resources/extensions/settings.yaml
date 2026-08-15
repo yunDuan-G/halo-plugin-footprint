@@ -90,6 +90,15 @@ spec:
           name: highlightVisitedCities
           value: true
           help: "使用主题色显示已经去过的城市区域"
+        - $formkit: number
+          label: 图片墙单页展示数量
+          name: photoWallPageSize
+          value: 6
+          min: 1
+          max: 12
+          step: 1
+          validation: required|number|between:1,12
+          help: "每个足迹图片墙单页最多展示的图片数量，超出后可使用左右箭头翻页（1-12）"
         - $formkit: text
           label: 高德JsKey
           name: gaoDeKey

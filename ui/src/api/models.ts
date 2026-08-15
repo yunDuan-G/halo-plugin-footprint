@@ -22,6 +22,7 @@ export interface FootprintSpec {
   address?: string;
   footprintType?: string;
   image?: string;
+  galleryImages?: string[];
   article?: string;
   metadataNames?: [];
   zoomLevel: string;
