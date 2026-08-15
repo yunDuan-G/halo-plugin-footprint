@@ -1464,11 +1464,17 @@ const createPhotoWall = (spec, page = 0) => {
     return `
         <div class="photo-wall-window" data-photo-page="${currentPage}" data-photo-total-pages="${totalPages}">
             <div class="photo-wall-heading">
-                <div>
+                <div class="photo-wall-heading-copy">
                     <span class="photo-wall-kicker">MEMORY WALL</span>
-                    <h3>${escapeHtml(spec.name || '足迹')}</h3>
+                    <div class="photo-wall-title-row">
+                        <h3>${escapeHtml(spec.name || '足迹')}</h3>
+                        ${spec.createTime ? `<span class="photo-wall-date">${escapeHtml(formatDateToYMD(spec.createTime))}</span>` : ''}
+                    </div>
+                    ${spec.description ? `<p class="photo-wall-description">${escapeHtml(spec.description)}</p>` : ''}
                 </div>
-                <span class="photo-wall-counter">${currentPage + 1} / ${totalPages}</span>
+                <div class="photo-wall-heading-meta">
+                    <span class="photo-wall-counter">${currentPage + 1} / ${totalPages}</span>
+                </div>
             </div>
             <div class="photo-wall-canvas">
                 <span class="photo-wall-thread" aria-hidden="true"></span>

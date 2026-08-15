@@ -648,6 +648,25 @@
 }
 .photo-wall-heading {
     top: 18px;
+    gap: 20px;
+    align-items: flex-start;
+}
+.photo-wall-heading-copy {
+    min-width: 0;
+    max-width: 440px;
+}
+.photo-wall-heading-meta {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 7px;
+}
+.photo-wall-title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    min-width: 0;
 }
 .photo-wall-kicker {
     display: block;
@@ -661,6 +680,23 @@
     font: 600 22px/1.1 Georgia, 'Times New Roman', serif;
     letter-spacing: 0.01em;
 }
+.photo-wall-description {
+    max-width: 410px;
+    margin: 7px 0 0;
+    overflow: hidden;
+    color: var(--wall-ink);
+    font: 12px/1.45 Georgia, 'Times New Roman', serif;
+    opacity: 0.72;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+.photo-wall-date {
+    flex: 0 0 auto;
+    color: var(--wall-accent);
+    font: 600 11px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+    letter-spacing: 0.04em;
+}
 .photo-wall-counter {
     min-width: 42px;
     padding: 6px 9px;
@@ -672,7 +708,7 @@
 }
 .photo-wall-canvas {
     position: absolute;
-    inset: 62px 22px 47px;
+    inset: 88px 22px 47px;
     overflow: visible;
 }
 .photo-wall-thread {
