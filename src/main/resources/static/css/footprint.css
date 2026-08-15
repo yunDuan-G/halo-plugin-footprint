@@ -797,7 +797,9 @@
 }
 .photo-wall-nav:not(:disabled):hover {
     color: #fff;
-    background: #3d5b4b;
+    background: #35423d;
+    border-color: #35423d;
+    box-shadow: 0 8px 18px rgba(53, 66, 61, 0.24);
     transform: translateY(-1px);
 }
 .photo-wall-nav:disabled {
