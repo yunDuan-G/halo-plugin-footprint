@@ -1457,7 +1457,11 @@ const createPhotoWall = (spec, page = 0) => {
                     aria-label="放大查看第 ${absoluteIndex + 1} 张图片">
                 <span class="photo-wall-card-inner">
                     <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
-                    <span class="photo-wall-pin" aria-hidden="true"></span>
+                    <span class="photo-wall-pin" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path class="photo-wall-pin-icon" d="M16 9V4h1V2H7v2h1v5l-2 2v2h5v7l1 1 1-1v-7h5v-2l-2-2Z"></path>
+                        </svg>
+                    </span>
                 </span>
             </button>`;
     }).join('');

@@ -792,15 +792,32 @@
 .photo-wall-pin {
     --photo-pin: #c96f55;
     position: absolute;
-    top: -7px;
+    top: -18px;
     left: 50%;
-    width: 10px;
-    height: 10px;
+    width: 24px;
+    height: 24px;
     transform: translateX(-50%);
-    border: 1px solid #9d4938;
-    border-radius: 50%;
-    background: var(--photo-pin);
-    box-shadow: 0 0 0 2px rgba(201, 111, 85, 0.16), 0 2px 4px rgba(53, 39, 24, 0.3);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    outline: none;
+    transform-origin: 50% 85%;
+    will-change: transform, opacity;
+    animation: photoWallPinIn 0.72s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: var(--card-delay, 0ms);
+}
+.photo-wall-pin svg {
+    display: block;
+    width: 24px;
+    height: 24px;
+    overflow: visible;
+    filter: none;
+}
+.photo-wall-pin-icon {
+    fill: var(--photo-pin);
+    stroke: none;
+    paint-order: fill;
 }
 .photo-wall-center-mark {
     position: absolute;
@@ -856,6 +873,30 @@
     100% {
         opacity: 1;
         transform: rotate(var(--card-rotation)) scale(1);
+    }
+}
+@keyframes photoWallPinIn {
+    0% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-38px) scale(0.42) rotate(-18deg);
+    }
+    25% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(-12px) scale(0.78) rotate(-8deg);
+    }
+    48% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(8px) scale(1.22, 0.72) rotate(5deg);
+    }
+    64% {
+        transform: translateX(-50%) translateY(-5px) scale(0.88, 1.12) rotate(-3deg);
+    }
+    80% {
+        transform: translateX(-50%) translateY(2px) scale(1.06, 0.96) rotate(1deg);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1) rotate(0deg);
     }
 }
 
