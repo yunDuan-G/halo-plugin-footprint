@@ -2777,7 +2777,8 @@
 .map-controls .control-btn,
 .map-controls #timeline-btn,
 .map-controls #zoom-restore,
-.map-controls #messageBoards {
+.map-controls #messageBoards,
+.map-controls #map-fullscreen {
     min-height: 36px;
     padding: 0 13px;
     border: 1px solid transparent;
@@ -2793,7 +2794,8 @@
 .map-controls .control-btn:hover,
 .map-controls #timeline-btn:hover,
 .map-controls #zoom-restore:hover,
-.map-controls #messageBoards:hover {
+.map-controls #messageBoards:hover,
+.map-controls #map-fullscreen:hover {
     color: #1f2937;
     background: rgba(255, 255, 255, 0.78);
     border-color: rgba(148, 163, 184, 0.2);
@@ -2839,6 +2841,34 @@
 .map-controls #messageBoards {
     padding-inline: 12px;
 }
+.map-controls #map-fullscreen {
+    padding-inline: 12px;
+}
+.map-controls #map-fullscreen {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    gap: 0;
+}
+.map-controls #map-fullscreen svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.map-controls #map-fullscreen .fullscreen-exit-icon {
+    display: none;
+}
+.map-controls #map-fullscreen[data-fullscreen-state="exit"] .fullscreen-enter-icon {
+    display: none;
+}
+.map-controls #map-fullscreen[data-fullscreen-state="exit"] .fullscreen-exit-icon {
+    display: block;
+}
 .map-controls .plane-switch {
     gap: 6px;
     padding: 2px 7px 2px 4px;
@@ -2879,6 +2909,7 @@
     .map-controls #timeline-btn,
     .map-controls #zoom-restore,
     .map-controls #messageBoards,
+    .map-controls #map-fullscreen,
     .map-controls .zoom-btn,
     .map-controls .plane-switch .switch-text {
         color: #dbe5f1;
@@ -2887,6 +2918,7 @@
     .map-controls #timeline-btn:hover,
     .map-controls #zoom-restore:hover,
     .map-controls #messageBoards:hover,
+    .map-controls #map-fullscreen:hover,
     .map-controls .zoom-btn:hover,
     .map-controls .plane-switch:hover {
         color: #fff;
@@ -2896,6 +2928,17 @@
     .map-controls #messageBoards::before {
         filter: brightness(0) invert(1);
     }
+}
+/* 底部控制栏不再显示地图放大/缩小按钮 */
+#map-controls #zoom-buttons {
+    display: none !important;
+}
+/* 浏览器全屏时，地图及其覆盖层铺满视口 */
+#footprint-page:fullscreen,
+#footprint-page:fullscreen .footprint-container,
+#footprint-page:fullscreen #footprint-map {
+    width: 100vw;
+    height: 100vh;
 }
 /* 修复控制按钮提示气泡被裁剪的问题 */
 .map-controls .control-btn {
@@ -3372,4 +3415,12 @@
     min-height: 150px;
     box-sizing: border-box;
     pointer-events: none;
+}
+
+/* 移动端不展示桌面版图片墙和全屏入口 */
+@media (max-width: 768px) {
+    #photo-wall-layer,
+    #map-fullscreen {
+        display: none !important;
+    }
 }

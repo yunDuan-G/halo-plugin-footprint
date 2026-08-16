@@ -1595,6 +1595,7 @@ const addFootprintMarkers = async (map, footprintData) => {
     const logoContainer = document.querySelector('.logo-container');
     let photoWallElement = null;
     let photoWallConnector = null;
+    let photoWallWheelUnlockTimer = null;
 
     const closePhotoLightbox = () => {
         const lightbox = document.querySelector('.photo-lightbox');
@@ -1703,6 +1704,10 @@ const addFootprintMarkers = async (map, footprintData) => {
     const closeCurrentMarker = () => {
         infoWindow.close();
         closePhotoLightbox();
+        if (photoWallWheelUnlockTimer) {
+            window.clearTimeout(photoWallWheelUnlockTimer);
+            photoWallWheelUnlockTimer = null;
+        }
         photoWallElement?.remove();
         photoWallConnector?.remove();
         logoContainer?.classList.remove('photo-wall-active');
@@ -1846,6 +1851,20 @@ const addFootprintMarkers = async (map, footprintData) => {
         photoWallElement.className = 'photo-wall-window';
         photoWallElement.innerHTML = createPhotoWall(photoWallState.spec, photoWallState.page);
         photoWallElement.addEventListener('click', handlePhotoWallClick);
+        photoWallElement.addEventListener('wheel', (event) => {
+            if (Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+            event.preventDefault();
+            if (photoWallWheelUnlockTimer) return;
+
+            const action = event.deltaY > 0 ? 'next' : 'previous';
+            const navigationButton = photoWallElement.querySelector(`[data-photo-action="${action}"]`);
+            if (!(navigationButton instanceof HTMLButtonElement) || navigationButton.disabled) return;
+
+            navigationButton.click();
+            photoWallWheelUnlockTimer = window.setTimeout(() => {
+                photoWallWheelUnlockTimer = null;
+            }, 180);
+        }, {passive: false});
         photoWallLayer.appendChild(photoWallElement);
 
         photoWallConnector = document.createElement('span');
@@ -1994,7 +2013,7 @@ const addFootprintMarkers = async (map, footprintData) => {
                     closeCurrentMarker();
 
                     const galleryImages = normalizeGalleryImages(footprint.spec.galleryImages);
-                    photoWallState = galleryImages.length ? {
+                    photoWallState = !isMobile && galleryImages.length ? {
                         images: galleryImages,
                         page: 0,
                         pageSize: Math.max(1, Math.min(12, Number(window.FOOTPRINT_CONFIG?.photoWallPageSize) || 6)),
@@ -2019,8 +2038,8 @@ const addFootprintMarkers = async (map, footprintData) => {
                         await moveToLocation(map, position2, zoomLevel, 500);
                     }
                     currentMarker = marker;
-                    // 有图片墙时展示在地图外围；没有配置图片墙时保留原有详情卡片。
-                    if (galleryImages.length) {
+                    // 桌面端有图片墙时展示在地图外围；移动端始终保留原有详情卡片。
+                    if (!isMobile && galleryImages.length) {
                         logoContainer?.classList.add('photo-wall-active');
                         renderPhotoWall();
                     } else {
@@ -2141,6 +2160,39 @@ const addFootprintMarkers = async (map, footprintData) => {
     document.getElementById('messageBoards').addEventListener('click', () => {
         window.open('http://www.yunduan019.com/liu', '_blank');
     });
+
+    const fullscreenButton = document.getElementById('map-fullscreen');
+    const fullscreenTarget = document.getElementById('footprint-page');
+    const updateFullscreenButton = () => {
+        if (!fullscreenButton || !fullscreenTarget) return;
+        const isFullscreen = document.fullscreenElement === fullscreenTarget;
+        fullscreenButton.dataset.fullscreenState = isFullscreen ? 'exit' : 'enter';
+        const tooltipText = isFullscreen ? '退出全屏地图' : '进入全屏地图';
+        fullscreenButton.dataset.tooltip = tooltipText;
+        fullscreenButton.setAttribute('aria-label', tooltipText);
+        const tooltip = fullscreenButton.querySelector('.tooltip');
+        if (tooltip) tooltip.textContent = tooltipText;
+    };
+
+    if (fullscreenButton && fullscreenTarget) {
+        fullscreenButton.addEventListener('click', async () => {
+            try {
+                if (document.fullscreenElement) {
+                    await document.exitFullscreen();
+                } else if (fullscreenTarget.requestFullscreen) {
+                    await fullscreenTarget.requestFullscreen();
+                }
+            } catch (error) {
+                console.warn('切换全屏失败:', error);
+            }
+        });
+        document.addEventListener('fullscreenchange', () => {
+            updateFullscreenButton();
+            map.resize();
+            positionPhotoWall();
+        });
+        updateFullscreenButton();
+    }
 
     document.getElementById('zoom-restore').addEventListener('click', () => {
         //显示时间线按钮/缩放按钮/线路按钮
@@ -2426,12 +2478,12 @@ const initializeApp = async () => {
     try {
         // 使用独立楼块图层，避免自定义地图样式隐藏底图自带楼块
         const buildingLayer = new AMap.Buildings({
-            zIndex: 10,
+                zIndex: 10,
             zooms: [16.8, 24],
-            heightFactor: 1.2,
+                heightFactor: 1.2,
             // 雾蓝玻璃感楼块：楼顶略清晰，楼面更透明，接近浅色地图的视觉效果
-            wallColor: 'rgba(175,206,233,0.2)',
-            roofColor: 'rgba(175,206,233,0.5)'
+                wallColor: 'rgba(175,206,233,0.2)',
+                roofColor: 'rgba(175,206,233,0.5)'
         });
 
         // 创建地图实例
@@ -2488,7 +2540,7 @@ const initializeApp = async () => {
         showElements();
         renderStats();
         // 为所有控制按钮添加点击动画
-        document.querySelectorAll('.control-btn, .zoom-controls button').forEach(button => {
+        document.querySelectorAll('.control-btn, .zoom-controls button, #map-fullscreen').forEach(button => {
             addButtonAnimation(button);
         });
 
