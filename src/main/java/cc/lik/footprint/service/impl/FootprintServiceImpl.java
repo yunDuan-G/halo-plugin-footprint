@@ -18,6 +18,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 @EnableScheduling
@@ -52,40 +54,123 @@ public class FootprintServiceImpl implements FootprintService {
     }
 
     private static final String GAODE_URL = "https://restapi.amap.com/v3/geocode/geo";
+    private static final String GAODE_POI_URL = "https://restapi.amap.com/v5/place/text";
     private static final String GAODE_REGEO_URL = "https://restapi.amap.com/v3/geocode/regeo";
+    private static final Pattern CITY_PATTERN =
+        Pattern.compile("([\\u4e00-\\u9fa5]{1,12}(?:市|自治州|地区|盟))");
 
     @Override
     public Mono<String> AddressLocationUtil(String address, String gaoDeWebKey) {
+        // 足迹地址通常包含“园区/商场内的具体 POI”，优先使用 POI 关键字搜索，
+        // 其结果更接近高德地图搜索和坐标拾取器展示的位置。
+        return searchPoiLocation(address, gaoDeWebKey)
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.info("POI关键字未找到结果，降级使用地理编码: {}", address);
+                    return geocodeLocation(address, gaoDeWebKey);
+                }))
+                .switchIfEmpty(Mono.error(new RuntimeException("无法根据地址获取经纬度")));
+    }
+
+    private Mono<String> searchPoiLocation(String address, String gaoDeWebKey) {
+        String region = extractCity(address);
+        return WebClient.create()
+                .get()
+                .uri(GAODE_POI_URL, uriBuilder -> {
+                    uriBuilder
+                        .queryParam("key", gaoDeWebKey)
+                        .queryParam("keywords", address)
+                        .queryParam("output", "json")
+                        .queryParam("page_size", 1);
+                    if (region != null) {
+                        uriBuilder.queryParam("region", region)
+                                .queryParam("city_limit", "true");
+                    }
+                    return uriBuilder.build();
+                })
+                .retrieve()
+                .bodyToMono(String.class)
+                .map(response -> {
+                    try {
+                        JsonNode jsonResponse = objectMapper.readTree(response);
+                        if (!"1".equals(jsonResponse.path("status").asText())) {
+                            throw new RuntimeException("高德POI搜索失败: "
+                                    + jsonResponse.path("info").asText("未知错误"));
+                        }
+                        String location = extractFirstLocation(jsonResponse.path("pois"));
+                        if (location == null) {
+                            throw new RuntimeException("高德POI搜索没有匹配结果");
+                        }
+                        return location;
+                    } catch (Exception e) {
+                        throw new RuntimeException("解析高德POI搜索响应失败: " + e.getMessage(), e);
+                    }
+                })
+                .onErrorResume(e -> {
+                    log.warn("调用高德POI搜索失败，将使用地理编码兜底: {}", e.getMessage());
+                    return Mono.empty();
+                });
+    }
+
+    private Mono<String> geocodeLocation(String address, String gaoDeWebKey) {
         return WebClient.create()
                 .get()
                 .uri(GAODE_URL, uriBuilder -> uriBuilder
                         .queryParam("key", gaoDeWebKey)
                         .queryParam("address", address)
+                        .queryParam("output", "json")
                         .build())
                 .retrieve()
                 .bodyToMono(String.class)
-                .mapNotNull(response -> {
+                .map(response -> {
                     try {
                         JsonNode jsonResponse = objectMapper.readTree(response);
-                        if ("1".equals(jsonResponse.get("status").asText())) {
-                            JsonNode geocodes = jsonResponse.get("geocodes");
-                            if (geocodes.isArray() && !geocodes.isEmpty()) {
-                                String location = geocodes.get(0).get("location").asText();
-                                String[] coordinates = location.split(",");
-                                return coordinates[0] + "," + coordinates[1];
-                            }
+                        if (!"1".equals(jsonResponse.path("status").asText())) {
+                            throw new RuntimeException("高德地理编码失败: "
+                                    + jsonResponse.path("info").asText("未知错误"));
                         }
-                        log.warn("高德地图API返回错误: {}", jsonResponse.get("info").asText());
-                        throw new RuntimeException("高德地图API返回错误: " + jsonResponse.get("info").asText());
+                        String location = extractFirstLocation(jsonResponse.path("geocodes"));
+                        if (location == null) {
+                            throw new RuntimeException("高德地理编码没有匹配结果");
+                        }
+                        return location;
                     } catch (Exception e) {
-                        log.error("解析高德地图响应失败: {}", e.getMessage());
-                        throw new RuntimeException("解析高德地图响应失败: " + e.getMessage());
+                        throw new RuntimeException("解析高德地理编码响应失败: " + e.getMessage(), e);
                     }
                 })
                 .onErrorResume(e -> {
-                    log.error("调用高德地图API失败: {}", e.getMessage());
+                    log.error("调用高德地理编码API失败: {}", e.getMessage());
                     return Mono.empty();
                 });
+    }
+
+    private String extractFirstLocation(JsonNode results) {
+        if (results == null || !results.isArray() || results.isEmpty()) {
+            return null;
+        }
+        JsonNode locationNode = results.get(0).path("location");
+        if (!locationNode.isTextual()) {
+            return null;
+        }
+        String location = locationNode.asText().trim();
+        String[] coordinates = location.split(",");
+        if (coordinates.length != 2) {
+            return null;
+        }
+        try {
+            Double.parseDouble(coordinates[0]);
+            Double.parseDouble(coordinates[1]);
+            return coordinates[0].trim() + "," + coordinates[1].trim();
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private String extractCity(String address) {
+        if (address == null || address.isBlank()) {
+            return null;
+        }
+        Matcher matcher = CITY_PATTERN.matcher(address);
+        return matcher.find() ? matcher.group(1) : null;
     }
 
     @Override
