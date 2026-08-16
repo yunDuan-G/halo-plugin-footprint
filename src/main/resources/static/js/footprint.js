@@ -1453,7 +1453,7 @@ const createPhotoWall = (spec, page = 0) => {
         const imageUrl = getPhotoWallImageUrl(url);
         return `
             <button class="photo-wall-card" type="button" data-photo-index="${absoluteIndex}"
-                    style="left:${layout.x}%;top:${layout.y}%;--card-rotation:${layout.r}deg;"
+                    style="left:${layout.x}%;top:${layout.y}%;--card-rotation:${layout.r}deg;--card-delay:${index * 70}ms;"
                     aria-label="放大查看第 ${absoluteIndex + 1} 张图片">
                 <span class="photo-wall-card-inner">
                     <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">

@@ -761,6 +761,8 @@
     background: transparent;
     transform: rotate(var(--card-rotation));
     cursor: zoom-in;
+    animation: photoWallCardIn 0.48s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: var(--card-delay, 0ms);
     transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), z-index 0s 0.28s;
 }
 .photo-wall-card:hover,
@@ -845,6 +847,16 @@
 @keyframes photoWallShow {
     0% { opacity: 0; transform: translateY(18px) scale(0.94) rotate(-1deg); }
     100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+}
+@keyframes photoWallCardIn {
+    0% {
+        opacity: 0;
+        transform: translateY(18px) rotate(calc(var(--card-rotation) - 5deg)) scale(0.86);
+    }
+    100% {
+        opacity: 1;
+        transform: rotate(var(--card-rotation)) scale(1);
+    }
 }
 
 /* ===== 图片墙放大预览 ===== */
