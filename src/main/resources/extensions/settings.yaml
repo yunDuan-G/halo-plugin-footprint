@@ -99,6 +99,22 @@ spec:
           step: 1
           validation: required|number|between:1,12
           help: "每个足迹图片墙单页最多展示的图片数量，超出后可使用左右箭头翻页（1-12）"
+        - $formkit: select
+          label: 图片墙样式
+          name: photoWallStyle
+          value: original
+          options:
+            - label: 经典方案
+              value: original
+            - label: 地图侧边展开式画廊
+              value: gallery
+            - label: 胶片带模式
+              value: filmstrip
+            - label: 旅行手账模式
+              value: journal
+            - label: 聚焦式照片墙
+              value: focus
+          help: "选择桌面端图片墙的展示方式；移动端仍使用原有信息窗口(部分样式为固定图片数量)"
         - $formkit: text
           label: 高德JsKey
           name: gaoDeKey

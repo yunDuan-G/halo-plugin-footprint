@@ -20,4 +20,5 @@ public class BaseConfig {
     private String highlightScheme;
     private Boolean highlightVisitedCities;
     private Integer photoWallPageSize;
+    private String photoWallStyle;
 }

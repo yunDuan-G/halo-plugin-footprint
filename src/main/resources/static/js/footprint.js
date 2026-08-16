@@ -118,6 +118,8 @@ function renderStats() {
 let activeCard = null;
 // 跟踪当前正在执行动画的卡片（与activeCard分开，避免mouseleave中断异步动画）
 let animationInFlight = null;
+let closeActiveFootprint = null;
+let timelineHoverGeneration = 0;
 
 // 标记点DOM缓存，避免重复querySelector查询
 const markerCache = new Map();
@@ -643,6 +645,9 @@ const populateTimeline = async (map) => {
         // 添加点击事件处理
         detailBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
+            // 点击旅行故事时立即让当前卡片的异步悬停缩放失效，避免它在点击后再次把地图缩放到 6.5 级。
+            timelineHoverGeneration += 1;
+            timelineItem._hoverCancelled = true;
 
             // 清除抛物线动画
             if (timelineItem.currentAnimationId) {
@@ -700,6 +705,9 @@ const populateTimeline = async (map) => {
 
     // 打开抽屉
     timelineBtn.addEventListener('click', () => {
+        // 切换到时间线前关闭当前标记点的图片墙
+        closeActiveFootprint?.();
+
         // 打开时间线时自动恢复标记点，方便时间线与地图足迹保持同步
         if (footprintMarkerController && !footprintMarkerController.isVisible()) {
             footprintMarkerController.setVisible(true);
@@ -771,6 +779,10 @@ const populateTimeline = async (map) => {
 
         const handleEnter = async () => {
             if (isProcessing) return;
+            const hoverGeneration = timelineHoverGeneration;
+            // 时间线卡片悬停时先关闭地图上的图片墙，避免悬停缩放与图片墙定位同时进行。
+            closeActiveFootprint?.();
+            if (hoverGeneration !== timelineHoverGeneration || card._hoverCancelled) return;
             //还原仰角和旋转
             if (isElevation) {
                 map.setPitch(0);
@@ -849,6 +861,7 @@ const populateTimeline = async (map) => {
                         //第一次 绑定地图 缩放事件
                         zoomOn(map, card, newPosition, zoom, 1);
                         const sameZoom = await moveToLocation(map, newPosition, zoom, 0);
+                        if (hoverGeneration !== timelineHoverGeneration || card._hoverCancelled) return;
                         if (sameZoom) {
                             // 同级缩放不会触发 zoomend，因此直接结束监听并启动抛物线
                             zoomOff(map);
@@ -892,6 +905,7 @@ const populateTimeline = async (map) => {
 
                         //缩放到 多个标记点的 地图中心点 和 缩放级别
                         const sameZoom = await moveToLocation(map, newPosition2, zoom, 5);
+                        if (hoverGeneration !== timelineHoverGeneration || card._hoverCancelled) return;
                         if (sameZoom) {
                             // 同级缩放不会触发 zoomend，因此直接结束监听并启动抛物线
                             zoomOff(map);
@@ -918,6 +932,7 @@ const populateTimeline = async (map) => {
 
         const handleLeave = () => {
             // 立即取消任何待执行的 handleEnter，避免竞态条件
+            timelineHoverGeneration += 1;
             animationInFlight = null;
             const amapMarker = document.querySelectorAll('.amap-marker');
             amapMarker.forEach(marker => {
@@ -1423,6 +1438,13 @@ const PHOTO_WALL_LAYOUTS = [
     {x: 15, y: 68, r: 10}, {x: 38, y: 72, r: -3}, {x: 61, y: 72, r: 8}
 ];
 
+const PHOTO_WALL_FOCUS_LAYOUTS = [
+    {x: 3, y: 8, r: -8}, {x: 76, y: 5, r: 7}, {x: 0, y: 58, r: 6},
+    {x: 78, y: 56, r: -7}, {x: 20, y: 0, r: 5}, {x: 58, y: 0, r: -5},
+    {x: 19, y: 68, r: -4}, {x: 61, y: 68, r: 5}, {x: 3, y: 35, r: 9},
+    {x: 78, y: 35, r: -9}, {x: 36, y: 2, r: 3}
+];
+
 const normalizeGalleryImages = (images) => {
     if (!Array.isArray(images)) return [];
     return images.map((item, index) => {
@@ -1441,38 +1463,193 @@ const getPhotoWallImageUrl = (url, width = 500) => {
     return String(url || '') || 'https://www.lik.cc/upload/loading8.gif';
 };
 
+const getPhotoWallStyle = () => {
+    const configuredStyle = String(window.FOOTPRINT_CONFIG?.photoWallStyle || 'original')
+        .trim()
+        .toLowerCase();
+    const legacyAliases = {
+        a: 'gallery',
+        b: 'filmstrip',
+        c: 'journal',
+        d: 'focus'
+    };
+    const style = legacyAliases[configuredStyle] || configuredStyle;
+    return ['gallery', 'filmstrip', 'journal', 'focus'].includes(style) ? style : 'original';
+};
+
+const getPhotoWallPageSize = () => {
+    if (getPhotoWallStyle() === 'gallery') return 8;
+    return Math.max(1, Math.min(12, Number(window.FOOTPRINT_CONFIG?.photoWallPageSize) || 6));
+};
+
 const createPhotoWall = (spec, page = 0) => {
     const images = normalizeGalleryImages(spec.galleryImages);
-    const pageSize = Math.max(1, Math.min(12, Number(window.FOOTPRINT_CONFIG?.photoWallPageSize) || 6));
-    const totalPages = Math.max(1, Math.ceil(images.length / pageSize));
-    const currentPage = Math.max(0, Math.min(totalPages - 1, page));
+    const pageSize = getPhotoWallPageSize();
+    const style = getPhotoWallStyle();
+    const totalPages = style === 'filmstrip' ? 1 : Math.max(1, Math.ceil(images.length / pageSize));
+    const currentPage = style === 'filmstrip' ? 0 : Math.max(0, Math.min(totalPages - 1, page));
     const pageImages = images.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
-    const cards = pageImages.map((url, index) => {
-        const layout = PHOTO_WALL_LAYOUTS[index % PHOTO_WALL_LAYOUTS.length];
-        const absoluteIndex = currentPage * pageSize + index;
-        const imageUrl = getPhotoWallImageUrl(url);
-        return `
-            <button class="photo-wall-card" type="button" data-photo-index="${absoluteIndex}"
-                    style="left:${layout.x}%;top:${layout.y}%;--card-rotation:${layout.r}deg;--card-delay:${index * 70}ms;"
-                    aria-label="放大查看第 ${absoluteIndex + 1} 张图片">
-                <span class="photo-wall-card-inner">
-                    <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
-                    <span class="photo-wall-pin" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false">
-                            <path class="photo-wall-pin-icon" d="M16 9V4h1V2H7v2h1v5l-2 2v2h5v7l1 1 1-1v-7h5v-2l-2-2Z"></path>
-                        </svg>
+    let cards = '';
+    let canvas = '';
+    let kicker = 'MEMORY WALL';
+    let counter = `${currentPage + 1} / ${totalPages}`;
+    let footer = `${images.length} 张图片 · 点击卡片放大`;
+    let wallClass = '';
+    let wallStyleAttribute = '';
+
+    if (style === 'gallery') {
+        wallClass = ' photo-wall-variant-a';
+        kicker = 'TRAVEL GALLERY';
+        cards = pageImages.map((url, index) => {
+            const absoluteIndex = currentPage * pageSize + index;
+            const imageUrl = getPhotoWallImageUrl(url);
+            return `
+                <button class="photo-wall-card photo-wall-variant-a-card" type="button" data-photo-index="${absoluteIndex}"
+                        style="--card-delay:${index * 70}ms;"
+                        aria-label="放大查看第 ${absoluteIndex + 1} 张图片">
+                    <span class="photo-wall-card-inner">
+                        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
+                        <span class="photo-wall-pin" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path class="photo-wall-pin-icon" d="M16 9V4h1V2H7v2h1v5l-2 2v2h5v7l1 1 1-1v-7h5v-2l-2-2Z"></path>
+                            </svg>
+                        </span>
                     </span>
-                </span>
-            </button>`;
-    }).join('');
+                </button>`;
+        }).join('');
+        const primaryUrl = getPhotoWallImageUrl(pageImages[0]);
+        const primaryIndex = currentPage * pageSize;
+        canvas = `
+            <div class="photo-wall-canvas photo-wall-gallery-stage">
+                <button class="photo-wall-feature" type="button" data-photo-index="${primaryIndex}" aria-label="放大查看第 ${primaryIndex + 1} 张图片">
+                    <img src="${escapeHtml(primaryUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="eager" decoding="async">
+                    <span class="photo-wall-feature-caption">${escapeHtml(spec.name || '足迹')} · ${primaryIndex + 1}</span>
+                </button>
+                <div class="photo-wall-thumb-rail" aria-label="图片缩略图">${cards}</div>
+            </div>`;
+        footer = `${images.length} 张图片 · 点击主图或缩略图放大`;
+    } else if (style === 'filmstrip') {
+        wallClass = ' photo-wall-variant-b';
+        kicker = 'FILM STRIP';
+        counter = `${images.length} 张`;
+        cards = pageImages.map((url, index) => {
+            const imageUrl = getPhotoWallImageUrl(url);
+            return `
+                <button class="photo-wall-card photo-wall-variant-b-card" type="button" data-photo-index="${index}"
+                        style="--card-delay:${index * 70}ms;"
+                        aria-label="放大查看第 ${index + 1} 张图片">
+                    <span class="photo-wall-card-inner">
+                        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
+                        <span class="photo-wall-pin" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path class="photo-wall-pin-icon" d="M16 9V4h1V2H7v2h1v5l-2 2v2h5v7l1 1 1-1v-7h5v-2l-2-2Z"></path>
+                            </svg>
+                        </span>
+                    </span>
+                </button>`;
+        }).join('');
+        const primaryUrl = getPhotoWallImageUrl(pageImages[0]);
+        canvas = `
+            <div class="photo-wall-canvas photo-wall-filmstrip-stage">
+                <button class="photo-wall-feature" type="button" data-photo-index="0" aria-label="放大查看第 1 张图片">
+                    <img src="${escapeHtml(primaryUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="eager" decoding="async">
+                </button>
+                <div class="photo-wall-filmstrip" aria-label="胶片缩略图">${cards}</div>
+            </div>`;
+        footer = `${images.length} 张图片 · 使用滚轮浏览胶片带`;
+    } else if (style === 'journal') {
+        wallClass = ' photo-wall-variant-c';
+        kicker = 'TRAVEL JOURNAL';
+        const journalRows = Math.max(1, Math.ceil(pageImages.length / 3));
+        const journalHeight = 324 + (journalRows - 1) * 145;
+        wallStyleAttribute = ` style="--journal-wall-height:${journalHeight}px;"`;
+        cards = pageImages.map((url, index) => {
+            const absoluteIndex = currentPage * pageSize + index;
+            const imageUrl = getPhotoWallImageUrl(url);
+            return `
+                <button class="photo-wall-card photo-wall-variant-c-card" type="button" data-photo-index="${absoluteIndex}"
+                        style="--card-delay:${index * 70}ms;"
+                        aria-label="放大查看第 ${absoluteIndex + 1} 张图片">
+                    <span class="photo-wall-card-inner">
+                        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
+                        <span class="photo-wall-pin" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path class="photo-wall-pin-icon" d="M16 9V4h1V2H7v2h1v5l-2 2v2h5v7l1 1 1-1v-7h5v-2l-2-2Z"></path>
+                            </svg>
+                        </span>
+                        <span class="photo-wall-journal-index">${String(absoluteIndex + 1).padStart(2, '0')}</span>
+                    </span>
+                </button>`;
+        }).join('');
+        canvas = `<div class="photo-wall-canvas photo-wall-journal-grid">${cards}</div>`;
+        footer = `${images.length} 张图片 · 点击照片翻阅`;
+    } else if (style === 'focus') {
+        wallClass = ' photo-wall-variant-d';
+        kicker = 'FOCUS FRAME';
+        cards = pageImages.slice(1).map((url, index) => {
+            const layout = PHOTO_WALL_FOCUS_LAYOUTS[index % PHOTO_WALL_FOCUS_LAYOUTS.length];
+            const absoluteIndex = currentPage * pageSize + index + 1;
+            const imageUrl = getPhotoWallImageUrl(url);
+            return `
+                <button class="photo-wall-card photo-wall-variant-d-card" type="button" data-photo-index="${absoluteIndex}"
+                        style="left:${layout.x}%;top:${layout.y}%;--card-rotation:${layout.r}deg;--card-delay:${index * 70}ms;"
+                        aria-label="放大查看第 ${absoluteIndex + 1} 张图片">
+                    <span class="photo-wall-card-inner">
+                        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
+                        <span class="photo-wall-pin" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path class="photo-wall-pin-icon" d="M16 9V4h1V2H7v2h1v5l-2 2v2h5v7l1 1 1-1v-7h5v-2l-2-2Z"></path>
+                            </svg>
+                        </span>
+                    </span>
+                </button>`;
+        }).join('');
+        const primaryUrl = getPhotoWallImageUrl(pageImages[0]);
+        const primaryIndex = currentPage * pageSize;
+        canvas = `
+            <div class="photo-wall-canvas photo-wall-focus-stage">
+                <span class="photo-wall-focus-halo" aria-hidden="true"></span>
+                <button class="photo-wall-focus-core" type="button" data-photo-index="${primaryIndex}" aria-label="放大查看第 ${primaryIndex + 1} 张图片">
+                    <img src="${escapeHtml(primaryUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="eager" decoding="async">
+                    <span class="photo-wall-focus-label">${escapeHtml(spec.name || '足迹')}</span>
+                </button>
+                ${cards}
+            </div>`;
+        footer = `${images.length} 张图片 · 主图聚焦展示`;
+    } else {
+        cards = pageImages.map((url, index) => {
+            const layout = PHOTO_WALL_LAYOUTS[index % PHOTO_WALL_LAYOUTS.length];
+            const absoluteIndex = currentPage * pageSize + index;
+            const imageUrl = getPhotoWallImageUrl(url);
+            return `
+                <button class="photo-wall-card" type="button" data-photo-index="${absoluteIndex}"
+                        style="left:${layout.x}%;top:${layout.y}%;--card-rotation:${layout.r}deg;--card-delay:${index * 70}ms;"
+                        aria-label="放大查看第 ${absoluteIndex + 1} 张图片">
+                    <span class="photo-wall-card-inner">
+                        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
+                        <span class="photo-wall-pin" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path class="photo-wall-pin-icon" d="M16 9V4h1V2H7v2h1v5l-2 2v2h5v7l1 1 1-1v-7h5v-2l-2-2Z"></path>
+                            </svg>
+                        </span>
+                    </span>
+                </button>`;
+        }).join('');
+        canvas = `
+            <div class="photo-wall-canvas">
+                <span class="photo-wall-thread" aria-hidden="true"></span>
+                ${cards}
+                <span class="photo-wall-center-mark" aria-hidden="true"></span>
+            </div>`;
+    }
 
     const hasPrevious = currentPage > 0;
     const hasNext = currentPage < totalPages - 1;
     return `
-        <div class="photo-wall-window" data-photo-page="${currentPage}" data-photo-total-pages="${totalPages}">
+        <div class="photo-wall-window${wallClass}"${wallStyleAttribute} data-photo-page="${currentPage}" data-photo-total-pages="${totalPages}">
             <div class="photo-wall-heading">
                 <div class="photo-wall-heading-copy">
-                    <span class="photo-wall-kicker">MEMORY WALL</span>
+                    <span class="photo-wall-kicker">${kicker}</span>
                     <div class="photo-wall-title-row">
                         <h3>${escapeHtml(spec.name || '足迹')}</h3>
                         ${spec.createTime ? `<span class="photo-wall-date">${escapeHtml(formatDateToYMD(spec.createTime))}</span>` : ''}
@@ -1480,20 +1657,16 @@ const createPhotoWall = (spec, page = 0) => {
                     ${spec.description ? `<p class="photo-wall-description">${escapeHtml(spec.description)}</p>` : ''}
                 </div>
                 <div class="photo-wall-heading-meta">
-                    <span class="photo-wall-counter">${currentPage + 1} / ${totalPages}</span>
+                    <span class="photo-wall-counter">${counter}</span>
                 </div>
             </div>
-            <div class="photo-wall-canvas">
-                <span class="photo-wall-thread" aria-hidden="true"></span>
-                ${cards}
-                <span class="photo-wall-center-mark" aria-hidden="true"></span>
-            </div>
+            ${canvas}
             <div class="photo-wall-footer">
-                <span>${images.length} 张图片 · 点击卡片放大</span>
-                <span class="photo-wall-navigation">
+                <span>${footer}</span>
+                ${style === 'filmstrip' ? '' : `<span class="photo-wall-navigation">
                     <button type="button" class="photo-wall-nav" data-photo-action="previous" ${hasPrevious ? '' : 'disabled'} aria-label="上一页">←</button>
                     <button type="button" class="photo-wall-nav" data-photo-action="next" ${hasNext ? '' : 'disabled'} aria-label="下一页">→</button>
-                </span>
+                </span>`}
             </div>
         </div>
     `;
@@ -1725,6 +1898,7 @@ const addFootprintMarkers = async (map, footprintData) => {
             isElevation = false;
         }
     };
+    closeActiveFootprint = closeCurrentMarker;
 
     footprintMarkerController?.setOnVisibilityChange((visible) => {
         if (!visible) {
@@ -1854,8 +2028,42 @@ const addFootprintMarkers = async (map, footprintData) => {
         photoWallElement = document.createElement('div');
         photoWallElement.className = 'photo-wall-window';
         photoWallElement.innerHTML = createPhotoWall(photoWallState.spec, photoWallState.page);
+        const filmstrip = photoWallElement.querySelector('.photo-wall-filmstrip');
+        const journalGrid = photoWallElement.querySelector('.photo-wall-journal-grid');
+        const journalWall = photoWallElement.querySelector('.photo-wall-variant-c');
+        if (journalWall instanceof HTMLElement) {
+            const journalHeight = journalWall.style.getPropertyValue('--journal-wall-height').trim();
+            if (journalHeight) {
+                photoWallElement.style.height = journalHeight;
+                photoWallElement.style.setProperty('--journal-wall-height', journalHeight);
+            }
+        }
+        if (photoWallElement.querySelector('.photo-wall-variant-a')) {
+            photoWallElement.classList.add('photo-wall-host-a');
+        }
         photoWallElement.addEventListener('click', handlePhotoWallClick);
         photoWallElement.addEventListener('wheel', (event) => {
+            const wheelTarget = event.target instanceof Element
+                ? event.target.closest('.photo-wall-filmstrip')
+                : null;
+            if (filmstrip instanceof HTMLElement && wheelTarget) {
+                const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+                    ? event.deltaX
+                    : event.deltaY;
+                if (!delta) return;
+                event.preventDefault();
+                filmstrip.scrollBy({left: delta * 1.2, behavior: 'smooth'});
+                return;
+            }
+            const journalTarget = event.target instanceof Element
+                ? event.target.closest('.photo-wall-journal-grid')
+                : null;
+            if (journalGrid instanceof HTMLElement && journalTarget
+                && journalGrid.scrollHeight > journalGrid.clientHeight) {
+                event.preventDefault();
+                journalGrid.scrollBy({top: event.deltaY, behavior: 'smooth'});
+                return;
+            }
             if (Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
             event.preventDefault();
             if (photoWallWheelUnlockTimer) return;
@@ -1907,6 +2115,12 @@ const addFootprintMarkers = async (map, footprintData) => {
         const nextCanvas = nextWall?.querySelector('.photo-wall-canvas');
         if (currentCanvas && nextCanvas) currentCanvas.replaceWith(nextCanvas);
 
+        const nextJournalHeight = nextWall?.style?.getPropertyValue('--journal-wall-height')?.trim();
+        if (nextJournalHeight) {
+            photoWallElement.style.height = nextJournalHeight;
+            photoWallElement.style.setProperty('--journal-wall-height', nextJournalHeight);
+        }
+
         const currentCounter = photoWallElement.querySelector('.photo-wall-counter');
         const nextCounter = nextWall?.querySelector('.photo-wall-counter');
         if (currentCounter && nextCounter) currentCounter.textContent = nextCounter.textContent || '';
@@ -1920,6 +2134,7 @@ const addFootprintMarkers = async (map, footprintData) => {
             }
         });
         photoWallElement.dataset.photoPage = String(nextPage);
+        requestAnimationFrame(positionPhotoWall);
     };
 
     const handleArticleClick = (e) => {
@@ -2020,11 +2235,14 @@ const addFootprintMarkers = async (map, footprintData) => {
                     photoWallState = !isMobile && galleryImages.length ? {
                         images: galleryImages,
                         page: 0,
-                        pageSize: Math.max(1, Math.min(12, Number(window.FOOTPRINT_CONFIG?.photoWallPageSize) || 6)),
+                        pageSize: getPhotoWallPageSize(),
                         spec: footprint.spec
                     } : null;
 
-                    const zoomLevel = Number(footprint.spec.zoomLevel);
+                    const configuredZoomLevel = Number(footprint.spec.zoomLevel);
+                    const zoomLevel = Number.isFinite(configuredZoomLevel) && configuredZoomLevel >= 3
+                        ? Math.min(20, Math.max(3, configuredZoomLevel))
+                        : 12;
                     //时间线抽屉打开时设置中心点偏右
                     //
                     const position2 = new AMap.LngLat(longitude, latitude);
@@ -2136,6 +2354,9 @@ const addFootprintMarkers = async (map, footprintData) => {
     // 清理函数
     const cleanup = () => {
         closeCurrentMarker();
+        if (closeActiveFootprint === closeCurrentMarker) {
+            closeActiveFootprint = null;
+        }
         map.off('movestart');
         map.off('moveend');
         map.off('mapmove', positionPhotoWall);
@@ -2199,6 +2420,9 @@ const addFootprintMarkers = async (map, footprintData) => {
     }
 
     document.getElementById('zoom-restore').addEventListener('click', () => {
+        // 返回中国地图前关闭当前标记点的图片墙
+        closeCurrentMarker();
+
         //显示时间线按钮/缩放按钮/线路按钮
         const timelineBtn = document.getElementById('timeline-btn');
         const zoomButtons = document.getElementById('zoom-buttons');
