@@ -539,6 +539,60 @@ let isTimelineOpen = false;
 
 //是否打开仰角和旋转
 let isElevation = false;
+// 仰角和旋转还原动画进行中时，仍需阻止后续操作使用中间状态
+let isElevationRestoring = false;
+let elevationRestorePromise = null;
+
+const restoreMapOrientation = (map) => {
+    if (!isElevation && !isElevationRestoring) {
+        return Promise.resolve();
+    }
+    if (elevationRestorePromise) {
+        return elevationRestorePromise;
+    }
+
+    isElevationRestoring = true;
+    let resolveRestore;
+    const restorePromise = new Promise(resolve => {
+        resolveRestore = resolve;
+    });
+    elevationRestorePromise = restorePromise;
+
+    const startedAt = Date.now();
+    let checkTimer = null;
+    const finish = () => {
+        // animateEnable 会让 setPitch/setRotation 忽略 immediately 参数，
+        // 因此先临时关闭地图动画，确保最终值确实落在 0。
+        map.setStatus({animateEnable: false});
+        map.setPitch(0, true);
+        map.setRotation(0, true);
+        map.setStatus({animateEnable: true});
+        if (checkTimer) {
+            window.clearTimeout(checkTimer);
+        }
+        isElevationRestoring = false;
+        isElevation = false;
+        elevationRestorePromise = null;
+        resolveRestore();
+    };
+    const checkRestore = () => {
+        const pitch = Number(map.getPitch?.() ?? 0);
+        const rotation = Number(map.getRotation?.() ?? 0);
+        if (Math.abs(pitch) < 0.5 && Math.abs(rotation) < 0.5) {
+            finish();
+        } else if (Date.now() - startedAt >= 1500) {
+            // 动画超时仍未结束时，直接跳到目标值，避免地图停在中间状态。
+            finish();
+        } else {
+            checkTimer = window.setTimeout(checkRestore, 16);
+        }
+    };
+
+    map.setPitch(0);
+    map.setRotation(0);
+    checkRestore();
+    return restorePromise;
+};
 
 // 添加图片预加载和缓存
 const imageCache = new Map();
@@ -739,10 +793,7 @@ const populateTimeline = async (map) => {
             footprintMap.style.width = number + "px";
         }
         //还原仰角和旋转
-        if (isElevation) {
-            map.setPitch(0);
-            map.setRotation(0);
-        }
+        restoreMapOrientation(map);
         isTimelineOpen = true;
         timelineDrawer.classList.add('open');
         const mapControls = document.getElementById('map-controls');
@@ -788,12 +839,9 @@ const populateTimeline = async (map) => {
             // 时间线卡片悬停时先关闭地图上的图片墙，避免悬停缩放与图片墙定位同时进行。
             closeActiveFootprint?.();
             if (hoverGeneration !== timelineHoverGeneration || card._hoverCancelled) return;
-            //还原仰角和旋转
-            if (isElevation) {
-                map.setPitch(0);
-                map.setRotation(0);
-            }
-            isElevation = false;
+            // 悬停前等待仰角和旋转还原完成，避免使用中间姿态继续移动地图。
+            await restoreMapOrientation(map);
+            if (hoverGeneration !== timelineHoverGeneration || card._hoverCancelled) return;
             try {
                 isProcessing = true;
                 activeCard = card;
@@ -1924,10 +1972,8 @@ const addFootprintMarkers = async (map, footprintData) => {
         photoWallConnector = null;
         currentMarker = null;
         photoWallState = null;
-        if (isElevation) {
-            map.setPitch(0);
-            map.setRotation(0);
-            isElevation = false;
+        if (isElevation || isElevationRestoring) {
+            restoreMapOrientation(map);
         }
     };
     closeActiveFootprint = closeCurrentMarker;
@@ -2260,8 +2306,9 @@ const addFootprintMarkers = async (map, footprintData) => {
                         return;
                     }
 
-                    // 先关闭当前窗体
+                    // 先关闭当前窗体，并等待可能尚未完成的姿态还原。
                     closeCurrentMarker();
+                    await restoreMapOrientation(map);
 
                     const galleryImages = normalizeGalleryImages(footprint.spec.galleryImages);
                     photoWallState = !isMobile && galleryImages.length ? {
@@ -2451,9 +2498,10 @@ const addFootprintMarkers = async (map, footprintData) => {
         updateFullscreenButton();
     }
 
-    document.getElementById('zoom-restore').addEventListener('click', () => {
+    document.getElementById('zoom-restore').addEventListener('click', async () => {
         // 返回中国地图前关闭当前标记点的图片墙
         closeCurrentMarker();
+        await restoreMapOrientation(map);
 
         //显示时间线按钮/缩放按钮/线路按钮
         const timelineBtn = document.getElementById('timeline-btn');
@@ -2473,11 +2521,6 @@ const addFootprintMarkers = async (map, footprintData) => {
 
         // 关闭信息窗口
         infoWindow.close();
-        //还原仰角和旋转
-        if (isElevation) {
-            map.setPitch(0);
-            map.setRotation(0);
-        }
         currentMarker = null;
         const position = new AMap.LngLat(116.397428, 39.90923);
         moveToLocation(map, position, 4, 0);
