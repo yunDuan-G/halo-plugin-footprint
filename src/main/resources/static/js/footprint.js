@@ -57,12 +57,12 @@ const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 function computeStats(footprints) {
     var adcodeSet = new Set();
     var citySet = new Set();
-    var muniPx = ["11","12","31","50"];
-    var autoPx = ["15","45","54","64","65"];
-    var sarPx  = ["81","82"];
+    var muniPx = ["11", "12", "31", "50"];
+    var autoPx = ["15", "45", "54", "64", "65"];
+    var sarPx = ["81", "82"];
     var m = 0, a = 0, s = 0, p = 0;
 
-    footprints.forEach(function(fp) {
+    footprints.forEach(function (fp) {
         var adc = fp.spec.provinceAdcode;
         if (!adc) return;
         var px = adc.substring(0, 2);
@@ -81,10 +81,10 @@ function computeStats(footprints) {
         provinces: adcodeSet.size,
         cities: citySet.size,
         categories: [
-            { label: "直辖市", v: m, t: 4 },
-            { label: "自治区", v: a, t: 5 },
-            { label: "特区",   v: s, t: 2 },
-            { label: "省份",   v: p, t: 23 }
+            {label: "直辖市", v: m, t: 4},
+            {label: "自治区", v: a, t: 5},
+            {label: "特区", v: s, t: 2},
+            {label: "省份", v: p, t: 23}
         ]
     };
 }
@@ -103,11 +103,11 @@ function renderStats() {
 
     var detail = document.getElementById("stats-detail");
     detail.innerHTML = "";
-    stats.categories.forEach(function(cat) {
+    stats.categories.forEach(function (cat) {
         var row = document.createElement("div");
         row.className = "stats-cat" + (cat.v === 0 ? " is-zero" : "");
         row.innerHTML = "<span class=\"stats-cat-label\">" + cat.label + "</span>" +
-                        "<span class=\"stats-cat-value\">" + cat.v + "/" + cat.t + "</span>";
+                "<span class=\"stats-cat-value\">" + cat.v + "/" + cat.t + "</span>";
         detail.appendChild(row);
     });
 
@@ -147,7 +147,8 @@ const saveMarkerVisibilityPreference = (visible) => {
 const createFootprintMarkerController = (map) => {
     const markers = new Map();
     let visible = readMarkerVisibilityPreference();
-    let onVisibilityChange = () => {};
+    let onVisibilityChange = () => {
+    };
 
     const applyVisibility = (marker) => {
         if (visible) {
@@ -186,7 +187,8 @@ const createFootprintMarkerController = (map) => {
             return visible;
         },
         setOnVisibilityChange(callback) {
-            onVisibilityChange = typeof callback === 'function' ? callback : () => {};
+            onVisibilityChange = typeof callback === 'function' ? callback : () => {
+            };
         }
     };
 };
@@ -648,6 +650,10 @@ const populateTimeline = async (map) => {
             // 点击旅行故事时立即让当前卡片的异步悬停缩放失效，避免它在点击后再次把地图缩放到 6.5 级。
             timelineHoverGeneration += 1;
             timelineItem._hoverCancelled = true;
+            clearTimelineHoverZoom(map);
+            if (typeof map.stopAnimation === 'function') {
+                map.stopAnimation();
+            }
 
             // 清除抛物线动画
             if (timelineItem.currentAnimationId) {
@@ -767,7 +773,6 @@ const populateTimeline = async (map) => {
         // 移除滚动事件监听
         timelineContent.removeEventListener('scroll', handleScroll);
     });
-
 
 
     // 为每个卡片绑定鼠标悬停事件
@@ -979,6 +984,33 @@ let boundZoomStart, boundZoom, boundZoomEnd;
 //缩放事件绑定次数
 let frequency;
 
+// 移除悬停缩放的全部监听。悬停时会在 zoomend 中启动第二段缩放，
+// 如果点击旅行故事后仍保留这些监听，它们会把地图再次缩放回悬停级别。
+function clearTimelineHoverZoom(map) {
+    const bindings = [
+        ['zoomstart', boundZoomStart],
+        ['zoomchange', boundZoom],
+        ['zoomend', boundZoomEnd],
+        ['zoomstart', boundZoomStart3],
+        ['zoomchange', boundZoom3],
+        ['zoomend', boundZoomEnd3],
+    ];
+
+    bindings.forEach(([eventName, handler]) => {
+        if (handler) {
+            map.off(eventName, handler);
+        }
+    });
+
+    boundZoomStart = null;
+    boundZoom = null;
+    boundZoomEnd = null;
+    boundZoomStart3 = null;
+    boundZoom3 = null;
+    boundZoomEnd3 = null;
+    frequency = undefined;
+}
+
 
 //绑定事件 用于card的悬停
 function zoomOn(map, card, newPosition, zoom) {
@@ -998,9 +1030,9 @@ function zoomOff(map, card, newPosition, byOverlays) {
     // console.log("解除事件绑定!");
 
     // 使用存储的函数引用解绑
-    map.off('zoomstart', boundZoomStart);
-    map.off('zoomchange', boundZoom);
-    map.off('zoomend', boundZoomEnd);
+    if (boundZoomStart) map.off('zoomstart', boundZoomStart);
+    if (boundZoom) map.off('zoomchange', boundZoom);
+    if (boundZoomEnd) map.off('zoomend', boundZoomEnd);
     if (card) {
         //第二次 绑定地图 缩放事件
         zoomOn3(map, card, newPosition, byOverlays, 2);
@@ -1034,9 +1066,9 @@ function zoomOff2(map) {
     // console.log("解除事件绑定2!");
 
     // 使用存储的函数引用解绑
-    map.off('zoomstart', boundZoomStart2);
-    map.off('zoomchange', boundZoom2);
-    map.off('zoomend', boundZoomEnd2);
+    if (boundZoomStart2) map.off('zoomstart', boundZoomStart2);
+    if (boundZoom2) map.off('zoomchange', boundZoom2);
+    if (boundZoomEnd2) map.off('zoomend', boundZoomEnd2);
 }
 
 // 存储绑定的函数，方便解绑
@@ -1064,9 +1096,9 @@ function zoomOff3(map, card) {
     }
 
     // 使用存储的函数引用解绑
-    map.off('zoomstart', boundZoomStart3);
-    map.off('zoomchange', boundZoom3);
-    map.off('zoomend', boundZoomEnd3);
+    if (boundZoomStart3) map.off('zoomstart', boundZoomStart3);
+    if (boundZoom3) map.off('zoomchange', boundZoom3);
+    if (boundZoomEnd3) map.off('zoomend', boundZoomEnd3);
 }
 
 //地图开始缩放
@@ -1465,8 +1497,8 @@ const getPhotoWallImageUrl = (url, width = 500) => {
 
 const getPhotoWallStyle = () => {
     const configuredStyle = String(window.FOOTPRINT_CONFIG?.photoWallStyle || 'original')
-        .trim()
-        .toLowerCase();
+            .trim()
+            .toLowerCase();
     const legacyAliases = {
         a: 'gallery',
         b: 'filmstrip',
@@ -1733,12 +1765,12 @@ const handleScroll = debounce(() => {
     if (activeCard != null && activeCard.currentAnimationId) {
         cancelAnimationFrame(activeCard.currentAnimationId);
         activeCard.currentAnimationId = null;
-    // 清理标记点置顶和高亮
-    document.querySelectorAll('.amap-marker').forEach(marker => {
-        marker.classList.remove('zIndex13');
-        marker.classList.remove('zIndex14');
-        marker.classList.remove('marker-highlight');
-    });
+        // 清理标记点置顶和高亮
+        document.querySelectorAll('.amap-marker').forEach(marker => {
+            marker.classList.remove('zIndex13');
+            marker.classList.remove('zIndex14');
+            marker.classList.remove('marker-highlight');
+        });
     }
 
     // 清除画布
@@ -1987,13 +2019,13 @@ const addFootprintMarkers = async (map, footprintData) => {
             bottom: statsRect.bottom - layerTop
         } : null;
         const isInsideLayer = (candidate) => candidate.left >= margin
-            && candidate.top >= margin
-            && candidate.left + wallWidth <= markerPoint.width - margin
-            && candidate.top + wallHeight <= markerPoint.height - margin;
+                && candidate.top >= margin
+                && candidate.left + wallWidth <= markerPoint.width - margin
+                && candidate.top + wallHeight <= markerPoint.height - margin;
         const overlapsStats = (candidate) => statsBox && candidate.left < statsBox.right + margin
-            && candidate.left + wallWidth > statsBox.left - margin
-            && candidate.top < statsBox.bottom + margin
-            && candidate.top + wallHeight > statsBox.top - margin;
+                && candidate.left + wallWidth > statsBox.left - margin
+                && candidate.top < statsBox.bottom + margin
+                && candidate.top + wallHeight > statsBox.top - margin;
 
         // 默认固定在右上角；若与统计窗口冲突，则依次尝试统计窗口下方、左侧和右下角。
         const candidates = [
@@ -2003,7 +2035,7 @@ const addFootprintMarkers = async (map, footprintData) => {
             {left: markerPoint.width - wallWidth - margin, top: markerPoint.height - wallHeight - margin}
         ];
         const selectedPosition = candidates.find(candidate => isInsideLayer(candidate) && !overlapsStats(candidate))
-            || candidates[0];
+                || candidates[0];
         const left = Math.max(margin, Math.min(selectedPosition.left, markerPoint.width - wallWidth - margin));
         const top = Math.max(margin, Math.min(selectedPosition.top, markerPoint.height - wallHeight - margin));
         photoWallElement.style.left = `${left}px`;
@@ -2044,22 +2076,22 @@ const addFootprintMarkers = async (map, footprintData) => {
         photoWallElement.addEventListener('click', handlePhotoWallClick);
         photoWallElement.addEventListener('wheel', (event) => {
             const wheelTarget = event.target instanceof Element
-                ? event.target.closest('.photo-wall-filmstrip')
-                : null;
+                    ? event.target.closest('.photo-wall-filmstrip')
+                    : null;
             if (filmstrip instanceof HTMLElement && wheelTarget) {
                 const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
-                    ? event.deltaX
-                    : event.deltaY;
+                        ? event.deltaX
+                        : event.deltaY;
                 if (!delta) return;
                 event.preventDefault();
                 filmstrip.scrollBy({left: delta * 1.2, behavior: 'smooth'});
                 return;
             }
             const journalTarget = event.target instanceof Element
-                ? event.target.closest('.photo-wall-journal-grid')
-                : null;
+                    ? event.target.closest('.photo-wall-journal-grid')
+                    : null;
             if (journalGrid instanceof HTMLElement && journalTarget
-                && journalGrid.scrollHeight > journalGrid.clientHeight) {
+                    && journalGrid.scrollHeight > journalGrid.clientHeight) {
                 event.preventDefault();
                 journalGrid.scrollBy({top: event.deltaY, behavior: 'smooth'});
                 return;
@@ -2216,7 +2248,7 @@ const addFootprintMarkers = async (map, footprintData) => {
                     position: position,
                     content: markerContent,
                     anchor: 'bottom-center',
-                    offset: new AMap.Pixel(0, -5),
+                    offset: new AMap.Pixel(0, -15),
                     extData: footprint.spec // 存储额外数据
                 });
 
@@ -2241,8 +2273,8 @@ const addFootprintMarkers = async (map, footprintData) => {
 
                     const configuredZoomLevel = Number(footprint.spec.zoomLevel);
                     const zoomLevel = Number.isFinite(configuredZoomLevel) && configuredZoomLevel >= 3
-                        ? Math.min(20, Math.max(3, configuredZoomLevel))
-                        : 12;
+                            ? Math.min(20, Math.max(3, configuredZoomLevel))
+                            : 12;
                     //时间线抽屉打开时设置中心点偏右
                     //
                     const position2 = new AMap.LngLat(longitude, latitude);
@@ -2578,10 +2610,10 @@ const addVisitedCityLayer = (map, footprintData) => {
     }
 
     const visitedCitySet = new Set(
-        footprintData
-            .map(item => item?.spec?.cityAdcode)
-            .filter(Boolean)
-            .map(adcode => String(adcode))
+            footprintData
+                    .map(item => item?.spec?.cityAdcode)
+                    .filter(Boolean)
+                    .map(adcode => String(adcode))
     );
 
     if (visitedCitySet.size === 0) {
@@ -2610,15 +2642,15 @@ const addVisitedCityLayer = (map, footprintData) => {
                         'city-stroke': properties => {
                             const cityAdcode = properties?.adcode_cit;
                             return visitedCitySet.has(String(cityAdcode))
-                                ? getThemeRgba(0.92)
-                                : '';
+                                    ? getThemeRgba(0.92)
+                                    : '';
                         },
                         // 只填充已去过的城市，未去过的城市保持透明
                         fill: properties => {
                             const cityAdcode = properties?.adcode_cit;
                             return visitedCitySet.has(String(cityAdcode))
-                                ? getThemeRgba(0.28)
-                                : '';
+                                    ? getThemeRgba(0.28)
+                                    : '';
                         }
                     }
                 });
@@ -2706,12 +2738,12 @@ const initializeApp = async () => {
     try {
         // 使用独立楼块图层，避免自定义地图样式隐藏底图自带楼块
         const buildingLayer = new AMap.Buildings({
-                zIndex: 10,
+            zIndex: 10,
             zooms: [16.8, 24],
-                heightFactor: 1.2,
+            heightFactor: 1.2,
             // 雾蓝玻璃感楼块：楼顶略清晰，楼面更透明，接近浅色地图的视觉效果
-                wallColor: 'rgba(175,206,233,0.2)',
-                roofColor: 'rgba(175,206,233,0.5)'
+            wallColor: 'rgba(175,206,233,0.2)',
+            roofColor: 'rgba(175,206,233,0.5)'
         });
 
         // 创建地图实例
