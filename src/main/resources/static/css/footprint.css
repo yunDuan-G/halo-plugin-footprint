@@ -621,6 +621,23 @@
     -webkit-user-select: none;
     caret-color: transparent;
 }
+.photo-wall-window.photo-wall-closing {
+    transform-origin: top left;
+    pointer-events: none;
+    animation: photoWallClose 0.42s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+.photo-wall-window.photo-wall-zooming-out {
+    transform-origin: top left;
+    transition: transform 0.16s ease-out, opacity 0.16s ease-out;
+    transform: translateY(calc(var(--photo-wall-zoom-progress, 0) * 12px))
+        scale(var(--photo-wall-zoom-scale, 1))
+        rotate(calc(var(--photo-wall-zoom-progress, 0) * 1deg));
+    opacity: var(--photo-wall-zoom-opacity, 1);
+}
+.photo-wall-connector.photo-wall-closing {
+    opacity: 0;
+    transition: opacity 0.22s ease;
+}
 .photo-wall-window * {
     user-select: none;
     -webkit-user-select: none;
@@ -864,6 +881,15 @@
 @keyframes photoWallShow {
     0% { opacity: 0; transform: translateY(18px) scale(0.94) rotate(-1deg); }
     100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+}
+@keyframes photoWallClose {
+    0% {
+        opacity: var(--photo-wall-zoom-opacity, 1);
+        transform: translateY(calc(var(--photo-wall-zoom-progress, 0) * 12px))
+            scale(var(--photo-wall-zoom-scale, 1))
+            rotate(calc(var(--photo-wall-zoom-progress, 0) * 1deg));
+    }
+    100% { opacity: 0; transform: translateY(12px) scale(0.72) rotate(1deg); }
 }
 @keyframes photoWallCardIn {
     0% {

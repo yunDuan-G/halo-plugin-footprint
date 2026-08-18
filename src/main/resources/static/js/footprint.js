@@ -1853,6 +1853,17 @@ const addFootprintMarkers = async (map, footprintData) => {
     let photoWallElement = null;
     let photoWallConnector = null;
     let photoWallWheelUnlockTimer = null;
+    let photoWallCloseTimer = null;
+    let photoWallClosingElement = null;
+    const PHOTO_WALL_CLOSE_ZOOM = 10;
+    const PHOTO_WALL_CLOSE_ANIMATION_MS = 420;
+
+    const getFootprintZoomLevel = (spec) => {
+        const configuredZoomLevel = Number(spec?.zoomLevel);
+        return Number.isFinite(configuredZoomLevel) && configuredZoomLevel >= 3
+                ? Math.min(20, Math.max(3, configuredZoomLevel))
+                : 12;
+    };
 
     const closePhotoLightbox = () => {
         const lightbox = document.querySelector('.photo-lightbox');
@@ -1958,7 +1969,16 @@ const addFootprintMarkers = async (map, footprintData) => {
         document.addEventListener('keydown', handleKeydown);
     };
 
+    const cancelPhotoWallClose = () => {
+        if (photoWallCloseTimer) {
+            window.clearTimeout(photoWallCloseTimer);
+            photoWallCloseTimer = null;
+        }
+        photoWallClosingElement = null;
+    };
+
     const closeCurrentMarker = () => {
+        cancelPhotoWallClose();
         infoWindow.close();
         closePhotoLightbox();
         if (photoWallWheelUnlockTimer) {
@@ -1975,6 +1995,29 @@ const addFootprintMarkers = async (map, footprintData) => {
         if (isElevation || isElevationRestoring) {
             restoreMapOrientation(map);
         }
+    };
+
+    const closePhotoWallWithAnimation = () => {
+        if (!photoWallElement) {
+            closeCurrentMarker();
+            return;
+        }
+        if (photoWallClosingElement === photoWallElement) return;
+
+        const closingElement = photoWallElement;
+        const closingConnector = photoWallConnector;
+        photoWallClosingElement = closingElement;
+        closingElement.style.removeProperty('animation');
+        closingConnector?.style.removeProperty('opacity');
+        closingElement.classList.add('photo-wall-closing');
+        closingConnector?.classList.add('photo-wall-closing');
+        photoWallCloseTimer = window.setTimeout(() => {
+            photoWallCloseTimer = null;
+            photoWallClosingElement = null;
+            if (photoWallElement === closingElement) {
+                closeCurrentMarker();
+            }
+        }, PHOTO_WALL_CLOSE_ANIMATION_MS);
     };
     closeActiveFootprint = closeCurrentMarker;
 
@@ -2246,7 +2289,48 @@ const addFootprintMarkers = async (map, footprintData) => {
         if (bounds && position && !bounds.contains(position)) closeCurrentMarker();
     });
     map.on('mapmove', positionPhotoWall);
-    map.on('zoomchange', positionPhotoWall);
+    const handlePhotoWallZoomChange = () => {
+        positionPhotoWall();
+        if (!currentMarker || !photoWallElement) return;
+        if (photoWallClosingElement === photoWallElement) return;
+        const zoom = Number(map.getZoom());
+        // 缩小起点必须使用当前图片墙对应标记点的 zoomLevel。
+        const openZoom = getFootprintZoomLevel(photoWallState?.spec);
+        if (!Number.isFinite(zoom) || !Number.isFinite(openZoom)) return;
+
+        if (zoom >= openZoom) {
+            photoWallElement.classList.remove('photo-wall-zooming-out');
+            photoWallElement.style.removeProperty('transform');
+            photoWallElement.style.removeProperty('opacity');
+            photoWallElement.style.removeProperty('--photo-wall-zoom-progress');
+            photoWallElement.style.removeProperty('--photo-wall-zoom-scale');
+            photoWallElement.style.removeProperty('--photo-wall-zoom-opacity');
+            photoWallConnector?.style.removeProperty('opacity');
+            return;
+        }
+
+        const zoomRange = Math.max(0.5, openZoom - PHOTO_WALL_CLOSE_ZOOM);
+        const progress = Math.max(0, Math.min(1, (openZoom - zoom) / zoomRange));
+        const scale = 1 - progress * 0.28;
+        const opacity = 1 - progress * 0.12;
+        photoWallElement.classList.add('photo-wall-zooming-out');
+        // 停止入场动画，避免 animation 的最终帧覆盖缩放过程中的样式。
+        photoWallElement.style.animation = 'none';
+        photoWallElement.style.transform = `translateY(${(progress * 12).toFixed(2)}px) scale(${scale.toFixed(3)}) rotate(${(progress).toFixed(3)}deg)`;
+        photoWallElement.style.opacity = opacity.toFixed(3);
+        photoWallElement.style.setProperty('--photo-wall-zoom-progress', progress.toFixed(3));
+        photoWallElement.style.setProperty('--photo-wall-zoom-scale', scale.toFixed(3));
+        photoWallElement.style.setProperty('--photo-wall-zoom-opacity', opacity.toFixed(3));
+        if (photoWallConnector) {
+            photoWallConnector.style.opacity = opacity.toFixed(3);
+        }
+
+        if (zoom <= PHOTO_WALL_CLOSE_ZOOM) {
+            closePhotoWallWithAnimation();
+        }
+    };
+    map.on('zoomchange', handlePhotoWallZoomChange);
+    map.on('zoom', handlePhotoWallZoomChange);
 
     // 添加全局点击事件监听器
     map.on('click', handleMapClick);
@@ -2318,10 +2402,7 @@ const addFootprintMarkers = async (map, footprintData) => {
                         spec: footprint.spec
                     } : null;
 
-                    const configuredZoomLevel = Number(footprint.spec.zoomLevel);
-                    const zoomLevel = Number.isFinite(configuredZoomLevel) && configuredZoomLevel >= 3
-                            ? Math.min(20, Math.max(3, configuredZoomLevel))
-                            : 12;
+                    const zoomLevel = getFootprintZoomLevel(footprint.spec);
                     //时间线抽屉打开时设置中心点偏右
                     //
                     const position2 = new AMap.LngLat(longitude, latitude);
@@ -2439,7 +2520,9 @@ const addFootprintMarkers = async (map, footprintData) => {
         map.off('movestart');
         map.off('moveend');
         map.off('mapmove', positionPhotoWall);
-        map.off('zoomchange', positionPhotoWall);
+        map.off('zoomchange', handlePhotoWallZoomChange);
+        map.off('zoom', handlePhotoWallZoomChange);
+        cancelPhotoWallClose();
         map.off('click', handleMapClick);
 
         const infoWindowElement = document.querySelector('.info-window');
