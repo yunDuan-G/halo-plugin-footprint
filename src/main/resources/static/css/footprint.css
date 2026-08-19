@@ -607,6 +607,7 @@
 .photo-wall-window {
     --wall-ink: #26302d;
     --wall-muted: #75817b;
+    --wall-accent: #b36b4e;
     --wall-paper: rgba(248, 246, 239, 0.98);
     position: absolute;
     width: 620px;
@@ -627,11 +628,7 @@
     animation: photoWallClose 0.42s cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 .photo-wall-window.photo-wall-zooming-out {
-    transform-origin: top left;
-    transition: transform 0.16s ease-out, opacity 0.16s ease-out;
-    transform: translateY(calc(var(--photo-wall-zoom-progress, 0) * 12px))
-        scale(var(--photo-wall-zoom-scale, 1))
-        rotate(calc(var(--photo-wall-zoom-progress, 0) * 1deg));
+    transition: opacity 0.16s ease-out;
     opacity: var(--photo-wall-zoom-opacity, 1);
 }
 .photo-wall-connector.photo-wall-closing {
@@ -3496,14 +3493,6 @@
     pointer-events: none;
 }
 
-/* 移动端不展示桌面版图片墙和全屏入口 */
-@media (max-width: 768px) {
-    #photo-wall-layer,
-    #map-fullscreen {
-        display: none !important;
-    }
-}
-
 /* ===== 方案 A：地图侧边展开式画廊 ===== */
 .photo-wall-variant-a {
     width: min(620px, calc(100vw - 40px));
@@ -3885,3 +3874,52 @@
 .photo-wall-variant-d .photo-wall-card-inner { height: 100%; padding: 6px 6px 18px; }
 .photo-wall-variant-d .photo-wall-card img { height: 100%; }
 .photo-wall-variant-d .photo-wall-pin { top: -12px; }
+
+/* 图片墙响应式尺寸：桌面端小屏窗口缩小整体宽度和卡片 */
+@media screen and (min-width: 769px) and (max-width: 1200px) {
+    .photo-wall-window,
+    .photo-wall-variant-a,
+    .photo-wall-variant-b,
+    .photo-wall-variant-c,
+    .photo-wall-variant-d,
+    .photo-wall-host-a {
+        width: min(calc(100vw - 32px), 620px);
+    }
+
+    .photo-wall-window { height: clamp(360px, calc(100vh - 56px), 440px); }
+    .photo-wall-variant-a { height: clamp(420px, calc(100vh - 56px), 545px); }
+    .photo-wall-host-a { height: clamp(420px, calc(100vh - 56px), 545px); }
+    .photo-wall-variant-b { height: clamp(360px, calc(100vh - 56px), 455px); }
+    .photo-wall-variant-c {
+        height: min(var(--journal-wall-height, 480px), calc(100vh - 56px));
+    }
+    .photo-wall-variant-d { height: clamp(360px, calc(100vh - 56px), 480px); }
+
+    .photo-wall-card {
+        width: clamp(72px, 8vw, 96px);
+        height: clamp(88px, 10vw, 118px);
+    }
+
+    .photo-wall-variant-b .photo-wall-card {
+        flex-basis: clamp(64px, 7vw, 84px);
+        width: clamp(64px, 7vw, 84px);
+        height: clamp(46px, 5vw, 60px);
+    }
+
+    .photo-wall-variant-c .photo-wall-card {
+        height: clamp(96px, 10vw, 118px);
+    }
+
+    .photo-wall-variant-d .photo-wall-card {
+        width: clamp(74px, 8vw, 92px);
+        height: clamp(90px, 10vw, 110px);
+    }
+}
+
+/* 移动端不展示桌面版图片墙和全屏入口 */
+@media (max-width: 768px) {
+    #photo-wall-layer,
+    #map-fullscreen {
+        display: none !important;
+    }
+}

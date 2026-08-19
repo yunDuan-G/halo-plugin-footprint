@@ -1573,7 +1573,6 @@ const createPhotoWall = (spec, page = 0) => {
     let canvas = '';
     let kicker = 'MEMORY WALL';
     let counter = `${currentPage + 1} / ${totalPages}`;
-    let footer = `${images.length} 张图片 · 点击卡片放大`;
     let wallClass = '';
     let wallStyleAttribute = '';
 
@@ -1607,7 +1606,6 @@ const createPhotoWall = (spec, page = 0) => {
                 </button>
                 <div class="photo-wall-thumb-rail" aria-label="图片缩略图">${cards}</div>
             </div>`;
-        footer = `${images.length} 张图片 · 点击主图或缩略图放大`;
     } else if (style === 'filmstrip') {
         wallClass = ' photo-wall-variant-b';
         kicker = 'FILM STRIP';
@@ -1636,7 +1634,6 @@ const createPhotoWall = (spec, page = 0) => {
                 </button>
                 <div class="photo-wall-filmstrip" aria-label="胶片缩略图">${cards}</div>
             </div>`;
-        footer = `${images.length} 张图片 · 使用滚轮浏览胶片带`;
     } else if (style === 'journal') {
         wallClass = ' photo-wall-variant-c';
         kicker = 'TRAVEL JOURNAL';
@@ -1662,7 +1659,6 @@ const createPhotoWall = (spec, page = 0) => {
                 </button>`;
         }).join('');
         canvas = `<div class="photo-wall-canvas photo-wall-journal-grid">${cards}</div>`;
-        footer = `${images.length} 张图片 · 点击照片翻阅`;
     } else if (style === 'focus') {
         wallClass = ' photo-wall-variant-d';
         kicker = 'FOCUS FRAME';
@@ -1695,7 +1691,6 @@ const createPhotoWall = (spec, page = 0) => {
                 </button>
                 ${cards}
             </div>`;
-        footer = `${images.length} 张图片 · 主图聚焦展示`;
     } else {
         cards = pageImages.map((url, index) => {
             const layout = PHOTO_WALL_LAYOUTS[index % PHOTO_WALL_LAYOUTS.length];
@@ -1738,16 +1733,13 @@ const createPhotoWall = (spec, page = 0) => {
                 </div>
                 <div class="photo-wall-heading-meta">
                     <span class="photo-wall-counter">${counter}</span>
+                    ${style === 'filmstrip' ? '' : `<span class="photo-wall-navigation">
+                        <button type="button" class="photo-wall-nav" data-photo-action="previous" ${hasPrevious ? '' : 'disabled'} aria-label="上一页">←</button>
+                        <button type="button" class="photo-wall-nav" data-photo-action="next" ${hasNext ? '' : 'disabled'} aria-label="下一页">→</button>
+                    </span>`}
                 </div>
             </div>
             ${canvas}
-            <div class="photo-wall-footer">
-                <span>${footer}</span>
-                ${style === 'filmstrip' ? '' : `<span class="photo-wall-navigation">
-                    <button type="button" class="photo-wall-nav" data-photo-action="previous" ${hasPrevious ? '' : 'disabled'} aria-label="上一页">←</button>
-                    <button type="button" class="photo-wall-nav" data-photo-action="next" ${hasNext ? '' : 'disabled'} aria-label="下一页">→</button>
-                </span>`}
-            </div>
         </div>
     `;
 };
@@ -2301,6 +2293,7 @@ const addFootprintMarkers = async (map, footprintData) => {
         if (zoom >= openZoom) {
             photoWallElement.classList.remove('photo-wall-zooming-out');
             photoWallElement.style.removeProperty('transform');
+            photoWallElement.style.removeProperty('zoom');
             photoWallElement.style.removeProperty('opacity');
             photoWallElement.style.removeProperty('--photo-wall-zoom-progress');
             photoWallElement.style.removeProperty('--photo-wall-zoom-scale');
@@ -2316,7 +2309,9 @@ const addFootprintMarkers = async (map, footprintData) => {
         photoWallElement.classList.add('photo-wall-zooming-out');
         // 停止入场动画，避免 animation 的最终帧覆盖缩放过程中的样式。
         photoWallElement.style.animation = 'none';
-        photoWallElement.style.transform = `translateY(${(progress * 12).toFixed(2)}px) scale(${scale.toFixed(3)}) rotate(${(progress).toFixed(3)}deg)`;
+        // 使用布局级 zoom，避免 transform: scale() 将整张图片墙栅格化后再采样，导致文字和图片变糊。
+        photoWallElement.style.removeProperty('transform');
+        photoWallElement.style.zoom = scale.toFixed(3);
         photoWallElement.style.opacity = opacity.toFixed(3);
         photoWallElement.style.setProperty('--photo-wall-zoom-progress', progress.toFixed(3));
         photoWallElement.style.setProperty('--photo-wall-zoom-scale', scale.toFixed(3));
