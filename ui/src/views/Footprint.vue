@@ -145,6 +145,16 @@ const fetchStats = async () => {
 };
 fetchStats();
 
+const provinceCoverageRate = computed(() => {
+  if (!stats.value) return 0;
+  return Math.min(100, Math.round((stats.value.totalProvinces / 34) * 100));
+});
+
+const categoryProgressRate = (visited: number, total: number) => {
+  if (!total) return 0;
+  return Math.min(100, Math.round((visited / total) * 100));
+};
+
 const provinceCategoryStats = computed(() => {
   if (!stats.value) return null;
   const categoryDefs = [
@@ -250,6 +260,10 @@ const handleDeleteInBatch = async () => {
     },
   });
 };
+const handleOpenFrontend = () => {
+  window.open('/footprints', '_blank');
+};
+
 const handleOpenCreateModal = (footprint?: Footprint) => {
   selectedFootprint.value = footprint;
   editingModal.value = true;
@@ -337,6 +351,9 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
   <div>
     <VPageHeader title="足迹管理">
       <template #actions>
+        <VButton type="primary" @click="handleOpenFrontend">
+          前台地图
+        </VButton>
         <VButton type="secondary" @click="editingModal = true">
           <template #icon>
             <IconAddCircle />
@@ -346,144 +363,182 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
       </template>
     </VPageHeader>
     <div class="m-0 md:m-4">
-    <!-- 统计概览卡片 -->
-    <div v-if="stats" class="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <VCard
-        class="cursor-pointer hover:shadow-md transition-shadow"
-        @click="showStatsDetail = !showStatsDetail"
-      >
-        <div class="p-4 text-center">
-          <div class="text-3xl font-bold text-indigo-600">{{ stats.totalFootprints }}</div>
-          <div class="text-sm text-gray-500 mt-1">总足迹数</div>
+    <!-- 统计概览 -->
+    <VCard v-if="stats" class="mb-4 overflow-hidden">
+      <div class="p-5">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-gray-500">足迹概览</p>
+            <div class="mt-2 flex items-end gap-2">
+              <span class="text-3xl font-semibold text-gray-900">{{ stats.totalFootprints }}</span>
+              <span class="pb-1 text-sm text-gray-400">条足迹</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="inline-flex items-center rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm hover:bg-gray-50"
+            @click="showStatsDetail = !showStatsDetail"
+          >
+            {{ showStatsDetail ? '收起详情' : '查看详情' }}
+          </button>
         </div>
-      </VCard>
-      <VCard
-        class="cursor-pointer hover:shadow-md transition-shadow"
-        @click="showStatsDetail = !showStatsDetail"
-      >
-        <div class="p-4 text-center">
-          <div class="text-2xl font-bold text-indigo-600">{{ stats.totalProvinces }} / 34</div>
-          <div class="text-sm text-gray-500 mt-1">去过省级行政区</div>
-        </div>
-      </VCard>
-      <VCard
-        class="cursor-pointer hover:shadow-md transition-shadow"
-        @click="showStatsDetail = !showStatsDetail"
-      >
-        <div class="p-4 text-center">
-          <div class="text-3xl font-bold text-indigo-600">{{ stats.totalCities }}</div>
-          <div class="text-sm text-gray-500 mt-1">去过城市</div>
-        </div>
-      </VCard>
-    </div>
 
-    <!-- 省级行政区类别统计 -->
-    <div v-if="provinceCategoryStats" class="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <div
-        v-for="cat in provinceCategoryStats"
-        :key="cat.key"
-        class="rounded-lg border border-gray-200 bg-white p-3 text-center shadow-sm"
-      >
-        <div
-          class="text-lg font-semibold"
-          :class="cat.visited > 0 ? 'text-indigo-600' : 'text-gray-400'"
-        >
-          {{ cat.visited }} / {{ cat.total }}
+        <div class="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div class="rounded-lg border border-gray-100 bg-gray-50/70 p-4">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-500">省级行政区覆盖</span>
+              <span class="text-sm font-medium text-gray-900">{{ stats.totalProvinces }} / 34</span>
+            </div>
+            <div class="mt-3 overflow-hidden rounded-full" style="height: 8px; background-color: #e5e7eb;">
+              <div
+                class="rounded-full transition-all"
+                :style="{ width: provinceCoverageRate + '%', height: '100%', backgroundColor: '#6366f1' }"
+              ></div>
+            </div>
+            <div class="mt-2 text-xs text-gray-400">
+              {{ provinceCoverageRate }}%
+            </div>
+          </div>
+
+          <div class="rounded-lg border border-gray-100 bg-gray-50/70 p-4">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-500">已到访城市</span>
+              <span class="text-sm font-medium text-gray-900">{{ stats.totalCities }}</span>
+            </div>
+            <div class="mt-3 flex items-end gap-2">
+              <span class="text-2xl font-semibold text-gray-900">{{ stats.totalCities }}</span>
+              <span class="pb-1 text-xs text-gray-400">按城市编码去重统计</span>
+            </div>
+          </div>
         </div>
-        <div class="text-xs text-gray-500 mt-0.5">{{ cat.label }}</div>
+
+        <div v-if="provinceCategoryStats" class="mt-5 border-t border-gray-100 pt-4">
+          <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div v-for="cat in provinceCategoryStats" :key="cat.key">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-gray-500">{{ cat.label }}</span>
+                <span class="font-medium text-gray-900">{{ cat.visited }} / {{ cat.total }}</span>
+              </div>
+              <div class="mt-2 overflow-hidden rounded-full" style="height: 6px; background-color: #e5e7eb;">
+                <div
+                  class="rounded-full transition-all"
+                  :style="{ width: categoryProgressRate(cat.visited, cat.total) + '%', height: '100%', backgroundColor: '#6366f1' }"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+    </VCard>
+
     <!-- 统计详情 -->
     <Transition name="fade">
-      <VCard v-if="showStatsDetail && stats" class="mb-4">
-        <!-- Tab 切换 -->
-        <div class="flex border-b border-gray-200 px-4 pt-3">
-          <button
-            class="pb-2 px-3 text-sm font-medium border-b-2 transition-colors"
-            :class="activeDetailTab === 'province'
-              ? 'border-indigo-500 text-indigo-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'"
-            @click="activeDetailTab = 'province'"
-          >
-            省份详情 ({{ stats.provinces.length }})
-          </button>
-          <button
-            class="pb-2 px-3 text-sm font-medium border-b-2 transition-colors"
-            :class="activeDetailTab === 'city'
-              ? 'border-indigo-500 text-indigo-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'"
-            @click="activeDetailTab = 'city'"
-          >
-            城市详情 ({{ stats.cities.length }})
-          </button>
+      <VCard v-if="showStatsDetail && stats" class="mb-4 overflow-hidden">
+        <div class="flex flex-col gap-4 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-500">统计详情</p>
+            <p class="mt-1 text-xs text-gray-400">点击省份或城市可筛选下方足迹列表</p>
+          </div>
+          <div class="inline-flex rounded-lg bg-gray-100 p-1">
+            <button
+              type="button"
+              class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+              :class="activeDetailTab === 'province'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'"
+              @click="activeDetailTab = 'province'"
+            >
+              省份详情
+              <span class="ml-1 text-gray-400">{{ stats.provinces.length }}</span>
+            </button>
+            <button
+              type="button"
+              class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+              :class="activeDetailTab === 'city'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'"
+              @click="activeDetailTab = 'city'"
+            >
+              城市详情
+              <span class="ml-1 text-gray-400">{{ stats.cities.length }}</span>
+            </button>
+          </div>
         </div>
 
-        <!-- 省份列表 -->
-        <div v-show="activeDetailTab === 'province'">
-          <!-- 搜索 -->
-          <div class="px-4 pt-3">
-            <input
-              v-model="provinceSearchText"
-              type="text"
-              class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              placeholder="搜索省份..."
-            />
-          </div>
-          <div class="px-2 py-2 max-h-72 overflow-y-auto">
+        <div v-show="activeDetailTab === 'province'" class="p-5">
+          <input
+            v-model="provinceSearchText"
+            type="text"
+            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            placeholder="搜索省份..."
+          />
+          <div class="mt-4 grid gap-3 sm:grid-cols-2">
             <div
-              v-for="province in filteredProvinces"
+              v-for="(province, index) in filteredProvinces"
               :key="province.adcode"
-              class="flex items-center justify-between py-2 px-3 rounded cursor-pointer transition-colors"
+              class="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-100 px-3 py-2.5 transition-colors"
               :class="activeProvinceFilter === province.name
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'hover:bg-gray-50'"
+                ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                : 'hover:border-gray-200 hover:bg-gray-50'"
               @click="handleProvinceClick(province.name)"
             >
-              <div class="min-w-0 flex-1">
-                <span class="font-medium text-sm">{{ province.name }}</span>
-                <span v-if="province.cities && province.cities.length > 0" class="text-xs text-gray-400 ml-2">
-                  {{ province.cities.slice(0, 5).join('、') }}<template v-if="province.cities.length > 5">等</template>
-                </span>
+              <div
+                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium"
+                :class="activeProvinceFilter === province.name
+                  ? 'bg-indigo-500 text-white'
+                  : 'bg-gray-100 text-gray-500'"
+              >
+                {{ index + 1 }}
               </div>
-              <span class="text-sm font-medium shrink-0 ml-3"
-                :class="activeProvinceFilter === province.name ? 'text-indigo-600' : 'text-indigo-500'"
-              >{{ province.count }} 条</span>
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-sm font-medium">{{ province.name }}</div>
+                <div v-if="province.cities && province.cities.length > 0" class="mt-0.5 truncate text-xs text-gray-400">
+                  {{ province.cities.slice(0, 5).join('、') }}<template v-if="province.cities.length > 5">等</template>
+                </div>
+              </div>
+              <span class="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                {{ province.count }} 条
+              </span>
             </div>
-            <VEmpty v-if="filteredProvinces.length === 0" message="无匹配省份" />
           </div>
+          <VEmpty v-if="filteredProvinces.length === 0" message="无匹配省份" />
         </div>
 
-        <!-- 城市列表 -->
-        <div v-show="activeDetailTab === 'city'">
-          <!-- 搜索 -->
-          <div class="px-4 pt-3">
-            <input
-              v-model="citySearchText"
-              type="text"
-              class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              placeholder="搜索城市..."
-            />
-          </div>
-          <div class="px-2 py-2 max-h-72 overflow-y-auto">
+        <div v-show="activeDetailTab === 'city'" class="p-5">
+          <input
+            v-model="citySearchText"
+            type="text"
+            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            placeholder="搜索城市..."
+          />
+          <div class="mt-4 grid gap-3 sm:grid-cols-2">
             <div
-              v-for="city in filteredCities"
+              v-for="(city, index) in filteredCities"
               :key="city.adcode"
-              class="flex items-center justify-between py-2 px-3 rounded cursor-pointer transition-colors"
+              class="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-100 px-3 py-2.5 transition-colors"
               :class="activeCityFilter === city.name
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'hover:bg-gray-50'"
+                ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                : 'hover:border-gray-200 hover:bg-gray-50'"
               @click="handleCityClick(city.name)"
             >
-              <div class="min-w-0 flex-1">
-                <span class="font-medium text-sm">{{ city.name }}</span>
-                <span class="text-xs text-gray-400 ml-2">{{ city.province }}</span>
+              <div
+                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium"
+                :class="activeCityFilter === city.name
+                  ? 'bg-indigo-500 text-white'
+                  : 'bg-gray-100 text-gray-500'"
+              >
+                {{ index + 1 }}
               </div>
-              <span class="text-sm font-medium shrink-0 ml-3"
-                :class="activeCityFilter === city.name ? 'text-indigo-600' : 'text-indigo-500'"
-              >{{ city.count }} 条</span>
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-sm font-medium">{{ city.name }}</div>
+                <div class="mt-0.5 truncate text-xs text-gray-400">{{ city.province }}</div>
+              </div>
+              <span class="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                {{ city.count }} 条
+              </span>
             </div>
-            <VEmpty v-if="filteredCities.length === 0" message="无匹配城市" />
           </div>
+          <VEmpty v-if="filteredCities.length === 0" message="无匹配城市" />
         </div>
       </VCard>
     </Transition>
