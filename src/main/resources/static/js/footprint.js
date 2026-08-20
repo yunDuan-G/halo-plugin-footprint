@@ -771,7 +771,18 @@ const populateTimeline = async (map) => {
         // 创建日期元素
         const timelineDate = document.createElement('div');
         timelineDate.className = 'timeline-date';
-        timelineDate.textContent = formatDateToYMD(item.spec.createTime);
+        timelineDate.setAttribute('aria-label', formatDateToYMD(item.spec.createTime));
+        const dateParts = getTimelineDateParts(item.spec.createTime);
+        const dateYear = document.createElement('span');
+        dateYear.className = 'timeline-date-year';
+        dateYear.textContent = dateParts.year;
+        const dateMonthDay = document.createElement('span');
+        dateMonthDay.className = 'timeline-date-day';
+        dateMonthDay.textContent = dateParts.monthDay;
+        const dateWeekday = document.createElement('span');
+        dateWeekday.className = 'timeline-date-weekday';
+        dateWeekday.textContent = dateParts.weekday;
+        timelineDate.append(dateYear, dateMonthDay, dateWeekday);
         timelineItem.appendChild(timelineDate);
 
         // 创建内容卡片
@@ -810,7 +821,10 @@ const populateTimeline = async (map) => {
         iconSpan.innerHTML = SVG_ICONS.location;
         iconSpan.classList.add('location-icon'); // 添加 class
         locationDiv.appendChild(iconSpan);
-        locationDiv.appendChild(cardHeader);
+        const titleAnchor = document.createElement('div');
+        titleAnchor.className = 'timeline-title-anchor';
+        titleAnchor.appendChild(cardHeader);
+        locationDiv.appendChild(titleAnchor);
 
         mediaOverlay.appendChild(locationDiv);
 
@@ -1507,6 +1521,40 @@ function formatDateToYMD(dateString) {
         return `${y}-${m}-${d}`;
     } catch {
         return dateString;
+    }
+}
+
+// 时间线使用分层日期标记，统一按北京时间展示，避免浏览器时区造成日期跳变。
+function getTimelineDateParts(dateString) {
+    const fallback = {
+        year: '',
+        monthDay: formatDateToYMD(dateString).replace(/-/g, '.'),
+        weekday: ''
+    };
+
+    if (!dateString) return fallback;
+
+    try {
+        const date = new Date(dateString);
+        if (Number.isNaN(date.getTime())) return fallback;
+
+        const parts = new Intl.DateTimeFormat('zh-CN', {
+            timeZone: 'Asia/Shanghai',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            weekday: 'short'
+        }).formatToParts(date);
+        const valueOf = (type) => parts.find(part => part.type === type)?.value || '';
+
+        return {
+            year: valueOf('year'),
+            monthDay: `${valueOf('month')}.${valueOf('day')}`,
+            weekday: valueOf('weekday')
+        };
+    } catch (error) {
+        console.warn('时间线日期解析失败:', error);
+        return fallback;
     }
 }
 

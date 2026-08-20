@@ -4393,3 +4393,130 @@
         display: none !important;
     }
 }
+
+/* ===== 时间线交互细节：标题跃迁与分层日期 ===== */
+.timeline-drawer .timeline-date {
+    top: 33px;
+    left: 0;
+    width: 58px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    white-space: normal;
+}
+
+.timeline-drawer .timeline-date-year,
+.timeline-drawer .timeline-date-weekday {
+    display: block;
+    color: var(--timeline-muted);
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    line-height: 1;
+}
+
+.timeline-drawer .timeline-date-year {
+    color: var(--timeline-accent);
+}
+
+.timeline-drawer .timeline-date-day {
+    display: block;
+    color: var(--timeline-ink);
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.08em;
+    line-height: 0.95;
+}
+
+.timeline-drawer .timeline-date-weekday {
+    letter-spacing: 0.04em;
+}
+
+.timeline-drawer .timeline-location {
+    position: relative;
+    z-index: 4;
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    min-height: 22px;
+    overflow: visible;
+}
+
+.timeline-drawer .timeline-title-anchor {
+    position: relative;
+    z-index: 2;
+    min-width: 0;
+    transform-origin: left bottom;
+    transition: transform 0.52s cubic-bezier(0.16, 1, 0.3, 1),
+        opacity 0.24s ease;
+    will-change: transform;
+}
+
+.timeline-drawer .timeline-title-anchor .card-header {
+    max-width: 25ch;
+    margin: 0;
+    overflow: hidden;
+    color: inherit;
+    font: inherit;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.timeline-drawer .timeline-content-card:hover .timeline-title-anchor,
+.timeline-drawer .timeline-content-card:focus-within .timeline-title-anchor {
+    transform: translate(-26px, -72px) scale(1.28);
+}
+
+.timeline-drawer .timeline-content-card:hover .location-icon,
+.timeline-drawer .timeline-content-card:focus-within .location-icon {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.72);
+}
+
+.timeline-drawer .location-icon {
+    position: relative;
+    z-index: 3;
+    transition: opacity 0.24s ease, transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.timeline-drawer .timeline-info-overlay {
+    min-height: 84px;
+}
+
+@media (max-width: 768px) {
+    .timeline-drawer .timeline-date {
+        top: 32px;
+        width: 52px;
+    }
+
+    .timeline-drawer .timeline-date-day {
+        font-size: 18px;
+    }
+
+    .timeline-drawer .timeline-content-card:hover .timeline-title-anchor,
+    .timeline-drawer .timeline-content-card:focus-within .timeline-title-anchor {
+        transform: translate(-22px, -70px) scale(1.2);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .timeline-drawer .timeline-title-anchor,
+    .timeline-drawer .location-icon {
+        transition: none;
+    }
+
+    .timeline-drawer .timeline-content-card:hover .timeline-title-anchor,
+    .timeline-drawer .timeline-content-card:focus-within .timeline-title-anchor {
+        transform: none;
+    }
+
+    .timeline-drawer .timeline-content-card:hover .location-icon,
+    .timeline-drawer .timeline-content-card:focus-within .location-icon {
+        opacity: 1;
+        transform: none;
+    }
+}
