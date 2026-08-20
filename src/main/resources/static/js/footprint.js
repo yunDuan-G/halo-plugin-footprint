@@ -53,6 +53,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
+// 关系类型由后台按足迹类型配置。没有显式配置时保留旧版 metadataNames 行为，
+// 这样升级后已有的关联数据不会突然失效。
+function getFootprintRelationType(footprint) {
+    const type = footprint?.spec?.footprintType;
+    const configuredRelations = window.FOOTPRINT_CONFIG?.footprintTypeRelations || {};
+    const configuredType = configuredRelations[type];
+    if (configuredType === 'none' || configuredType === 'trip' || configuredType === 'collection') {
+        return configuredType;
+    }
+    return Array.isArray(footprint?.spec?.metadataNames) && footprint.spec.metadataNames.length > 0
+        ? 'legacy'
+        : 'none';
+}
+
+function getFootprintRelationNames(footprint) {
+    return getFootprintRelationType(footprint) === 'none'
+        ? []
+        : (Array.isArray(footprint?.spec?.metadataNames) ? footprint.spec.metadataNames : []);
+}
+
 // ===== 统计面板 =====
 function computeStats(footprints) {
     var adcodeSet = new Set();
@@ -224,17 +244,35 @@ const loadParabolaAnimation = (card, map) => {
         card.currentAnimationId = null;
     }
 
+    if (!card) return;
+
     const canvas = document.getElementById('canvas');
-    canvas.style.willChange = 'transform'; // 提示浏览器此元素会变化
+    if (!canvas) return;
+
     canvas.style.position = 'fixed'; // 使用fixed定位减少重排
     canvas.style.pointerEvents = 'none'; // 避免canvas拦截鼠标事件
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    // 设置画布大小为窗口大小
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    const accent = window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? '#d47668'
+        : '#b65b51';
 
-    if (!card) return;
+    // 使用设备像素比，避免 Retina 屏幕上的轨迹发糊。
+    const resizeCanvas = () => {
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(window.innerWidth * ratio);
+        canvas.height = Math.floor(window.innerHeight * ratio);
+        canvas.style.width = `${window.innerWidth}px`;
+        canvas.style.height = `${window.innerHeight}px`;
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    };
+
+    const clearCanvas = () => {
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    };
+
+    resizeCanvas();
 
     // 获取 card 的中心点
     const cardRect = card.getBoundingClientRect();
@@ -259,18 +297,25 @@ const loadParabolaAnimation = (card, map) => {
         return;
     }
 
+    // 获取地图容器位置。lngLatToContainer 返回的是地图容器坐标，
+    // Canvas 使用视口坐标，抽屉打开后两者不能直接混用。
+    const mapElement = map.getContainer?.() || document.getElementById('footprint-map');
+    const mapRect = mapElement?.getBoundingClientRect() || {left: 0, top: 0};
+
     // 获取所有相关的标记点
     const markerImages = [];
-    if (footprint.spec.metadataNames) {
+    const relationType = getFootprintRelationType(footprint);
+    const relationNames = getFootprintRelationNames(footprint);
+    if (relationNames.length > 0) {
         const name = footprint.metadata.name;
 
-        const metadataName = footprint.spec.metadataNames.includes(name);
+        const metadataName = relationNames.includes(name);
         // 如果没有当前的标记点，手动添加
         if (!metadataName) {
             markerImages.push(markerImage);
         }
         // 如果有 metadataNames，获取所有相关的标记点
-        footprint.spec.metadataNames.forEach(metadataName => {
+        relationNames.forEach(metadataName => {
             const relatedFootprint = window.FOOTPRINT_CONFIG.footprints.find(
                     f => f.metadata.name === metadataName
             );
@@ -303,24 +348,24 @@ const loadParabolaAnimation = (card, map) => {
 
     // 获取所有相关的标记点
     const mapCenter = [];
-    if (footprint.spec.metadataNames
-            && footprint.spec.metadataNames.length > 0 &&
-            !(footprint.spec.metadataNames.length === 1 && footprint.spec.metadataNames.includes(footprint.metadata.name))) {
+    if (relationNames.length > 0 &&
+            !(relationNames.length === 1 && relationNames.includes(footprint.metadata.name))) {
         const name = footprint.metadata.name;
 
-        const metadataName = footprint.spec.metadataNames.includes(name);
+        const metadataName = relationNames.includes(name);
         // 如果没有当前的标记点，手动添加
         if (!metadataName) {
             const pixel = map.lngLatToContainer([footprint.spec.longitude, footprint.spec.latitude]); // 相对于地图容器的坐标
             // 转换为屏幕XY坐标
             const mapCenterXY = {
                 mapCenterX: pixel.x,
-                mapCenterY: pixel.y
+                mapCenterY: pixel.y,
+                isPrimary: true
             }
             mapCenter.push(mapCenterXY)
         }
         // 如果有 metadataNames，获取所有相关的标记点
-        footprint.spec.metadataNames.forEach(metadataName => {
+        relationNames.forEach(metadataName => {
             const relatedFootprint = window.FOOTPRINT_CONFIG.footprints.find(
                     f => f.metadata.name === metadataName
             );
@@ -329,7 +374,8 @@ const loadParabolaAnimation = (card, map) => {
                 // 转换为屏幕XY坐标
                 const mapCenterXY = {
                     mapCenterX: pixel.x,
-                    mapCenterY: pixel.y
+                    mapCenterY: pixel.y,
+                    isPrimary: relatedFootprint.metadata.name === name
                 }
                 // 如果没有 metadataNames，只使用当前标记点
                 mapCenter.push(mapCenterXY)
@@ -340,58 +386,77 @@ const loadParabolaAnimation = (card, map) => {
         // 转换为屏幕XY坐标
         const mapCenterXY = {
             mapCenterX: pixel.x,
-            mapCenterY: pixel.y
+            mapCenterY: pixel.y,
+            isPrimary: true
         }
         // 如果没有 metadataNames，只使用当前标记点
         mapCenter.push(mapCenterXY)
     }
 
-    // 为每个标记点创建动画
-    const animations = mapCenter.map(center => {
-        // 起点和终点
-        const startPoint = {x: cardCenterX, y: cardCenterY};
-        const endPoint = {x: center.mapCenterX, y: center.mapCenterY - 36};
+    const startPoint = {x: cardCenterX, y: cardCenterY};
+    const markerPoints = mapCenter.map(center => ({
+        x: mapRect.left + center.mapCenterX,
+        y: mapRect.top + center.mapCenterY - 36,
+        isPrimary: center.isPrimary === true
+    }));
 
-        // 控制点，控制抛物线形状
+    // 关联足迹从当前卡片对应的标记点分支，不再经过抽象的中心点。
+    const primaryPoint = markerPoints.find(point => point.isPrimary) || markerPoints[0];
+    const relatedPoints = markerPoints.filter(point => point !== primaryPoint);
+
+    const createRouteSegment = (segmentStart, segmentEnd, options = {}) => {
+        const distance = Math.hypot(
+            segmentEnd.x - segmentStart.x,
+            segmentEnd.y - segmentStart.y
+        );
+        const arcHeight = Math.min(
+            options.arcMax ?? 96,
+            Math.max(options.arcMin ?? 40, distance * (options.arcRatio ?? 0.12))
+        );
         const controlPoint = {
-            x: (startPoint.x + endPoint.x) / 2,
-            y: Math.min(startPoint.y, endPoint.y) - 150
+            x: (segmentStart.x + segmentEnd.x) / 2 + (options.controlOffset ?? 0),
+            y: Math.min(segmentStart.y, segmentEnd.y) - arcHeight
         };
 
         return {
-            startPoint,
-            endPoint,
+            startPoint: segmentStart,
+            endPoint: segmentEnd,
             controlPoint,
             progress: 0,
-            startTime: null
+            startTime: null,
+            delay: options.delay ?? 0,
+            duration: options.duration ?? 900,
+            opacity: options.opacity ?? 1,
+            kind: options.kind ?? 'route',
+            routePoints: Array.from({length: 56}, (_, pointIndex) => {
+                return getQuadraticBezierPoint(
+                    pointIndex / 55,
+                    segmentStart,
+                    controlPoint,
+                    segmentEnd
+                );
+            })
         };
-    });
+    };
 
-    // 动画参数
-    const duration = 500; // 动画持续时间(ms)
+    // 关联足迹不绘制分支路线，只保留卡片到当前主标记点的引导线。
+    const animations = [createRouteSegment(startPoint, primaryPoint, {
+        kind: 'trunk',
+        duration: 760,
+        arcMin: 32,
+        arcMax: 72,
+        arcRatio: 0.1
+    })];
+
+    // 动画参数：路线显影、终点停留、定位波纹和淡出。
+    const relatedPulseDuration = 620;
+    const relatedPulseDelay = 95;
+    const holdDuration = relatedPoints.length > 0
+        ? Math.max(460, relatedPulseDuration + (relatedPoints.length - 1) * relatedPulseDelay)
+        : 460;
+    const fadeDuration = 520;
+    let allCompleteAt = null;
     let isAnimating = true;
-
-    // 绘制抛物线上的箭头
-    function drawArrow(x, y, angle) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(angle);
-
-        // 箭头形状
-        const arrowSize = 20; // 箭头大小
-        const arrowWidth = 10; // 箭头宽度
-
-        // 绘制实心三角形箭头
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(-arrowSize, -arrowWidth);
-        ctx.lineTo(-arrowSize, arrowWidth);
-        ctx.closePath();
-        ctx.fillStyle = '#000000';
-        ctx.fill();
-
-        ctx.restore();
-    }
 
     // 计算二次贝塞尔曲线上的点
     function getQuadraticBezierPoint(t, p0, p1, p2) {
@@ -400,24 +465,102 @@ const loadParabolaAnimation = (card, map) => {
         return {x, y};
     }
 
-    // 计算二次贝塞尔曲线的切线角度
-    function getQuadraticBezierAngle(t, p0, p1, p2) {
-        const dx = 2 * (1 - t) * (p1.x - p0.x) + 2 * t * (p2.x - p1.x);
-        const dy = 2 * (1 - t) * (p1.y - p0.y) + 2 * t * (p2.y - p1.y);
-        return Math.atan2(dy, dx);
+    const easeOutCubic = value => 1 - Math.pow(1 - value, 3);
+
+    // 绘制一个小型显影光点，不使用箭头，避免产生导航软件的视觉暗示。
+    function drawTravelPoint(point, alpha = 1) {
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.shadowColor = `${accent}66`;
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = accent;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#fffdfa';
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
     }
 
-    // 绘制虚线抛物线
-    function drawDashedCurve(startPoint, controlPoint, endPoint) {
+    // 终点定位波纹只出现一次，用来完成路线叙事。
+    function drawEndpointPulse(point, phase, alpha = 1) {
+        const radius = 7 + phase * 17;
+        ctx.save();
+        ctx.globalAlpha = alpha * (1 - phase) * 0.62;
+        ctx.fillStyle = accent;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(startPoint.x, startPoint.y);
-        ctx.quadraticCurveTo(controlPoint.x, controlPoint.y, endPoint.x, endPoint.y);
+        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
 
-        ctx.setLineDash([6, 4]); // 虚线模式: 5px实线，3px空白
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 2;
-        // ctx.stroke();
-        // ctx.setLineDash([]); // 重置为实线
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    // 关联点只做一次聚焦波纹，不建立路线关系。
+    function drawRelatedFocus(point, phase, alpha = 1) {
+        const radius = 6 + phase * 15;
+        ctx.save();
+        ctx.globalAlpha = alpha * (1 - phase) * 0.58;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.globalAlpha = alpha * 0.68;
+        ctx.fillStyle = accent;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // 底稿路线很淡，显影部分更清晰，整体像地图上的一笔手绘路径。
+    function drawRoute(animation, alpha = 1) {
+        const points = animation.routePoints;
+        const visibleCount = Math.max(1, Math.floor((points.length - 1) * animation.progress));
+
+        const drawPoints = count => {
+            ctx.beginPath();
+            for (let i = 0; i <= count; i++) {
+                const point = points[i];
+                if (i === 0) {
+                    ctx.moveTo(point.x, point.y);
+                } else {
+                    ctx.lineTo(point.x, point.y);
+                }
+            }
+        };
+
+        ctx.save();
+        ctx.globalAlpha = alpha * animation.opacity * 0.15;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 1;
+        ctx.lineCap = 'round';
+        drawPoints(points.length - 1);
+        ctx.stroke();
+        ctx.restore();
+
+        if (animation.progress <= 0) return;
+
+        ctx.save();
+        ctx.globalAlpha = alpha * animation.opacity;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 1.8;
+        ctx.lineCap = 'round';
+        drawPoints(visibleCount);
+        ctx.stroke();
+        ctx.restore();
     }
 
     // 动画循环
@@ -427,21 +570,26 @@ const loadParabolaAnimation = (card, map) => {
                 cancelAnimationFrame(card.currentAnimationId);
                 card.currentAnimationId = null;
             }
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            clearCanvas();
             return;
         }
 
         // 清除画布
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        clearCanvas();
+
+        const elapsedSinceComplete = allCompleteAt === null
+            ? 0
+            : timestamp - allCompleteAt;
+        const fadeAlpha = allCompleteAt === null || elapsedSinceComplete <= holdDuration
+            ? 1
+            : Math.max(0, 1 - (elapsedSinceComplete - holdDuration) / fadeDuration);
 
         // 更新每个动画的进度
         animations.forEach(animation => {
-            if (!animation.startTime) animation.startTime = timestamp;
-            const elapsed = timestamp - animation.startTime;
-            animation.progress = Math.min(elapsed / duration, 1);
-
-            // 绘制完整的虚线抛物线
-            drawDashedCurve(animation.startPoint, animation.controlPoint, animation.endPoint);
+            if (animation.startTime === null) animation.startTime = timestamp;
+            const elapsed = timestamp - animation.startTime - animation.delay;
+            const linearProgress = Math.max(0, Math.min(elapsed / animation.duration, 1));
+            animation.progress = easeOutCubic(linearProgress);
 
             // 计算当前动画点在曲线上的位置
             const currentPoint = getQuadraticBezierPoint(
@@ -451,47 +599,43 @@ const loadParabolaAnimation = (card, map) => {
                     animation.endPoint
             );
 
-            // 计算当前点的切线角度
-            const angle = getQuadraticBezierAngle(
-                    animation.progress,
-                    animation.startPoint,
-                    animation.controlPoint,
-                    animation.endPoint
-            );
-
-            // 绘制当前位置的箭头
-            drawArrow(currentPoint.x, currentPoint.y, angle);
-
-            // 绘制从起点到当前点的实线部分
-            ctx.beginPath();
-            ctx.moveTo(animation.startPoint.x, animation.startPoint.y);
-
-            // 为了绘制实线部分，我们需要细分曲线
-            const segments = 50;
-            for (let i = 0; i <= segments * animation.progress; i++) {
-                const t = i / segments;
-                const p = getQuadraticBezierPoint(t, animation.startPoint, animation.controlPoint, animation.endPoint);
-                if (i === 0) {
-                    ctx.moveTo(p.x, p.y);
-                } else {
-                    ctx.lineTo(p.x, p.y);
-                }
+            drawRoute(animation, fadeAlpha);
+            if (animation.progress > 0 && animation.progress < 1) {
+                drawTravelPoint(currentPoint, fadeAlpha * animation.opacity);
             }
 
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 2;
-            ctx.stroke();
+            if (animation.progress >= 1 && allCompleteAt !== null) {
+                const pulsePhase = Math.min(elapsedSinceComplete / (holdDuration + fadeDuration), 1);
+                drawEndpointPulse(animation.endPoint, pulsePhase, fadeAlpha * animation.opacity * 0.72);
+            }
         });
+
+        if (allCompleteAt !== null && relatedPoints.length > 0) {
+            relatedPoints.forEach((point, index) => {
+                const relatedElapsed = elapsedSinceComplete - index * relatedPulseDelay;
+                if (relatedElapsed < 0) return;
+                const pulsePhase = Math.min(relatedElapsed / relatedPulseDuration, 1);
+                drawRelatedFocus(point, pulsePhase, fadeAlpha);
+            });
+        }
 
         // 检查是否所有动画都完成
         const allComplete = animations.every(animation => animation.progress >= 1);
 
-        // 继续动画直到完成
-        if (!allComplete) {
+        // 所有路线显影完成后开始终点波纹和淡出。
+        if (allComplete && allCompleteAt === null) {
+            allCompleteAt = timestamp;
+        }
+
+        const fadeFinished = allCompleteAt !== null
+            && timestamp - allCompleteAt >= holdDuration + fadeDuration;
+
+        if (!allComplete || !fadeFinished) {
             card.currentAnimationId = requestAnimationFrame(animate);
         } else {
-            card.currentAnimationId = null; // 动画完成后清除 ID
-            isAnimating = false; // 标记动画结束
+            card.currentAnimationId = null;
+            isAnimating = false;
+            clearCanvas();
         }
     }
 
@@ -501,8 +645,8 @@ const loadParabolaAnimation = (card, map) => {
 
     // 响应窗口大小变化
     const resizeHandler = () => {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        resizeCanvas();
+        clearCanvas();
     };
     window.addEventListener('resize', resizeHandler);
 
@@ -517,7 +661,7 @@ const loadParabolaAnimation = (card, map) => {
             cancelAnimationFrame(card.currentAnimationId);
             card.currentAnimationId = null;
         }
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        clearCanvas();
         window.removeEventListener('resize', resizeHandler);
         card.removeEventListener('mouseleave', handleLeave);
         // 清除引用
@@ -856,7 +1000,7 @@ const populateTimeline = async (map) => {
                 });
 
 
-                const zoom = 6.5;
+                const hoverZoom = 6.5;
 
                 const cardHeader = card.querySelector('.card-header');
                 const cardHeaderContent = cardHeader.textContent;
@@ -874,7 +1018,8 @@ const populateTimeline = async (map) => {
                 const needsMovement = distance > 1000 || currentZoom < 13;
 
                 //获取关联标记点
-                const metadataNames = footprint.spec.metadataNames;
+                const relationType = getFootprintRelationType(footprint);
+                const metadataNames = getFootprintRelationNames(footprint);
                 //判断是否有 关联标记点
                 if (metadataNames && metadataNames.length > 0 &&
                         // 判断关联标记点是否为自身
@@ -904,16 +1049,20 @@ const populateTimeline = async (map) => {
                     const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [350, 120, 120, 120]);
                     // 提取坐标
                     const newPosition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
+                    const calculatedZoom = Number.parseFloat(byOverlays[0]);
+                    const targetZoom = Number.isFinite(calculatedZoom) ? calculatedZoom : hoverZoom;
+                    const centerDistance = newPosition.distance(map.getCenter());
+                    const zoomDistance = Math.abs(Number(map.getZoom()) - targetZoom);
 
                     //判断是否需要移动地图
                     if (!window.FOOTPRINT_CONFIG.enableHoverZoom) {
                         // 关闭悬停缩放：直接渲染抛物线
                         zoomOff(map);
                         loadParabolaAnimation(card, map);
-                    } else if (!byOverlays[0].toString().startsWith(currentZoom)) {
+                    } else if (centerDistance > 1000 || zoomDistance > 0.05) {
                         //第一次 绑定地图 缩放事件
-                        zoomOn(map, card, newPosition, zoom, 1);
-                        const sameZoom = await moveToLocation(map, newPosition, zoom, 0);
+                        zoomOn(map, card, newPosition, targetZoom);
+                        const sameZoom = await moveToLocation(map, newPosition, targetZoom, 0);
                         if (hoverGeneration !== timelineHoverGeneration || card._hoverCancelled) return;
                         if (sameZoom) {
                             // 同级缩放不会触发 zoomend，因此直接结束监听并启动抛物线
@@ -932,7 +1081,7 @@ const populateTimeline = async (map) => {
                         loadParabolaAnimation(card, map);
                     } else if (needsMovement) {
                         //第一次 绑定地图 缩放事件
-                        zoomOn(map, card, position2, zoom, 1);
+                        zoomOn(map, card, position2, hoverZoom, 1);
                         // 绑定次数
                         frequency = 1;
 
@@ -957,7 +1106,7 @@ const populateTimeline = async (map) => {
                         const newPosition2 = new AMap.LngLat(mergedOverlay[1].lng, mergedOverlay[1].lat);
 
                         //缩放到 多个标记点的 地图中心点 和 缩放级别
-                        const sameZoom = await moveToLocation(map, newPosition2, zoom, 5);
+                        const sameZoom = await moveToLocation(map, newPosition2, hoverZoom, 5);
                         if (hoverGeneration !== timelineHoverGeneration || card._hoverCancelled) return;
                         if (sameZoom) {
                             // 同级缩放不会触发 zoomend，因此直接结束监听并启动抛物线
