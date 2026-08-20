@@ -1012,27 +1012,21 @@ const populateTimeline = async (map) => {
                         parseFloat(footprint.spec.latitude)
                 );
 
-                const currentPos = map.getCenter();
-                const distance = position2.distance(currentPos);
-                const currentZoom = map.getZoom();
-                const needsMovement = distance > 1000 || currentZoom < 13;
-
                 //获取关联标记点
-                const relationType = getFootprintRelationType(footprint);
                 const metadataNames = getFootprintRelationNames(footprint);
                 //判断是否有 关联标记点
                 if (metadataNames && metadataNames.length > 0 &&
                         // 判断关联标记点是否为自身
                         !(metadataNames.length === 1 && metadataNames.includes(footprint.metadata.name))) {
+                    /*
+                    // 关联点整体缩放方案暂时保留，后续需要时可恢复。
                     const name = footprint.metadata.name;
-                    const metadataName = footprint.spec.metadataNames.includes(name);
-                    // 统计关联的标记点到集合
+                    const metadataName = metadataNames.includes(name);
                     const positions = metadataNames
                             .map(metadataName => window.FOOTPRINT_CONFIG.footprints.find(
                                     f => f.metadata.name === metadataName
                             ))
                             .filter(Boolean);
-                    // 把自身加入到 标记点集合中
                     if (!metadataName) {
                         positions.push(footprint);
                     }
@@ -1045,80 +1039,32 @@ const populateTimeline = async (map) => {
                             .filter(Boolean);
                     lastPositions = newOverlays;
 
-                    //获取多个标记点的 地图中心点 和 缩放级别
                     const byOverlays = map.getFitZoomAndCenterByOverlays(newOverlays, [350, 120, 120, 120]);
-                    // 提取坐标
                     const newPosition = new AMap.LngLat(byOverlays[1].lng, byOverlays[1].lat);
                     const calculatedZoom = Number.parseFloat(byOverlays[0]);
-                    const targetZoom = Number.isFinite(calculatedZoom) ? calculatedZoom : hoverZoom;
-                    const centerDistance = newPosition.distance(map.getCenter());
-                    const zoomDistance = Math.abs(Number(map.getZoom()) - targetZoom);
+                    const calculatedTargetZoom = Number.isFinite(calculatedZoom) ? calculatedZoom : hoverZoom;
+                    */
 
-                    //判断是否需要移动地图
-                    if (!window.FOOTPRINT_CONFIG.enableHoverZoom) {
-                        // 关闭悬停缩放：直接渲染抛物线
-                        zoomOff(map);
-                        loadParabolaAnimation(card, map);
-                    } else if (centerDistance > 1000 || zoomDistance > 0.05) {
-                        //第一次 绑定地图 缩放事件
-                        zoomOn(map, card, newPosition, targetZoom);
-                        const sameZoom = await moveToLocation(map, newPosition, targetZoom, 0);
+                    // 关联点只参与抛物线展示；悬停缩放固定到当前卡片对应的标记点。
+                    const targetPosition = position2;
+                    const targetZoom = hoverZoom;
+                    // 悬停缩放完成后再渲染抛物线，避免地图移动过程中计算出过期的标记点坐标。
+                    zoomOff(map);
+                    zoomOff3(map);
+                    if (window.FOOTPRINT_CONFIG.enableHoverZoom) {
+                        await moveToLocation(map, targetPosition, targetZoom, 0);
                         if (hoverGeneration !== timelineHoverGeneration || card._hoverCancelled) return;
-                        if (sameZoom) {
-                            // 同级缩放不会触发 zoomend，因此直接结束监听并启动抛物线
-                            zoomOff(map);
-                            zoomOff3(map);
-                            loadParabolaAnimation(card, map);
-                        }
-                    } else {
-                        loadParabolaAnimation(card, map);
-                        zoomOff(map);
                     }
+                    loadParabolaAnimation(card, map);
                 } else {
-                    if (!window.FOOTPRINT_CONFIG.enableHoverZoom) {
-                        // 关闭悬停缩放：直接渲染抛物线
-                        zoomOff(map);
-                        loadParabolaAnimation(card, map);
-                    } else if (needsMovement) {
-                        //第一次 绑定地图 缩放事件
-                        zoomOn(map, card, position2, hoverZoom, 1);
-                        // 绑定次数
-                        frequency = 1;
-
-                        // 获取悬停card的 Overlays
-                        const newOverlays2 = allOverlays.filter(
-                                f => f && f._position && f._position.lng === position2.getLng() && f._position.lat === position2.getLat()
-                        );
-
-                        // 获取上次悬停card的 Overlays
-                        /*const newOverlays3 = lastPositions
-                                .map(value => allOverlays.find(
-                                        f => f._position.lng === value.getLng() && f._position.lat === value.getLat()
-                                ))
-                                .filter(Boolean);*/
-                        /*const mergedOverlays = [...new Set([...newOverlays2, ...lastPositions])];
-
-                        lastPositions = newOverlays2;*/
-
-                        //获取多个标记点的 地图中心点 和 缩放级别
-                        const mergedOverlay = map.getFitZoomAndCenterByOverlays(newOverlays2, [350, 120, 120, 120]);
-                        // 提取坐标
-                        const newPosition2 = new AMap.LngLat(mergedOverlay[1].lng, mergedOverlay[1].lat);
-
-                        //缩放到 多个标记点的 地图中心点 和 缩放级别
-                        const sameZoom = await moveToLocation(map, newPosition2, hoverZoom, 5);
+                    // 无关联点时同样遵循启用悬停缩放的设置，缩放完成后再启动动画。
+                    zoomOff(map);
+                    zoomOff3(map);
+                    if (window.FOOTPRINT_CONFIG.enableHoverZoom) {
+                        await moveToLocation(map, position2, hoverZoom, 0);
                         if (hoverGeneration !== timelineHoverGeneration || card._hoverCancelled) return;
-                        if (sameZoom) {
-                            // 同级缩放不会触发 zoomend，因此直接结束监听并启动抛物线
-                            zoomOff(map);
-                            zoomOff3(map);
-                            loadParabolaAnimation(card, map);
-                        }
-                        // await moveToLocation(map, position2, zoom, 0);
-                    } else {
-                        loadParabolaAnimation(card, map);
-                        zoomOff(map);
                     }
+                    loadParabolaAnimation(card, map);
                 }
             } catch (error) {
                 console.error('处理卡片悬停时发生错误:', error);
