@@ -364,67 +364,93 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
     </VPageHeader>
     <div class="m-0 md:m-4">
     <!-- 统计概览 -->
-    <VCard v-if="stats" class="mb-4 overflow-hidden">
-      <div class="p-5">
-        <div class="flex items-start justify-between gap-4">
-          <div class="min-w-0">
-            <p class="text-sm font-medium text-gray-500">足迹概览</p>
-            <div class="mt-2 flex items-end gap-2">
-              <span class="text-3xl font-semibold text-gray-900">{{ stats.totalFootprints }}</span>
-              <span class="pb-1 text-sm text-gray-400">条足迹</span>
+    <VCard v-if="stats" class="mb-4 overflow-hidden border border-gray-200 shadow-sm">
+      <div class="grid grid-cols-1 md:grid-cols-3">
+        <section class="relative bg-slate-50/80 p-5 sm:p-6 md:border-r md:border-gray-200">
+          <div class="absolute inset-y-0 left-0 w-1 bg-indigo-500"></div>
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">Footprint index</p>
+              <h2 class="mt-2 text-lg font-semibold tracking-tight text-gray-900">足迹总览</h2>
             </div>
+            <button
+              type="button"
+              class="inline-flex min-h-9 items-center rounded-md border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 active:translate-y-px"
+              :aria-expanded="showStatsDetail"
+              aria-controls="footprint-stats-detail"
+              @click="showStatsDetail = !showStatsDetail"
+            >
+              {{ showStatsDetail ? '收起详情' : '查看详情' }}
+            </button>
           </div>
-          <button
-            type="button"
-            class="inline-flex items-center rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm hover:bg-gray-50"
-            @click="showStatsDetail = !showStatsDetail"
-          >
-            {{ showStatsDetail ? '收起详情' : '查看详情' }}
-          </button>
-        </div>
+          <div class="mt-8 flex items-end gap-3">
+            <span class="tabular-nums text-5xl font-semibold leading-none tracking-[-0.06em] text-gray-950 sm:text-6xl">{{ stats.totalFootprints }}</span>
+            <span class="pb-1 text-sm text-gray-500">条足迹记录</span>
+          </div>
+          <div class="mt-5 flex items-center gap-2 text-xs text-gray-500">
+            <span class="h-2 w-2 rounded-full bg-indigo-500"></span>
+            <span>覆盖 {{ stats.totalProvinces }} 个省级行政区 · {{ stats.totalCities }} 个城市</span>
+          </div>
+        </section>
 
-        <div class="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <div class="rounded-lg border border-gray-100 bg-gray-50/70 p-4">
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-500">省级行政区覆盖</span>
-              <span class="text-sm font-medium text-gray-900">{{ stats.totalProvinces }} / 34</span>
+        <section class="border-t border-gray-200 p-5 sm:p-6 md:border-t-0 md:border-r">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-sm font-medium text-gray-500">省份覆盖</p>
+              <p class="mt-1 text-xs text-gray-400">全国省级行政区</p>
             </div>
-            <div class="mt-3 overflow-hidden rounded-full" style="height: 8px; background-color: #e5e7eb;">
+            <span class="tabular-nums text-sm font-semibold text-gray-900">{{ stats.totalProvinces }} / 34</span>
+          </div>
+          <div class="mt-8 flex items-baseline gap-2">
+            <span class="tabular-nums text-3xl font-semibold tracking-tight text-gray-950">{{ provinceCoverageRate }}%</span>
+            <span class="text-xs text-gray-400">覆盖率</span>
+          </div>
+          <div class="mt-4 h-2 overflow-hidden rounded-full bg-gray-100" role="progressbar" :aria-valuenow="provinceCoverageRate" aria-valuemin="0" aria-valuemax="100" aria-label="省份覆盖率">
+            <div
+              class="h-full rounded-full bg-indigo-500 transition-all duration-300"
+              :style="{ width: provinceCoverageRate + '%' }"
+            ></div>
+          </div>
+        </section>
+
+        <section class="border-t border-gray-200 p-5 sm:p-6 md:border-t-0">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-sm font-medium text-gray-500">已到访城市</p>
+              <p class="mt-1 text-xs text-gray-400">按城市编码去重</p>
+            </div>
+            <span class="text-xs font-medium text-indigo-600">城市</span>
+          </div>
+          <div class="mt-8 flex items-baseline gap-2">
+            <span class="tabular-nums text-3xl font-semibold tracking-tight text-gray-950">{{ stats.totalCities }}</span>
+            <span class="text-xs text-gray-400">个</span>
+          </div>
+          <div class="mt-4 flex items-center gap-2 text-xs text-gray-500">
+            <span class="h-2 w-2 rounded-full bg-indigo-500"></span>
+            <span>每一次记录都将城市版图向外延伸</span>
+          </div>
+        </section>
+      </div>
+
+      <div v-if="provinceCategoryStats" class="border-t border-gray-200 px-5 py-5 sm:px-6">
+        <div class="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <p class="text-sm font-medium text-gray-700">行政区类型</p>
+            <p class="mt-1 text-xs text-gray-400">按省级行政区类别统计</p>
+          </div>
+          <span class="text-xs text-gray-400">已覆盖 / 总数</span>
+        </div>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+          <div v-for="cat in provinceCategoryStats" :key="cat.key" class="min-w-0">
+            <div class="flex items-center justify-between gap-3 text-xs">
+              <span class="truncate text-gray-500">{{ cat.label }}</span>
+              <span class="tabular-nums shrink-0 font-medium text-gray-900">{{ cat.visited }} / {{ cat.total }}</span>
+            </div>
+            <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100" role="progressbar" :aria-valuenow="categoryProgressRate(cat.visited, cat.total)" aria-valuemin="0" aria-valuemax="100" :aria-label="cat.label + '覆盖率'">
               <div
-                class="rounded-full transition-all"
-                :style="{ width: provinceCoverageRate + '%', height: '100%', backgroundColor: '#6366f1' }"
+                class="h-full rounded-full bg-indigo-500 transition-all duration-300"
+                :style="{ width: categoryProgressRate(cat.visited, cat.total) + '%' }"
               ></div>
-            </div>
-            <div class="mt-2 text-xs text-gray-400">
-              {{ provinceCoverageRate }}%
-            </div>
-          </div>
-
-          <div class="rounded-lg border border-gray-100 bg-gray-50/70 p-4">
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-500">已到访城市</span>
-              <span class="text-sm font-medium text-gray-900">{{ stats.totalCities }}</span>
-            </div>
-            <div class="mt-3 flex items-end gap-2">
-              <span class="text-2xl font-semibold text-gray-900">{{ stats.totalCities }}</span>
-              <span class="pb-1 text-xs text-gray-400">按城市编码去重统计</span>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="provinceCategoryStats" class="mt-5 border-t border-gray-100 pt-4">
-          <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div v-for="cat in provinceCategoryStats" :key="cat.key">
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-gray-500">{{ cat.label }}</span>
-                <span class="font-medium text-gray-900">{{ cat.visited }} / {{ cat.total }}</span>
-              </div>
-              <div class="mt-2 overflow-hidden rounded-full" style="height: 6px; background-color: #e5e7eb;">
-                <div
-                  class="rounded-full transition-all"
-                  :style="{ width: categoryProgressRate(cat.visited, cat.total) + '%', height: '100%', backgroundColor: '#6366f1' }"
-                ></div>
-              </div>
             </div>
           </div>
         </div>
@@ -433,7 +459,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
 
     <!-- 统计详情 -->
     <Transition name="fade">
-      <VCard v-if="showStatsDetail && stats" class="mb-4 overflow-hidden">
+    <VCard v-if="showStatsDetail && stats" id="footprint-stats-detail" class="mb-4 overflow-hidden">
         <div class="flex flex-col gap-4 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p class="text-sm font-medium text-gray-500">统计详情</p>
