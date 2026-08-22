@@ -57,7 +57,6 @@ tasks.register('prepareProductionTemplate') {
             throw new GradleException('生产模板文件不存在，请先确认 processResources 已完成')
         }
 
-        // 删除本地预览使用的相对路径 CSS 和 JS
         def html = htmlFile.getText('UTF-8')
             .replace(
                 '<link rel="stylesheet" href="../static/css/footprint.css" type="text/css">',
@@ -67,9 +66,6 @@ tasks.register('prepareProductionTemplate') {
                 '<script type="text/javascript" src="../static/js/footprint.js"></script>',
                 ''
             )
-
-        // 使用后台配置的高德 Key，移除本地测试 Key
-        html = html
             .replace(
                 '<!--    <script type="text/javascript" th:src="|https://webapi.amap.com/maps?v=2.0&key=${settings.gaoDeKey}|"></script>-->',
                 '<script type="text/javascript" th:src="|https://webapi.amap.com/maps?v=2.0&key=${settings.gaoDeKey}|"></script>'
@@ -79,14 +75,12 @@ tasks.register('prepareProductionTemplate') {
                 ''
             )
 
-        // 删除 footprints 的本地示例数组，保留 Thymeleaf 数据注入表达式
         def footprintsMarker = 'footprints: /*[[${footprints}]]*/ '
         def footprintsStart = html.indexOf(footprintsMarker)
         if (footprintsStart >= 0) {
             def arrayStart = footprintsStart + footprintsMarker.length()
             def titleStart = html.indexOf('title:', arrayStart)
             def arrayEnd = titleStart >= 0 ? html.lastIndexOf(']', titleStart) : -1
-
             if (arrayEnd >= arrayStart) {
                 html = html.substring(0, arrayStart) + '[]' + html.substring(arrayEnd + 1)
             } else {
@@ -98,18 +92,15 @@ tasks.register('prepareProductionTemplate') {
 
         htmlFile.setText(html, 'UTF-8')
 
-        // 启用正式页面路径判断，避免脚本在其他页面初始化地图
         def js = jsFile.getText('UTF-8')
         def productionPathGuard = """if (currentPath !== '/footprints') {
         console.log('非足迹页面，不加载地图功能');
         return;
     }"""
         def pathGuardPattern = /(?s)\/\*if \(currentPath !== '\/footprints'\) \{\s*console\.log\('非足迹页面，不加载地图功能'\);\s*return;\s*\}\*\//
-
         if (js =~ pathGuardPattern) {
             js = js.replaceFirst(pathGuardPattern, productionPathGuard)
         }
-
         jsFile.setText(js, 'UTF-8')
     }
 }
@@ -123,6 +114,8 @@ build {
 
 halo {
     version = '2.25.4'
+    superAdminUsername = 'yunduan'
+    superAdminPassword = '123456'
     debug = true
 }
 

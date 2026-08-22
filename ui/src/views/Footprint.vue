@@ -512,7 +512,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
             class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             placeholder="搜索省份..."
           />
-          <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div class="stats-detail-grid mt-4 gap-3">
             <div
               v-for="(province, index) in filteredProvinces"
               :key="province.adcode"
@@ -551,7 +551,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
             class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             placeholder="搜索城市..."
           />
-          <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div class="stats-detail-grid mt-4 gap-3">
             <div
               v-for="(city, index) in filteredCities"
               :key="city.adcode"
@@ -831,6 +831,18 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
 
 .stats-overview-metric {
   font-size: 1.875rem;
+}
+
+.stats-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (max-width: 639px) {
+  .stats-detail-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (min-width: 640px) {
