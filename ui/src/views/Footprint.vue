@@ -405,10 +405,17 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
             <span class="tabular-nums text-3xl font-semibold tracking-tight text-gray-950">{{ provinceCoverageRate }}%</span>
             <span class="text-xs text-gray-400">覆盖率</span>
           </div>
-          <div class="mt-4 h-2 overflow-hidden rounded-full bg-gray-100" role="progressbar" :aria-valuenow="provinceCoverageRate" aria-valuemin="0" aria-valuemax="100" aria-label="省份覆盖率">
+          <div
+            class="stats-progress mt-4"
+            role="progressbar"
+            :aria-valuenow="provinceCoverageRate"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-label="省份覆盖率"
+          >
             <div
-              class="h-full rounded-full bg-indigo-500 transition-all duration-300"
-              :style="{ width: provinceCoverageRate + '%' }"
+              class="stats-progress__bar"
+              :style="{ '--progress-value': provinceCoverageRate + '%' }"
             ></div>
           </div>
         </section>
@@ -446,10 +453,17 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
               <span class="truncate text-gray-500">{{ cat.label }}</span>
               <span class="tabular-nums shrink-0 font-medium text-gray-900">{{ cat.visited }} / {{ cat.total }}</span>
             </div>
-            <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100" role="progressbar" :aria-valuenow="categoryProgressRate(cat.visited, cat.total)" aria-valuemin="0" aria-valuemax="100" :aria-label="cat.label + '覆盖率'">
+            <div
+              class="stats-progress stats-progress--compact mt-2"
+              role="progressbar"
+              :aria-valuenow="categoryProgressRate(cat.visited, cat.total)"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              :aria-label="cat.label + '覆盖率'"
+            >
               <div
-                class="h-full rounded-full bg-indigo-500 transition-all duration-300"
-                :style="{ width: categoryProgressRate(cat.visited, cat.total) + '%' }"
+                class="stats-progress__bar"
+                :style="{ '--progress-value': categoryProgressRate(cat.visited, cat.total) + '%' }"
               ></div>
             </div>
           </div>
@@ -790,5 +804,30 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
 }
 .table-td {
   white-space: nowrap;
+}
+
+.stats-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background-color: #f3f4f6;
+}
+
+.stats-progress--compact {
+  height: 6px;
+}
+
+.stats-progress__bar {
+  width: var(--progress-value, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background-color: #6366f1;
+  transition: width 300ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stats-progress__bar {
+    transition: none;
+  }
 }
 </style>

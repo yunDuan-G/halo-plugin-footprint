@@ -122,9 +122,8 @@ build {
 }
 
 halo {
-    version = '2.24'
+    version = '2.25.4'
     debug = true
-    suspend = true
 }
 
 tasks.named('jar') {
