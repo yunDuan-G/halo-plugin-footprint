@@ -44,67 +44,6 @@ tasks.register('installDepsForUI', PnpmTask) {
     args = ['install']
 }
 
-// 将本地预览模板转换为 Halo 生产环境模板。
-// 只处理 build/resources/main 中的资源副本，不修改 src/main/resources 下的源码。
-tasks.register('prepareProductionTemplate') {
-    dependsOn('processResources')
-
-    doLast {
-        def htmlFile = file("$buildDir/resources/main/templates/footprint.html")
-        def jsFile = file("$buildDir/resources/main/static/js/footprint.js")
-
-        if (!htmlFile.exists() || !jsFile.exists()) {
-            throw new GradleException('生产模板文件不存在，请先确认 processResources 已完成')
-        }
-
-        def html = htmlFile.getText('UTF-8')
-            .replace(
-                '<link rel="stylesheet" href="../static/css/footprint.css" type="text/css">',
-                ''
-            )
-            .replace(
-                '<script type="text/javascript" src="../static/js/footprint.js"></script>',
-                ''
-            )
-            .replace(
-                '<!--    <script type="text/javascript" th:src="|https://webapi.amap.com/maps?v=2.0&key=${settings.gaoDeKey}|"></script>-->',
-                '<script type="text/javascript" th:src="|https://webapi.amap.com/maps?v=2.0&key=${settings.gaoDeKey}|"></script>'
-            )
-            .replace(
-                '<script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=9618e4f2ebbbcbac8cdae50c795901d1"></script>',
-                ''
-            )
-
-        def footprintsMarker = 'footprints: /*[[${footprints}]]*/ '
-        def footprintsStart = html.indexOf(footprintsMarker)
-        if (footprintsStart >= 0) {
-            def arrayStart = footprintsStart + footprintsMarker.length()
-            def titleStart = html.indexOf('title:', arrayStart)
-            def arrayEnd = titleStart >= 0 ? html.lastIndexOf(']', titleStart) : -1
-            if (arrayEnd >= arrayStart) {
-                html = html.substring(0, arrayStart) + '[]' + html.substring(arrayEnd + 1)
-            } else {
-                throw new GradleException('无法定位 footprints 本地示例数据的结束位置')
-            }
-        } else {
-            throw new GradleException('未找到 footprints 数据注入表达式')
-        }
-
-        htmlFile.setText(html, 'UTF-8')
-
-        def js = jsFile.getText('UTF-8')
-        def productionPathGuard = """if (currentPath !== '/footprints') {
-        console.log('非足迹页面，不加载地图功能');
-        return;
-    }"""
-        def pathGuardPattern = /(?s)\/\*if \(currentPath !== '\/footprints'\) \{\s*console\.log\('非足迹页面，不加载地图功能'\);\s*return;\s*\}\*\//
-        if (js =~ pathGuardPattern) {
-            js = js.replaceFirst(pathGuardPattern, productionPathGuard)
-        }
-        jsFile.setText(js, 'UTF-8')
-    }
-}
-
 build {
     // build frontend before build
     tasks.named('compileJava').configure {
@@ -119,6 +58,3 @@ halo {
     debug = true
 }
 
-tasks.named('jar') {
-    dependsOn('prepareProductionTemplate')
-}
