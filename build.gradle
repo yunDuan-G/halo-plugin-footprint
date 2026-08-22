@@ -1,12 +1,12 @@
 plugins {
     id 'java'
     id "com.github.node-gradle.node" version "7.0.2"
-    id "io.freefair.lombok" version "8.10"
-    id "run.halo.plugin.devtools" version "0.6.0"
+    id "io.freefair.lombok" version "8.0.1"
+    id "run.halo.plugin.devtools" version "0.2.0"
 }
 
 group 'cc.lik.footprint'
-sourceCompatibility = JavaVersion.VERSION_21
+sourceCompatibility = JavaVersion.VERSION_17
 
 repositories {
     mavenCentral()
@@ -16,7 +16,7 @@ repositories {
 }
 
 dependencies {
-    implementation platform('run.halo.tools.platform:plugin:2.25.0')
+    implementation platform('run.halo.tools.platform:plugin:2.20.11')
     compileOnly 'run.halo.app:api'
 
     testImplementation 'run.halo.app:api'
@@ -123,8 +123,6 @@ build {
 
 halo {
     version = '2.25.4'
-    superAdminUsername = 'yunduan'
-    superAdminPassword = '123456'
     debug = true
 }
 
