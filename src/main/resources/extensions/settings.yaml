@@ -7,55 +7,6 @@ spec:
     - group: base
       label: 基本设置
       formSchema:
-#         - $el: a
-#           attrs:
-#             href: "https://www.lik.cc/docs/halo-plugins"
-#             class: "py-4 block"
-#             target: "_blank"
-#             style:
-#               color: "#1890ff"
-#               fontSize: "0.875em"
-#               display: "flex"
-#               align-items: "center"
-#           children:
-#             - $el: span
-#               children: "查看 足迹 帮助文档"
-#             - $el: img
-#               attrs:
-#                 src: "/plugins/footprint/assets/static/img/link.svg"
-#                 width: "14px"
-#                 height: "14px"
-#                 style:
-#                   margin-left: "4px"
-#         - $el: a
-#           attrs:
-#             href: "https://www.lik.cc/archives/microimmersion"
-#             class: "py-4 block"
-#             target: "_blank"
-#             style:
-#               color: "#1890ff"
-#               fontSize: "0.875em"
-#               display: "flex"
-#               align-items: "center"
-#           children:
-#             - $el: span
-#               children: "推荐halo主题"
-#             - $el: img
-#               attrs:
-#                 src: "/plugins/footprint/assets/static/img/link.svg"
-#                 width: "14px"
-#                 height: "14px"
-#                 style:
-#                   margin-left: "4px"
-#         - $el: span
-#           children: "加入交流群"
-#         - $el: img
-#           attrs:
-#             src: "https://www.lik.cc/upload/iShot_2025-03-03_16.03.00.png"
-#             width: "100px"
-#             height: "120px"
-#             style:
-#               margin-left: "80px"
         - $formkit: text
           label: 页面标题
           name: title
@@ -98,7 +49,7 @@ spec:
           max: 12
           step: 1
           validation: required|number|between:1,12
-          help: "每个足迹图片墙单页最多展示的图片数量，超出后可使用左右箭头翻页（1-12）"
+          help: "每个足迹图片墙单页最多展示的图片数量，超出后可使用左右箭头翻页(1-12)"
         - $formkit: select
           label: 图片墙样式
           name: photoWallStyle

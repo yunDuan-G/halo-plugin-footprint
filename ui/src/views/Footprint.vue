@@ -384,7 +384,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
             </button>
           </div>
           <div class="mt-8 flex items-end gap-3">
-            <span class="tabular-nums text-5xl font-semibold leading-none tracking-[-0.06em] text-gray-950 sm:text-6xl">{{ stats.totalFootprints }}</span>
+            <span class="stats-overview-total tabular-nums font-semibold leading-none tracking-[-0.06em] text-gray-950">{{ stats.totalFootprints }}</span>
             <span class="pb-1 text-sm text-gray-500">条足迹记录</span>
           </div>
           <div class="mt-5 flex items-center gap-2 text-xs text-gray-500">
@@ -402,7 +402,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
             <span class="tabular-nums text-sm font-semibold text-gray-900">{{ stats.totalProvinces }} / 34</span>
           </div>
           <div class="mt-8 flex items-baseline gap-2">
-            <span class="tabular-nums text-3xl font-semibold tracking-tight text-gray-950">{{ provinceCoverageRate }}%</span>
+            <span class="stats-overview-metric tabular-nums font-semibold tracking-tight text-gray-950">{{ provinceCoverageRate }}%</span>
             <span class="text-xs text-gray-400">覆盖率</span>
           </div>
           <div
@@ -429,7 +429,7 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
             <span class="text-xs font-medium text-indigo-600">城市</span>
           </div>
           <div class="mt-8 flex items-baseline gap-2">
-            <span class="tabular-nums text-3xl font-semibold tracking-tight text-gray-950">{{ stats.totalCities }}</span>
+            <span class="stats-overview-metric tabular-nums font-semibold tracking-tight text-gray-950">{{ stats.totalCities }}</span>
             <span class="text-xs text-gray-400">个</span>
           </div>
           <div class="mt-4 flex items-center gap-2 text-xs text-gray-500">
@@ -823,6 +823,20 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
   border-radius: inherit;
   background-color: #6366f1;
   transition: width 300ms ease;
+}
+
+.stats-overview-total {
+  font-size: 3rem;
+}
+
+.stats-overview-metric {
+  font-size: 1.875rem;
+}
+
+@media (min-width: 640px) {
+  .stats-overview-total {
+    font-size: 3.75rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
