@@ -6,9 +6,17 @@
 
 ![Logo](src/main/resources/logo.svg)
 
+![img.png](src/main/resources/img.png)
+
 ## 项目介绍
 
 `足迹` 是专为 Halo 开发的旅行足迹插件。它把每一条旅行记录变成一个地图标记、一组照片和一个可以回看的旅行故事，支持从后台录入数据，在前台以高德地图、图片墙和时间线的形式展示。
+
+## 原作者
+
+本项目原作者为 Handsome，主页：<https://www.lik.cc/>。
+
+原始项目地址：[acanyo/halo-plugin-footprint](https://github.com/acanyo/halo-plugin-footprint)
 
 ## 功能特点
 
