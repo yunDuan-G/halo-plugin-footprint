@@ -875,6 +875,28 @@
     opacity: 0.3;
     cursor: default;
 }
+.photo-wall-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    box-sizing: border-box;
+    border: 1px solid rgba(43, 55, 49, 0.2);
+    border-radius: 10px;
+    color: var(--wall-ink, #26302d);
+    background: rgba(255, 255, 255, 0.72);
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+.photo-wall-close:hover {
+    color: #fff;
+    background: var(--wall-accent, #b36b4e);
+    transform: scale(1.05);
+}
 @keyframes photoWallShow {
     0% { opacity: 0; transform: translateY(18px) scale(0.94) rotate(-1deg); }
     100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
@@ -992,10 +1014,16 @@
     cursor: pointer;
     transition: background 0.2s ease, transform 0.2s ease;
 }
-.photo-lightbox-close:hover,
-.photo-lightbox-arrow:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: scale(1.06);
+@media (hover: hover) {
+    .photo-lightbox-close:hover,
+    .photo-lightbox-arrow:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: scale(1.06);
+    }
+
+    .photo-lightbox-arrow:hover {
+        transform: translateY(-50%) scale(1.06);
+    }
 }
 .photo-lightbox-close {
     position: fixed;
@@ -1016,7 +1044,12 @@
     border-radius: 50%;
     font-size: 21px;
 }
-.photo-lightbox-arrow:hover { transform: translateY(-50%) scale(1.06); }
+.photo-lightbox-arrow:active {
+    transform: translateY(-50%) scale(0.94);
+}
+.photo-lightbox-close:active {
+    transform: scale(0.94);
+}
 .photo-lightbox-prev { left: 28px; }
 .photo-lightbox-next { right: 28px; }
 .photo-lightbox-caption {
@@ -4375,11 +4408,111 @@
     }
 }
 
-/* 移动端不展示桌面版图片墙和全屏入口 */
+/* 移动端隐藏全屏入口，图片墙改为底部抽屉式展示 */
 @media (max-width: 768px) {
-    #photo-wall-layer,
     #map-fullscreen {
         display: none !important;
+    }
+
+    .photo-wall-window.photo-wall-mobile {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: calc(116px + var(--safe-bottom, 0px));
+        width: auto;
+        height: min(430px, calc(100vh - 230px));
+        height: min(430px, calc(100dvh - 230px));
+        min-height: 280px;
+        box-sizing: border-box;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        border-radius: 20px;
+        background: #fffdfa;
+        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.22);
+        transform-origin: bottom center;
+    }
+
+    body.photo-wall-mobile-open .map-controls {
+        display: none !important;
+    }
+
+    body.photo-wall-mobile-open .photo-wall-window.photo-wall-mobile {
+        bottom: calc(10px + var(--safe-bottom, 0px));
+        height: min(470px, calc(100vh - 120px));
+        height: min(470px, calc(100dvh - 120px));
+    }
+
+    .photo-wall-window.photo-wall-mobile > .photo-wall-window {
+        position: absolute;
+        inset: 0;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+        border: 0;
+        border-radius: inherit;
+        box-shadow: none;
+        transform: none;
+        animation: none;
+    }
+
+    .photo-wall-window.photo-wall-mobile .photo-wall-heading {
+        top: 14px;
+        left: 16px;
+        right: 16px;
+        gap: 10px;
+    }
+
+    .photo-wall-window.photo-wall-mobile .photo-wall-title-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+    }
+
+    .photo-wall-window.photo-wall-mobile .photo-wall-description {
+        margin-top: 4px;
+        font-size: 11px;
+    }
+
+    .photo-wall-window.photo-wall-mobile .photo-wall-canvas {
+        inset: var(--photo-wall-canvas-top, 96px) 12px 14px;
+    }
+
+    .photo-wall-window.photo-wall-mobile .photo-wall-variant-b .photo-wall-feature {
+        flex: 1 1 200px;
+        min-height: 130px;
+        max-height: 220px;
+    }
+
+    .photo-wall-window.photo-wall-mobile .photo-wall-variant-b .photo-wall-filmstrip {
+        flex-basis: 88px;
+        padding-top: 13px;
+        padding-bottom: 12px;
+    }
+
+    .photo-wall-window.photo-wall-mobile .photo-wall-variant-b .photo-wall-card {
+        flex-basis: 78px;
+        width: 78px;
+        height: 56px;
+        box-sizing: border-box;
+        transform: translateY(-4px) rotate(var(--card-rotation, 0deg));
+        animation: none;
+    }
+
+    .photo-wall-window.photo-wall-mobile .photo-wall-variant-b .photo-wall-card:hover,
+    .photo-wall-window.photo-wall-mobile .photo-wall-variant-b .photo-wall-card:focus-visible {
+        transform: translateY(-9px) rotate(0) scale(1.08);
+    }
+
+    .photo-wall-window.photo-wall-mobile .photo-wall-variant-b .photo-wall-card-inner {
+        box-sizing: border-box;
+    }
+
+    .photo-wall-window button:focus-visible,
+    .photo-lightbox button:focus,
+    .photo-lightbox button:focus-visible {
+        outline: none;
     }
 }
 
@@ -4507,5 +4640,12 @@
     .timeline-drawer .timeline-content-card:focus-within .location-icon {
         opacity: 1;
         transform: none;
+    }
+}
+
+/* 移动端时间线抽屉需要盖过统计面板与底部控制栏，确保关闭按钮始终可点 */
+@media (max-width: 768px) {
+    .timeline-drawer {
+        z-index: 1001;
     }
 }

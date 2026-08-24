@@ -153,6 +153,34 @@ const cancelTimelineMapMove = (map) => {
     }
 };
 
+const closeTimelineDrawer = (map) => {
+    const timelineBtn = document.getElementById('timeline-btn');
+    const timelineDrawer = document.getElementById('timelineDrawer');
+    const timelineContent = document.getElementById('timelineContent');
+    if (!timelineBtn || !timelineDrawer || !timelineContent) return;
+
+    const zoomButtons = document.getElementById('zoom-buttons');
+    const line = document.getElementById('line');
+    timelineBtn.classList.remove('hidden-important');
+    zoomButtons?.classList.remove('hidden-important');
+    line?.classList.remove('hidden-important');
+
+    const footprintMap = document.getElementById('footprint-map');
+    if (footprintMap) {
+        footprintMap.style.width = window.innerWidth + "px";
+    }
+
+    isTimelineOpen = false;
+    timelineDrawer.classList.remove('open');
+    const mapControls = document.getElementById('map-controls');
+    mapControls?.classList.remove('open');
+
+    timelineContent.removeEventListener('scroll', handleScroll);
+    clearTimeout(timelineScrollEndTimer);
+    cancelTimelineMapMove(map);
+    cancelTimelineScrollHover();
+};
+
 // 标记点DOM缓存，避免重复querySelector查询
 const markerCache = new Map();
 
@@ -902,10 +930,7 @@ const populateTimeline = async (map) => {
                     f => f.spec.name === cardHeaderContent
             );
             if (isMobile) {
-                isTimelineOpen = false;
-                timelineDrawer.classList.remove('open');
-                const mapControls = document.getElementById('map-controls');
-                mapControls.classList.remove('open');
+                closeTimelineDrawer(map);
 
                 // 卸载所有图片
                 const cards = document.querySelectorAll('.timeline-card');
@@ -975,25 +1000,7 @@ const populateTimeline = async (map) => {
 
     // 合上抽屉
     closeDrawerBtn.addEventListener('click', () => {
-        //显示时间线按钮/缩放按钮/线路按钮
-        const zoomButtons = document.getElementById('zoom-buttons');
-        const line = document.getElementById('line');
-        timelineBtn.classList.remove('hidden-important');
-        zoomButtons.classList.remove('hidden-important');
-        line.classList.remove('hidden-important');
-
-        //还原地图宽度
-        const footprintMap = document.getElementById('footprint-map');
-        footprintMap.style.width = window.innerWidth + "px";
-
-        isTimelineOpen = false;
-        timelineDrawer.classList.remove('open');
-        const mapControls = document.getElementById('map-controls');
-        mapControls.classList.remove('open');
-
-        // 移除滚动事件监听
-        timelineContent.removeEventListener('scroll', handleScroll);
-        clearTimeout(timelineScrollEndTimer);
+        closeTimelineDrawer(map);
     });
 
 
@@ -1742,10 +1749,12 @@ const createPhotoWallTape = (index) => {
 const createPhotoWall = (spec, page = 0) => {
     const images = normalizeGalleryImages(spec.galleryImages);
     const pageSize = getPhotoWallPageSize();
-    const style = getPhotoWallStyle();
+    const style = isMobile ? 'filmstrip' : getPhotoWallStyle();
     const totalPages = style === 'filmstrip' ? 1 : Math.max(1, Math.ceil(images.length / pageSize));
     const currentPage = style === 'filmstrip' ? 0 : Math.max(0, Math.min(totalPages - 1, page));
-    const pageImages = images.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+    const pageImages = style === 'filmstrip'
+        ? images
+        : images.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
     let cards = '';
     let canvas = '';
     let kicker = 'MEMORY WALL';
@@ -1783,12 +1792,14 @@ const createPhotoWall = (spec, page = 0) => {
         wallClass = ' photo-wall-variant-b';
         kicker = 'FILM STRIP';
         counter = `${images.length} 张`;
-        cards = pageImages.map((url, index) => {
+        const thumbImages = isMobile ? pageImages.slice(1) : pageImages;
+        cards = thumbImages.map((url, index) => {
             const imageUrl = getPhotoWallImageUrl(url);
+            const absoluteIndex = isMobile ? index + 1 : index;
             return `
-                <button class="photo-wall-card photo-wall-variant-b-card" type="button" data-photo-index="${index}"
+                <button class="photo-wall-card photo-wall-variant-b-card" type="button" data-photo-index="${absoluteIndex}"
                         style="--card-delay:${index * 70}ms;"
-                        aria-label="放大查看第 ${index + 1} 张图片">
+                        aria-label="放大查看第 ${absoluteIndex + 1} 张图片">
                     <span class="photo-wall-card-inner">
                         <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
                         ${createPhotoWallTape(index)}
@@ -1801,7 +1812,7 @@ const createPhotoWall = (spec, page = 0) => {
                 <button class="photo-wall-feature" type="button" data-photo-index="0" aria-label="放大查看第 1 张图片">
                     <img src="${escapeHtml(primaryUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="eager" decoding="async">
                 </button>
-                <div class="photo-wall-filmstrip" aria-label="胶片缩略图">${cards}</div>
+                ${thumbImages.length > 0 ? `<div class="photo-wall-filmstrip" aria-label="胶片缩略图">${cards}</div>` : ''}
             </div>`;
     } else if (style === 'journal') {
         wallClass = ' photo-wall-variant-c';
@@ -1894,6 +1905,7 @@ const createPhotoWall = (spec, page = 0) => {
                         <button type="button" class="photo-wall-nav" data-photo-action="previous" ${hasPrevious ? '' : 'disabled'} aria-label="上一页">←</button>
                         <button type="button" class="photo-wall-nav" data-photo-action="next" ${hasNext ? '' : 'disabled'} aria-label="下一页">→</button>
                     </span>`}
+                    ${isMobile ? `<button type="button" class="photo-wall-close" data-photo-action="close" aria-label="关闭图片墙">×</button>` : ''}
                 </div>
             </div>
             ${canvas}
@@ -2128,6 +2140,21 @@ const addFootprintMarkers = async (map, footprintData) => {
             changeLightboxImage(action);
         });
 
+        let lightboxTouchStartX = null;
+        lightbox.addEventListener('touchstart', (event) => {
+            if (event.touches.length === 1) {
+                lightboxTouchStartX = event.touches[0].clientX;
+            }
+        }, {passive: true});
+        lightbox.addEventListener('touchend', (event) => {
+            if (lightboxTouchStartX === null || event.changedTouches.length !== 1) return;
+            const deltaX = event.changedTouches[0].clientX - lightboxTouchStartX;
+            if (Math.abs(deltaX) > 40) {
+                changeLightboxImage(deltaX > 0 ? 'previous' : 'next');
+            }
+            lightboxTouchStartX = null;
+        }, {passive: true});
+
         lightbox.addEventListener('wheel', (event) => {
             if (Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
             event.preventDefault();
@@ -2162,6 +2189,7 @@ const addFootprintMarkers = async (map, footprintData) => {
         cancelPhotoWallClose();
         infoWindow.close();
         closePhotoLightbox();
+        document.body.classList.remove('photo-wall-mobile-open');
         if (photoWallWheelUnlockTimer) {
             window.clearTimeout(photoWallWheelUnlockTimer);
             photoWallWheelUnlockTimer = null;
@@ -2270,6 +2298,7 @@ const addFootprintMarkers = async (map, footprintData) => {
     };
 
     const positionPhotoWall = () => {
+        if (isMobile) return;
         if (!photoWallElement || !photoWallConnector) return;
         const markerPoint = getMarkerLayerPoint();
         if (!markerPoint) return;
@@ -2322,6 +2351,16 @@ const addFootprintMarkers = async (map, footprintData) => {
         photoWallConnector.style.transform = `rotate(${Math.atan2(deltaY, deltaX)}rad)`;
     };
 
+    const updateMobilePhotoWallLayout = () => {
+        if (!isMobile || !photoWallElement) return;
+        const heading = photoWallElement.querySelector('.photo-wall-heading');
+        const canvas = photoWallElement.querySelector('.photo-wall-canvas');
+        if (!heading || !canvas) return;
+
+        const canvasTop = Math.max(76, heading.offsetTop + heading.offsetHeight + 12);
+        photoWallElement.style.setProperty('--photo-wall-canvas-top', `${canvasTop}px`);
+    };
+
     const renderPhotoWall = () => {
         if (!photoWallLayer || !photoWallState) return;
         photoWallElement?.remove();
@@ -2329,6 +2368,10 @@ const addFootprintMarkers = async (map, footprintData) => {
 
         photoWallElement = document.createElement('div');
         photoWallElement.className = 'photo-wall-window';
+        if (isMobile) {
+            photoWallElement.classList.add('photo-wall-mobile');
+            document.body.classList.add('photo-wall-mobile-open');
+        }
         photoWallElement.innerHTML = createPhotoWall(photoWallState.spec, photoWallState.page);
         const filmstrip = photoWallElement.querySelector('.photo-wall-filmstrip');
         const journalGrid = photoWallElement.querySelector('.photo-wall-journal-grid');
@@ -2381,11 +2424,20 @@ const addFootprintMarkers = async (map, footprintData) => {
         }, {passive: false});
         photoWallLayer.appendChild(photoWallElement);
 
-        photoWallConnector = document.createElement('span');
-        photoWallConnector.className = 'photo-wall-connector';
-        photoWallLayer.insertBefore(photoWallConnector, photoWallElement);
-        requestAnimationFrame(positionPhotoWall);
+        if (isMobile) {
+            updateMobilePhotoWallLayout();
+            requestAnimationFrame(updateMobilePhotoWallLayout);
+        }
+        if (!isMobile) {
+            photoWallConnector = document.createElement('span');
+            photoWallConnector.className = 'photo-wall-connector';
+            photoWallLayer.insertBefore(photoWallConnector, photoWallElement);
+            requestAnimationFrame(positionPhotoWall);
+        }
     };
+
+    const mobilePhotoWallResizeHandler = debounce(updateMobilePhotoWallLayout, 150);
+    window.addEventListener('resize', mobilePhotoWallResizeHandler);
 
     const handlePhotoWallClick = (e) => {
         e.stopPropagation();
@@ -2403,6 +2455,10 @@ const addFootprintMarkers = async (map, footprintData) => {
 
         const action = actionTarget?.getAttribute('data-photo-action');
         if (!action || !currentMarker) return;
+        if (action === 'close') {
+            closeCurrentMarker();
+            return;
+        }
         const nextPage = photoWallState.page + (action === 'next' ? 1 : -1);
         const totalPages = Math.ceil(photoWallState.images.length / photoWallState.pageSize);
         if (nextPage < 0 || nextPage >= totalPages) return;
@@ -2471,6 +2527,7 @@ const addFootprintMarkers = async (map, footprintData) => {
     });
     map.on('mapmove', positionPhotoWall);
     const handlePhotoWallZoomChange = () => {
+        if (isMobile) return;
         positionPhotoWall();
         if (!currentMarker || !photoWallElement) return;
         if (photoWallClosingElement === photoWallElement) return;
@@ -2579,7 +2636,7 @@ const addFootprintMarkers = async (map, footprintData) => {
                     await restoreMapOrientation(map);
 
                     const galleryImages = normalizeGalleryImages(footprint.spec.galleryImages);
-                    photoWallState = !isMobile && galleryImages.length ? {
+                    photoWallState = galleryImages.length ? {
                         images: galleryImages,
                         page: 0,
                         pageSize: getPhotoWallPageSize(),
@@ -2604,8 +2661,9 @@ const addFootprintMarkers = async (map, footprintData) => {
                         await moveToLocation(map, position2, zoomLevel, 500);
                     }
                     currentMarker = marker;
-                    // 桌面端有图片墙时展示在地图外围；移动端始终保留原有详情卡片。
-                    if (!isMobile && galleryImages.length) {
+                    // 有图片时桌面端展示地图外围图片墙，移动端展示底部抽屉式图片墙；
+                    // 没有图片时保留原有信息窗口。
+                    if (galleryImages.length) {
                         logoContainer?.classList.add('photo-wall-active');
                         renderPhotoWall();
                     } else {
@@ -2698,6 +2756,7 @@ const addFootprintMarkers = async (map, footprintData) => {
     // 清理函数
     const cleanup = () => {
         closeCurrentMarker();
+        window.removeEventListener('resize', mobilePhotoWallResizeHandler);
         if (closeActiveFootprint === closeCurrentMarker) {
             closeActiveFootprint = null;
         }
@@ -2770,21 +2829,7 @@ const addFootprintMarkers = async (map, footprintData) => {
         closeCurrentMarker();
         await restoreMapOrientation(map);
 
-        //显示时间线按钮/缩放按钮/线路按钮
-        const timelineBtn = document.getElementById('timeline-btn');
-        const zoomButtons = document.getElementById('zoom-buttons');
-        const line = document.getElementById('line');
-        timelineBtn.classList.remove('hidden-important');
-        zoomButtons.classList.remove('hidden-important');
-        line.classList.remove('hidden-important');
-
-        const footprintMap = document.getElementById('footprint-map');
-        footprintMap.style.width = window.innerWidth + "px";
-        const timelineDrawer = document.getElementById('timelineDrawer');
-        isTimelineOpen = false;
-        timelineDrawer.classList.remove('open');
-        const mapControls = document.getElementById('map-controls');
-        mapControls.classList.remove('open');
+        closeTimelineDrawer(map);
 
         // 关闭信息窗口
         infoWindow.close();
@@ -2798,13 +2843,6 @@ const addFootprintMarkers = async (map, footprintData) => {
             card.style.backgroundImage = 'none';
             card.classList.add('loading');
         });
-
-
-        // 移除滚动事件监听
-        const timeLineBox = document.getElementById('timeLineBox');
-        if (timeLineBox) {
-            timeLineBox.removeEventListener('scroll', handleScroll);
-        }
     });
 };
 // 优化图层切换
