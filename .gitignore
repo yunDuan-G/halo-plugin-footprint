@@ -71,6 +71,7 @@ application-local.yaml
 application-local.properties
 
 /node_modules/
+/test/
 /ui/node_modules/
 /workplace/
 /src/main/resources/console/

@@ -4,10 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 判断当前路径是否为/footprints
     const currentPath = window.location.pathname;
-    /*if (currentPath !== '/footprints') {
+    if (currentPath !== '/footprints') {
         console.log('非足迹页面，不加载地图功能');
         return;
-    }*/
+    }
 
 
     // 设置全局颜色变量
