@@ -140,6 +140,18 @@ let activeCard = null;
 let animationInFlight = null;
 let closeActiveFootprint = null;
 let timelineHoverGeneration = 0;
+let timelineActivationToken = 0;
+let activeMapInstance = null;
+let lastTimelinePointer = null;
+let timelineScrollEndTimer = null;
+
+// 快速切换时间线卡片时，取消上一张卡片仍在进行的地图移动，
+// 避免新卡片的 setZoomAndCenter 在旧动画后面排队。
+const cancelTimelineMapMove = (map) => {
+    if (typeof map.stopAnimation === 'function') {
+        map.stopAnimation();
+    }
+};
 
 // 标记点DOM缓存，避免重复querySelector查询
 const markerCache = new Map();
@@ -981,6 +993,7 @@ const populateTimeline = async (map) => {
 
         // 移除滚动事件监听
         timelineContent.removeEventListener('scroll', handleScroll);
+        clearTimeout(timelineScrollEndTimer);
     });
 
 
@@ -1004,6 +1017,9 @@ const populateTimeline = async (map) => {
                 isProcessing = true;
                 activeCard = card;
                 animationInFlight = card;
+
+                // 停止上一张卡片残留的地图移动，确保当前卡片从新坐标开始渲染抛物线。
+                cancelTimelineMapMove(map);
 
                 // 关闭已打开的信息窗口
                 const allOverlays = map.getAllOverlays();
@@ -1096,6 +1112,8 @@ const populateTimeline = async (map) => {
             // 立即取消任何待执行的 handleEnter，避免竞态条件
             timelineHoverGeneration += 1;
             animationInFlight = null;
+            // 卡片已离开，地图不需要继续移动到该卡片的位置。
+            cancelTimelineMapMove(map);
             const amapMarker = document.querySelectorAll('.amap-marker');
             amapMarker.forEach(marker => {
                 marker.classList.remove('zIndex13');
@@ -1122,13 +1140,24 @@ const populateTimeline = async (map) => {
         };
 
         card.addEventListener('mouseenter', async () => {
+            if (card._hoverPending) return;
+            card._hoverPending = true;
+            const activation = ++timelineActivationToken;
+            card._hoverOwner = activation;
             card._hoverCancelled = false;
-            await handleLeave();
-            // 快速切换时，handleLeave 已标记取消，跳过 handleEnter
-            if (card._hoverCancelled) return;
-            handleEnter();
+            try {
+                await handleLeave();
+                // 快速切换时，handleLeave 已标记取消，跳过 handleEnter
+                if (activation !== timelineActivationToken || card._hoverCancelled) return;
+                await handleEnter();
+            } finally {
+                if (card._hoverOwner === activation) {
+                    card._hoverPending = false;
+                }
+            }
         });
         card.addEventListener('mouseleave', () => {
+            timelineActivationToken += 1;
             card._hoverCancelled = true;
             handleLeave();
         });
@@ -1705,6 +1734,11 @@ const getPhotoWallPageSize = () => {
     return Math.max(1, Math.min(12, Number(window.FOOTPRINT_CONFIG?.photoWallPageSize) || 6));
 };
 
+const createPhotoWallTape = (index) => {
+    const rotation = index % 2 === 0 ? ' photo-wall-tape-left' : ' photo-wall-tape-right';
+    return `<span class="photo-wall-tape${rotation}" aria-hidden="true"></span>`;
+};
+
 const createPhotoWall = (spec, page = 0) => {
     const images = normalizeGalleryImages(spec.galleryImages);
     const pageSize = getPhotoWallPageSize();
@@ -1731,11 +1765,7 @@ const createPhotoWall = (spec, page = 0) => {
                         aria-label="放大查看第 ${absoluteIndex + 1} 张图片">
                     <span class="photo-wall-card-inner">
                         <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
-                        <span class="photo-wall-pin" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <path class="photo-wall-pin-icon" d="M16 9V4h1V2H7v2h1v5l-2 2v2h5v7l1 1 1-1v-7h5v-2l-2-2Z"></path>
-                            </svg>
-                        </span>
+                        ${createPhotoWallTape(absoluteIndex)}
                     </span>
                 </button>`;
         }).join('');
@@ -1761,11 +1791,7 @@ const createPhotoWall = (spec, page = 0) => {
                         aria-label="放大查看第 ${index + 1} 张图片">
                     <span class="photo-wall-card-inner">
                         <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
-                        <span class="photo-wall-pin" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <path class="photo-wall-pin-icon" d="M16 9V4h1V2H7v2h1v5l-2 2v2h5v7l1 1 1-1v-7h5v-2l-2-2Z"></path>
-                            </svg>
-                        </span>
+                        ${createPhotoWallTape(index)}
                     </span>
                 </button>`;
         }).join('');
@@ -1792,11 +1818,7 @@ const createPhotoWall = (spec, page = 0) => {
                         aria-label="放大查看第 ${absoluteIndex + 1} 张图片">
                     <span class="photo-wall-card-inner">
                         <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
-                        <span class="photo-wall-pin" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <path class="photo-wall-pin-icon" d="M16 9V4h1V2H7v2h1v5l-2 2v2h5v7l1 1 1-1v-7h5v-2l-2-2Z"></path>
-                            </svg>
-                        </span>
+                        ${createPhotoWallTape(absoluteIndex)}
                         <span class="photo-wall-journal-index">${String(absoluteIndex + 1).padStart(2, '0')}</span>
                     </span>
                 </button>`;
@@ -1815,11 +1837,7 @@ const createPhotoWall = (spec, page = 0) => {
                         aria-label="放大查看第 ${absoluteIndex + 1} 张图片">
                     <span class="photo-wall-card-inner">
                         <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
-                        <span class="photo-wall-pin" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <path class="photo-wall-pin-icon" d="M16 9V4h1V2H7v2h1v5l-2 2v2h5v7l1 1 1-1v-7h5v-2l-2-2Z"></path>
-                            </svg>
-                        </span>
+                        ${createPhotoWallTape(absoluteIndex)}
                     </span>
                 </button>`;
         }).join('');
@@ -1845,11 +1863,7 @@ const createPhotoWall = (spec, page = 0) => {
                         aria-label="放大查看第 ${absoluteIndex + 1} 张图片">
                     <span class="photo-wall-card-inner">
                         <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(spec.name || '足迹图片')}" loading="lazy" decoding="async">
-                        <span class="photo-wall-pin" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <path class="photo-wall-pin-icon" d="M16 9V4h1V2H7v2h1v5l-2 2v2h5v7l1 1 1-1v-7h5v-2l-2-2Z"></path>
-                            </svg>
-                        </span>
+                        ${createPhotoWallTape(absoluteIndex)}
                     </span>
                 </button>`;
         }).join('');
@@ -1942,33 +1956,65 @@ const handleResize = debounce(() => {
     }
 }, 150);
 
-// 滚动处理函数
-const handleScroll = debounce(() => {
-    // 清除抛物线动画
-    if (activeCard != null && activeCard.currentAnimationId) {
-        cancelAnimationFrame(activeCard.currentAnimationId);
-        activeCard.currentAnimationId = null;
-        // 清理标记点置顶和高亮
-        document.querySelectorAll('.amap-marker').forEach(marker => {
-            marker.classList.remove('zIndex13');
-            marker.classList.remove('zIndex14');
-            marker.classList.remove('marker-highlight');
-        });
-    }
+// 滚动时先立即取消当前悬停，避免旧卡片的异步操作继续渲染。
+const cancelTimelineScrollHover = () => {
+    timelineHoverGeneration += 1;
+    timelineActivationToken += 1;
+    animationInFlight = null;
 
-    // 清除画布
+    document.querySelectorAll('.timeline-content-card').forEach(card => {
+        card._hoverCancelled = true;
+        card._hoverPending = false;
+        card._hoverOwner = 0;
+        if (card.currentAnimationId) {
+            cancelAnimationFrame(card.currentAnimationId);
+            card.currentAnimationId = null;
+        }
+    });
+
+    cancelTimelineMapMove(activeMapInstance);
+    document.querySelectorAll('.amap-marker').forEach(marker => {
+        marker.classList.remove('zIndex13');
+        marker.classList.remove('zIndex14');
+        marker.classList.remove('marker-highlight');
+    });
+
     const canvas = document.getElementById('canvas');
     if (canvas) {
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
-    // 重置动画状态
     isAnimating = false;
     activeCard = null;
-    // 清除抛物线动画
+};
 
-}, 10);
+// 滚动结束后，重新激活鼠标静止位置下的卡片。
+const rehoverTimelineAfterScroll = () => {
+    if (!lastTimelinePointer) return;
+    const target = document.elementFromPoint(
+        lastTimelinePointer.x,
+        lastTimelinePointer.y
+    );
+    const card = target instanceof Element
+        ? target.closest('.timeline-content-card')
+        : null;
+    if (!card || card._hoverPending) return;
+    card.dispatchEvent(new MouseEvent('mouseenter', {
+        bubbles: false,
+        cancelable: true
+    }));
+};
+
+const handleScroll = () => {
+    cancelTimelineScrollHover();
+    clearTimeout(timelineScrollEndTimer);
+    timelineScrollEndTimer = setTimeout(rehoverTimelineAfterScroll, 120);
+};
+
+window.addEventListener('pointermove', (event) => {
+    lastTimelinePointer = {x: event.clientX, y: event.clientY};
+}, {passive: true});
 
 // 添加足迹标记
 const addFootprintMarkers = async (map, footprintData) => {
@@ -2516,7 +2562,7 @@ const addFootprintMarkers = async (map, footprintData) => {
                     position: position,
                     content: markerContent,
                     anchor: 'bottom-center',
-                    offset: new AMap.Pixel(0, -15),
+                    offset: new AMap.Pixel(0, -10),
                     extData: footprint.spec // 存储额外数据
                 });
 
@@ -3019,8 +3065,8 @@ const initializeApp = async () => {
             mapStyle: window.FOOTPRINT_CONFIG.mapStyle || 'amap://styles/grey',
             viewMode: '3D',
             pitch: 0,
-            pitchEnable: true, // 开启俯仰交互
-            rotateEnable: true, // 开启旋转交互
+            pitchEnable: false, // 禁止右键拖拽调整仰角
+            rotateEnable: false, // 禁止右键拖拽旋转地图
             // 关闭底图自带楼块，改用上方独立的 AMap.Buildings 图层
             showBuildingBlock: false,
             features: ['bg', 'road', 'point'],
@@ -3029,6 +3075,7 @@ const initializeApp = async () => {
             ],
             resizeEnable: true     // 启用自动适应容器尺寸
         });
+        activeMapInstance = map;
 
         // 等待地图加载完成
         await new Promise(resolve => {

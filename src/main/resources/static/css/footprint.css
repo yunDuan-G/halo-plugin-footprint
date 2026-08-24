@@ -795,6 +795,7 @@
     border: 1px solid rgba(39, 43, 39, 0.17);
     background: #fffef9;
     box-shadow: 3px 5px 9px rgba(32, 39, 34, 0.18);
+    perspective: 520px;
 }
 .photo-wall-card img {
     display: block;
@@ -803,35 +804,34 @@
     object-fit: cover;
     background: #e6e3db;
 }
-.photo-wall-pin {
-    --photo-pin: #c96f55;
+.photo-wall-tape {
     position: absolute;
-    top: -18px;
+    z-index: 4;
+    top: -9px;
     left: 50%;
-    width: 24px;
-    height: 24px;
-    transform: translateX(-50%);
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    outline: none;
-    transform-origin: 50% 85%;
-    will-change: transform, opacity;
-    animation: photoWallPinIn 0.72s cubic-bezier(0.16, 1, 0.3, 1) both;
+    width: 42px;
+    height: 13px;
+    --tape-peel-angle: 78deg;
+    --tape-peel-duration: 0.58s;
+    --tape-hover-lift: 32deg;
+    transform: translateX(-50%) rotate(var(--tape-rotation, -12deg)) rotateX(0deg);
+    border: 1px solid rgba(125, 111, 81, 0.16);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.34), transparent 24%, rgba(255, 255, 255, 0.22) 72%, transparent), #e9dfc7;
+    box-shadow: 0 2px 3px rgba(58, 48, 32, 0.2);
+    clip-path: polygon(0 8%, 100% 0, 96% 94%, 3% 100%);
+    transform-origin: 50% 0%;
+    will-change: transform, opacity, filter;
+    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), filter 0.32s ease, opacity 0.2s ease;
+    animation: photoWallTapePeel var(--tape-peel-duration) cubic-bezier(0.16, 1, 0.3, 1) backwards;
     animation-delay: var(--card-delay, 0ms);
 }
-.photo-wall-pin svg {
-    display: block;
-    width: 24px;
-    height: 24px;
-    overflow: visible;
-    filter: none;
-}
-.photo-wall-pin-icon {
-    fill: var(--photo-pin);
-    stroke: none;
-    paint-order: fill;
+.photo-wall-tape-right { --tape-rotation: 10deg; }
+.photo-wall-tape-left { --tape-rotation: -12deg; }
+.photo-wall-card:hover .photo-wall-tape,
+.photo-wall-card:focus-visible .photo-wall-tape {
+    transform: translateX(-50%) rotate(var(--tape-rotation, -12deg)) rotateX(var(--tape-hover-lift, 32deg)) translateY(-2px);
+    filter: drop-shadow(0 7px 5px rgba(58, 48, 32, 0.22));
+    transition-delay: 0s;
 }
 .photo-wall-center-mark {
     position: absolute;
@@ -898,28 +898,22 @@
         transform: rotate(var(--card-rotation)) scale(1);
     }
 }
-@keyframes photoWallPinIn {
+@keyframes photoWallTapePeel {
     0% {
         opacity: 0;
-        transform: translateX(-50%) translateY(-38px) scale(0.42) rotate(-18deg);
+        transform: translateX(-50%) rotate(var(--tape-rotation, -12deg)) rotateX(var(--tape-peel-angle, 78deg)) translateY(-7px) scale(0.96);
     }
-    25% {
+    38% {
         opacity: 1;
-        transform: translateX(-50%) translateY(-12px) scale(0.78) rotate(-8deg);
+        transform: translateX(-50%) rotate(var(--tape-rotation, -12deg)) rotateX(18deg) translateY(-1px) scale(1.02);
     }
-    48% {
+    72% {
         opacity: 1;
-        transform: translateX(-50%) translateY(8px) scale(1.22, 0.72) rotate(5deg);
-    }
-    64% {
-        transform: translateX(-50%) translateY(-5px) scale(0.88, 1.12) rotate(-3deg);
-    }
-    80% {
-        transform: translateX(-50%) translateY(2px) scale(1.06, 0.96) rotate(1deg);
+        transform: translateX(-50%) rotate(var(--tape-rotation, -12deg)) rotateX(-5deg) scale(1.02, 0.98);
     }
     100% {
         opacity: 1;
-        transform: translateX(-50%) translateY(0) scale(1) rotate(0deg);
+        transform: translateX(-50%) rotate(var(--tape-rotation, -12deg)) rotateX(0deg) scale(1);
     }
 }
 
@@ -4048,14 +4042,10 @@
     padding: 5px 5px 16px;
 }
 .photo-wall-variant-a .photo-wall-card img { height: 100%; }
-.photo-wall-variant-a .photo-wall-pin {
+.photo-wall-variant-a .photo-wall-tape {
     top: -10px;
-    width: 18px;
-    height: 18px;
-}
-.photo-wall-variant-a .photo-wall-pin svg {
-    width: 18px;
-    height: 18px;
+    width: 32px;
+    height: 10px;
 }
 .photo-wall-host-a { height: 545px; }
 
@@ -4193,7 +4183,7 @@
     -webkit-user-drag: none;
     user-select: none;
 }
-.photo-wall-variant-b .photo-wall-pin { display: none; }
+.photo-wall-variant-b .photo-wall-tape { display: none; }
 
 /* ===== 方案 C：旅行手账模式 ===== */
 .photo-wall-variant-c {
@@ -4247,12 +4237,11 @@
     box-shadow: 3px 5px 9px rgba(87, 66, 46, 0.17);
 }
 .photo-wall-variant-c .photo-wall-card img { height: 100%; }
-.photo-wall-variant-c .photo-wall-pin {
+.photo-wall-variant-c .photo-wall-tape {
     top: -11px;
-    width: 20px;
-    height: 20px;
+    width: 34px;
+    height: 11px;
 }
-.photo-wall-variant-c .photo-wall-pin svg { width: 20px; height: 20px; }
 .photo-wall-journal-index {
     position: absolute;
     right: 8px;
@@ -4343,7 +4332,7 @@
 }
 .photo-wall-variant-d .photo-wall-card-inner { height: 100%; padding: 6px 6px 18px; }
 .photo-wall-variant-d .photo-wall-card img { height: 100%; }
-.photo-wall-variant-d .photo-wall-pin { top: -12px; }
+.photo-wall-variant-d .photo-wall-tape { top: -10px; }
 
 /* 图片墙响应式尺寸：桌面端小屏窗口缩小整体宽度和卡片 */
 @media screen and (min-width: 769px) and (max-width: 1200px) {
