@@ -2,11 +2,9 @@
 
 > 基于高德地图的 Halo 足迹插件，记录和展示你去过的地方。
 
-[演示站](https://www.lik.cc/footprints) · [在线文档](https://www.lik.cc/docs/halo-plugins) · [GitHub](https://github.com/acanyo/halo-plugin-footprint)
+![img.png](img.png)
 
-![Logo](src/main/resources/logo.svg)
-
-![img.png](src/main/resources/img.png)
+![img.png](img2.png)
 
 ## 项目介绍
 
@@ -17,6 +15,10 @@
 本项目原作者为 Handsome，主页：<https://www.lik.cc/>。
 
 原始项目地址：[acanyo/halo-plugin-footprint](https://github.com/acanyo/halo-plugin-footprint)
+
+[演示站](https://www.lik.cc/footprints) · [在线文档](https://www.lik.cc/docs/halo-plugins) · [GitHub](https://github.com/acanyo/halo-plugin-footprint)
+
+![Logo](src/main/resources/logo.svg)
 
 ## 功能特点
 
