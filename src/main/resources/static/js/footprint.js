@@ -32,24 +32,63 @@ document.addEventListener('DOMContentLoaded', () => {
             'color: #42b983; text-decoration: underline; padding: 2px 4px;'
     );
 
-    // 统计面板不依赖地图初始化，先渲染以避免地图加载阻塞显示
-    renderStats();
-
-    // 等待AMap对象加载完成
-    const checkAMap = () => {
-        if (typeof AMap === 'undefined') {
-            console.warn('等待高德地图API加载...');
-            setTimeout(checkAMap, 100);
-            return;
-        }
-        console.log('高德地图API加载成功');
-        initializeApp(isMobile);
-    };
-    checkAMap();
-
     // 添加事件监听（注意在组件卸载时移除）
     window.addEventListener('resize', handleResize);
 });
+
+// ===== 2D 高德地图懒加载接口（由 3D 地球视图切换时调用） =====
+let footprint2dInitialized = false;
+let footprint2dInitializing = false;
+
+window.Footprint2D = {
+    // 进入 2D 视图时调用：首次初始化高德地图，之后仅触发 resize
+    show(onReady) {
+        const ready = () => {
+            if (typeof onReady === 'function') onReady();
+        };
+        if (typeof AMap === 'undefined') {
+            console.warn('等待高德地图API加载...');
+            setTimeout(() => {
+                if (window.Footprint2D) window.Footprint2D.show(onReady);
+            }, 100);
+            return;
+        }
+        if (footprint2dInitialized) {
+            if (activeMapInstance && typeof activeMapInstance.resize === 'function') {
+                activeMapInstance.resize();
+            }
+            ready();
+            return;
+        }
+        if (footprint2dInitializing) {
+            // 正在初始化：稍后重试，初始化完成后回调
+            setTimeout(() => {
+                if (window.Footprint2D) window.Footprint2D.show(onReady);
+            }, 100);
+            return;
+        }
+        footprint2dInitializing = true;
+        console.log('高德地图API加载成功，初始化 2D 地图');
+        renderStats();
+        initializeApp(isMobile).finally(() => {
+            footprint2dInitializing = false;
+            ready();
+        });
+    },
+    // 切回 3D 时调用：保留地图实例，返回 2D 时直接 resize 即可
+    hide() {
+        // 地图实例保留，不做销毁
+    },
+    // 主动销毁（可选）：释放地图实例
+    destroy() {
+        if (activeMapInstance && typeof activeMapInstance.destroy === 'function') {
+            activeMapInstance.destroy();
+        }
+        activeMapInstance = null;
+        footprint2dInitialized = false;
+        footprint2dInitializing = false;
+    }
+};
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -3156,6 +3195,7 @@ const initializeApp = async () => {
 
         // 只在非移动端显示界面元素
         populateTimeline(map);
+        footprint2dInitialized = true;
     } catch (error) {
         console.error('初始化地图时发生错误:', error);
     }

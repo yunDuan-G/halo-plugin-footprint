@@ -147,3 +147,26 @@ spec:
             - $formkit: text
               index: "$index"
               validation: required
+    - group: globe3d
+      label: 3D 地球
+      formSchema:
+        - $formkit: text
+          label: 3D 地球标题
+          name: globeTitle
+          value: '旅行记忆'
+          help: "3D 地球导航栏与首页标题卡的标题（不读取基本设置中的左下角标题）"
+        - $formkit: textarea
+          label: 3D 地球描述
+          name: globeDesc
+          value: '把每一次出发，收藏成地球上的坐标；让走过的城市，成为星空下的故事。'
+          help: "3D 地球首页标题卡的描述文字（不读取基本设置中的足迹描述）"
+        - $formkit: text
+          label: 天地图 Key
+          name: tiandituKey
+          value: ''
+          help: "https://lbs.tianditu.gov.cn 注册后申请（浏览器端应用）。不填则 3D 地球只显示高德底图，天地图影像/矢量底图与三维地形不可用"
+        - $formkit: checkbox
+          label: 默认启用三维地形
+          name: enableTerrainDefault
+          value: false
+          help: "配置了天地图 Key 后，进入 3D 地球时是否默认开启三维地形（用户仍可在导航栏手动切换）"

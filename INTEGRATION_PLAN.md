@@ -1,7 +1,20 @@
 # `/footprints` 地球首页 + 2D 高德地图 整合方案
 
-> 状态：方案设计稿（尚未修改任何代码）
-> 目标：访问 `/footprints` 时默认展示 `test/` 中的 Cesium 3D 地球；点击导航栏 2D/3D 切换按钮进入 2D 时，加载本项目原有的高德地图页面。
+> 状态：**已实施（v2.8.0）**
+> 目标：访问 `/footprints` 时默认展示 `test/` 中的 Cesium 3D 地球；通过 2D/3D 切换进入 2D 时，加载本项目原有的高德地图页面。
+
+## 0. 实施完成总结（v2.8.0）
+
+本方案已随 v2.8.0 发布，最终实现内容：
+
+- `/footprints` 默认展示 Cesium 3D 地球（Cesium 1.120 本地静态资源，随插件打包）；
+- 顶部导航栏 2D/3D 切换使用 Cesium 原生 morph 动画过渡（展开成平面 → 飞到中国 → 交叉淡化到高德页面；切回时平面地球合并回球体并归位整球视角）；
+- 2D 模式加载项目原有高德地图（时间线、照片墙、城市高亮等全部保留），顶部导航栏隐藏，切换按钮移至底部控制栏；
+- 设置新增“3D 地球”Tab：`globeTitle`/`globeDesc`（3D 品牌文案，独立于基本设置）、`tiandituKey`（天地图 Key，驱动天地图底图与三维地形）、`enableTerrainDefault`（默认三维地形开关）；
+- 3D 默认底图为高德卫星·无字；足迹数据统一来自模板注入的 `FOOTPRINT_CONFIG`；
+- 2D/3D 视图状态通过 localStorage 记忆，刷新后保持上次模式；
+- 全屏覆盖层（城市足迹/相册）打开时自动隐藏导航栏；
+- 修复项：底部空白、切回 3D 地球变扁、切回后无法拖拽、飞到中国后切页突兀、底部按钮样式不统一等。
 
 ---
 
@@ -38,6 +51,7 @@
 - `test.html` 的 2D/3D 按钮（`#sceneModeBtn`）目前调用 Cesium 自身的 `viewer.scene.morphTo2D() / morphTo3D()`，即 Cesium 平面 2D，**不是**项目原有的高德地图。
 - `app.js` 目前通过 `fetch('test.json')` 加载数据，内置了兜底数据；坐标统一视为 GCJ-02（高德火星坐标）。
 - `app.js` 底部通过 `./100000_full.json`（相对当前页面 URL）加载中国轮廓。
+- `app.js` 顶部**硬编码**了天地图 Key（`const TDT_KEY = 'ff4d...'`），天地图底图菜单与“三维地形”按钮的可用性都依赖这个常量，无法由后台配置控制。
 
 ---
 
@@ -48,6 +62,7 @@
    - 3D 状态点击“2D” → 加载并展示**项目原有的高德地图页面**（时间线、照片墙、城市高亮、统计等原有功能全部保留）；
    - 2D 状态点击“3D” → 回到地球视图。
 3. 两视图共用同一份足迹数据（沿用 Thymeleaf 注入的 `window.FOOTPRINT_CONFIG.footprints`）。
+4. 在 `settings.yaml` 中新增“3D 地球”配置 Tab（含天地图 Key），三维地形/天地图能力由后台配置驱动，前端不再硬编码 Key。
 
 ---
 
@@ -125,7 +140,7 @@
 保留原有内容：
 
 - `<head>` 中的 `_AMapSecurityConfig`（`settings.gaoDeKey`）与高德 JS API 2.0 引入脚本——2D 模式必需；
-- Thymeleaf 注入的 `window.FOOTPRINT_CONFIG`（足迹数据 + 全部设置项）；
+- Thymeleaf 注入的 `window.FOOTPRINT_CONFIG`（足迹数据 + 全部设置项，**新增** `tiandituKey`、`enableTerrainDefault` 字段，见 §4.6）；
 - 原 `footprint.html` body 中的高德 UI 结构（`#footprint-map`、照片墙、统计、控件、时间线抽屉、留言板等）。
 
 新增内容：
@@ -139,7 +154,7 @@
 - body 改为两个视图包裹层：
   - `#view-3d`：`#cesiumContainer` + 地球导航栏/UI（从 `test.html` 迁移）；
   - `#view-2d`：原高德 UI 全部放入。
-- 导航栏只保留一套：`#topNav` + `#sceneModeBtn`（2D/3D）、自动旋转、城市高亮、三维地形、底图下拉。高德页原有操作控件（时间线、照片墙等）保留在 `#view-2d` 内，进入 2D 后自然可用。
+- 导航栏只保留一套：`#topNav` + `#sceneModeBtn`（2D/3D）、自动旋转、城市高亮、三维地形、底图下拉。其中“三维地形”按钮与天地图底图菜单项的启用/禁用状态由 `FOOTPRINT_CONFIG.tiandituKey` 决定（配置了 Key 才启用），不再由前端硬编码常量控制。高德页原有操作控件（时间线、照片墙等）保留在 `#view-2d` 内，进入 2D 后自然可用。
 - body 末尾追加 `<script src="/plugins/footprint/assets/static/js/travel-memory.js"></script>`。
 
 注意事项：
@@ -155,14 +170,21 @@
    - 坐标仍按 GCJ-02 处理（现有 `coordType: 'gcj02'`），与高德来源数据一致；
    - 无数据时保留内置兜底数组并在控制台告警。
 2. **中国轮廓路径**：`./100000_full.json` 改为绝对路径 `/plugins/footprint/assets/static/data/china-full.json`（页面 URL 是 `/footprints`，相对路径会解析到站点根目录）。
-3. **2D/3D 切换改造**（替换 `app.js` 约 343–420 行的 `morphTo2D/morphTo3D` 逻辑）：
-   - 移除 Cesium `morphTo2D` 及相关 2D 相机动画（`animateCameraToRect`、`CHINA_VIEW`、`morphComplete` 中的 2D 分支）；
-   - 点击 2D：隐藏 `#view-3d`、显示 `#view-2d`、按钮文字置为“3D”，并触发高德初始化（见 §4.4）；
-   - 点击 3D：隐藏 `#view-2d`、显示 `#view-3d`、按钮文字置为“2D”，恢复自转（`prefers-reduced-motion` 时除外）；
+3. **天地图 Key 与三维地形接入后台配置**：
+   - 删除 `app.js` 顶部硬编码的 `TDT_KEY` 常量，改为读取 `window.FOOTPRINT_CONFIG.tiandituKey`（后台“3D 地球”Tab 配置，见 §4.6）；
+   - `hasTDTKey`、天地图底图 Provider 的创建、底图菜单中天地图项（`tdtImg/tdtVec/tdtImgClean/tdtVecClean`）的启用，全部跟随配置的 Key；
+   - “三维地形”按钮（`#terrainBtn`）的可用性由 Key 是否配置决定；默认是否开启由 `FOOTPRINT_CONFIG.enableTerrainDefault` 决定（原逻辑为按钮始终 `disabled`，开启后由 `localStorage` 记忆开关状态）；
+   - 未配置 Key 时保持现有降级行为：仅高德底图可用、无三维地形，并给出提示文案。
+4. **2D/3D 切换改造**（替换 `app.js` 约 343–420 行的 `morphTo2D/morphTo3D` 逻辑）：
+   - 保留 Cesium 原生 `morphTo2D/morphTo3D` 作为过渡动画：切 2D 时先让地球“展开”成平面，`morphComplete` 后再交换到高德视图；切 3D 时先显示仍处于平面状态的地球，再“合并”回球体；
+   - 点击 2D：`morphTo2D` 动画 → 隐藏 `#view-3d`、显示 `#view-2d`，并触发高德初始化（见 §4.4）；
+   - 点击 3D：隐藏 `#view-2d`、显示 `#view-3d`（平面地球）→ `morphTo3D` 动画 → 恢复自转（`prefers-reduced-motion` 时直接切换，跳过动画）；
+   - 按钮文字沿用原页面语义：显示当前模式（3D 视图显示“3D”，2D 视图显示“2D”）；动画期间锁定按钮防连点，并带超时兜底；
+   - 2D 状态下地球保持 SCENE2D 平面状态（隐藏），返回时以其作为合并动画起点；切 2D 时收起地球侧覆盖层（详情卡/灯箱/相册/城市视图）。
    - 地球侧状态：进入 2D 时停止自动旋转与 `requestAnimationFrame` 循环，避免后台渲染消耗；返回 3D 时恢复。
-4. **品牌文案接入设置**：`#topNav` 的 “旅行记忆 / Travel Memory”、`#pageIntro` 标题与描述，改用 `FOOTPRINT_CONFIG.title/logoName/describe`（现有为硬编码）。
-5. **状态栏**：2D 状态下可将 `#statusText` 文案切换为“高德 2D 地图”，3D 下保持现有底图/坐标文案。
-6. `aria-busy`、瓦片错误重试等逻辑保持不变。
+5. **品牌文案接入设置**：`#pageIntro` 标题/描述与导航栏中文名改用“3D 地球”Tab 的 `globeTitle/globeDesc`（独立于基本设置，不再读 `logoName/describe`）；导航栏英文名保持默认 “Travel Memory”。
+6. **状态栏**：2D 状态下可将 `#statusText` 文案切换为“高德 2D 地图”，3D 下保持现有底图/坐标文案。
+7. `aria-busy`、瓦片错误重试等逻辑保持不变。
 
 ### 4.4 `footprint.js` 改造点（高德地图改为可懒加载）
 
@@ -191,7 +213,46 @@
 
 ### 4.6 后端
 
-- `FootprintRouter`、`FootprintEndpoint`、`FootprintHeadProcessor` 均**无需改动**；
+#### 4.6.1 `settings.yaml` 新增“3D 地球”配置 Tab
+
+在现有 `spec.forms` 中追加一个 `group: globe3d`（后台显示为“3D 地球”Tab），字段示例：
+
+```yaml
+- group: globe3d
+  label: 3D 地球
+  formSchema:
+    - $formkit: text
+      label: 3D 地球标题
+      name: globeTitle
+      value: '旅行记忆'
+      help: "3D 地球导航栏与首页标题卡的标题（不读取基本设置中的左下角标题）"
+    - $formkit: textarea
+      label: 3D 地球描述
+      name: globeDesc
+      value: '把每一次出发，收藏成地球上的坐标；让走过的城市，成为星空下的故事。'
+      help: "3D 地球首页标题卡的描述文字（不读取基本设置中的足迹描述）"
+    - $formkit: text
+      label: 天地图 Key
+      name: tiandituKey
+      value: ''
+      help: "https://lbs.tianditu.gov.cn 注册后申请（浏览器端应用）。不填则 3D 地球只显示高德底图，天地图影像/矢量底图与三维地形不可用"
+    - $formkit: checkbox
+      label: 默认启用三维地形
+      name: enableTerrainDefault
+      value: false
+      help: "配置了天地图 Key 后，进入 3D 地球时是否默认开启三维地形（用户仍可在导航栏手动切换）"
+```
+
+说明：
+
+- `tiandituKey` 同时驱动三处前端行为：天地图影像/矢量底图菜单项、三维地形 Provider（`tdtplug.umd.min.js`）、以及导航栏“三维地形”按钮的可用性；
+- `enableTerrainDefault` 只决定默认开关状态，用户在页面上的选择仍由 `localStorage` 记忆（与现有 `TDT_TERRAIN_STORAGE_KEY` 行为一致）；
+- 后台保存后无需重启插件，设置通过 `settings` 注入模板，与现有 `gaoDeKey` 等字段走同一通道。
+
+#### 4.6.2 其余后端改动
+
+- `FootprintRouter`、`FootprintEndpoint`、`FootprintHeadProcessor` 均**无需改动**（`settings` 对象已整体注入模板，新增字段自动生效）；
+- `BaseConfig` 与 `FootprintServiceImpl.getConfigByGroupName()` 需同步：新增 `tiandituKey`、`enableTerrainDefault` 字段，并让配置读取同时合并 `base` 与 `globe3d` 两组设置（模板中的 `settings` 就是这个对象，缺字段会导致 `${settings.tiandituKey}` 渲染报错）；
 - 数据继续由 Thymeleaf 在 `footprint.html` 注入（已按创建时间倒序），不新增 API；
 - 可选项（本期不做）：后续若需要“新增足迹后页面实时刷新”，可改为调用现有 `GET /apis/api.footprint.lik.cc/v1alpha1/footprints`。
 
@@ -204,6 +265,7 @@
 | Cesium 相对路径加载 | `Cesium.js` 依赖同目录 `Workers/Assets/ThirdParty/Widgets`，必须整目录原样放入 `static/cesium/`；由 Halo 反向代理同源提供，Worker 可正常加载 |
 | 插件体积增加约 12MB | 首次访问加载较慢；Halo 侧一般会启用压缩，可接受。若后续体积敏感，可考虑 Cesium 精简构建或 CDN（但 CDN 会引入跨域/可用性风险，默认不用） |
 | 高德 Key | 2D 模式依赖 `settings.gaoDeKey`（JS API + 域名白名单）；3D 瓦片走高德公开瓦片 URL 不依赖 Key。`_AMapSecurityConfig` 必须保留 |
+| 天地图 Key | 从 `app.js` 硬编码常量改为后台“3D 地球”Tab 配置，避免测试 Key 固化在插件包/前端代码中；天地图同样要求域名白名单，未配置时降级为仅高德底图、无三维地形 |
 | 坐标系统 | 足迹数据为 GCJ-02：高德 2D 直接用原坐标；Cesium 高德底图也是 GCJ-02 瓦片，`app.js` 已有 WGS84 ↔ GCJ-02 转换，切天地图底图时已有处理，无需额外改动 |
 | 样式冲突 | 两个样式表共存，按 §4.5 做 `mode-2d/mode-3d` 作用域隔离 |
 | 内存与性能 | 3D 隐藏时停止自转/动画循环；2D 首次初始化后保留实例，仅显隐切换；如发现内存占用高，可对 2D 实施销毁重建 |
@@ -225,13 +287,18 @@
 6. 站内其他主题页面（非 `/footprints`）不受影响：不加载 Cesium 资源，原有页面样式/脚本无回归。
 7. 桌面端与移动端均可完成 2D/3D 切换。
 8. 2D 高德地图 Key 失效时：3D 地球仍可正常显示，2D 切换给出清晰报错（沿用现有 AMap 加载失败提示）。
+9. 后台“3D 地球”Tab 可配置天地图 Key：
+   - 未配置时：导航栏“三维地形”按钮与天地图底图菜单项禁用，3D 地球仅显示高德底图，无任何报错；
+   - 配置后（无需重启）：天地图底图菜单与“三维地形”按钮可用，勾选“默认启用三维地形”后进入页面地形即开启；
+   - 保存配置后刷新 `/footprints`，行为与配置一致。
 
 ---
 
 ## 7. 实施顺序建议
 
 1. 复制静态资源（§4.1），在本地以最小改动让 `/footprints` 先跑通 3D 地球（模板指向新资源，数据先用 `FOOTPRINT_CONFIG`）；
-2. 完成 `travel-memory.js` 数据源与 2D/3D 切换改造（§4.3）；
-3. 完成 `footprint.js` 懒加载接口（§4.4）；
-4. CSS 作用域隔离与联调（§4.5）；
-5. 按 §6 全量验收，处理移动端与异常场景。
+2. 在 `settings.yaml` 新增“3D 地球”Tab 并注入 `FOOTPRINT_CONFIG`（§4.6.1）；
+3. 完成 `travel-memory.js` 数据源、天地图 Key/三维地形配置化与 2D/3D 切换改造（§4.3）；
+4. 完成 `footprint.js` 懒加载接口（§4.4）；
+5. CSS 作用域隔离与联调（§4.5）；
+6. 按 §6 全量验收，处理移动端与异常场景。

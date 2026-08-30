@@ -32,10 +32,15 @@ public class FootprintServiceImpl implements FootprintService {
 
     @Override
     public Mono<BaseConfig> getConfigByGroupName() {
-        return settingFetcher.get("base")
-            .switchIfEmpty(Mono.error(new RuntimeException("配置不存在")))
-            .flatMap(item -> {
-                BaseConfig config = new BaseConfig(
+        return Mono.zip(
+                settingFetcher.get("base")
+                    .switchIfEmpty(Mono.error(new RuntimeException("配置不存在"))),
+                settingFetcher.get("globe3d").defaultIfEmpty(objectMapper.createObjectNode())
+            )
+            .map(tuple -> {
+                JsonNode item = tuple.getT1();
+                JsonNode globe = tuple.getT2();
+                return new BaseConfig(
                     item.path("title").asText("Handsome足迹"),
                     item.path("gaoDeKey").asText(),
                     item.path("gaoDeWebKey").asText(),
@@ -48,9 +53,12 @@ public class FootprintServiceImpl implements FootprintService {
                     item.path("highlightScheme").asText("glow"),
                     item.path("highlightVisitedCities").asBoolean(true),
                     item.path("photoWallPageSize").asInt(6),
-                    item.path("photoWallStyle").asText("original")
+                    item.path("photoWallStyle").asText("original"),
+                    globe.path("globeTitle").asText("旅行记忆"),
+                    globe.path("globeDesc").asText("把每一次出发，收藏成地球上的坐标；让走过的城市，成为星空下的故事。"),
+                    globe.path("tiandituKey").asText(""),
+                    globe.path("enableTerrainDefault").asBoolean(false)
                 );
-                return Mono.just(config);
             });
     }
 

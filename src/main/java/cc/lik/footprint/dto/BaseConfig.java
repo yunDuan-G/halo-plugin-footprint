@@ -21,4 +21,8 @@ public class BaseConfig {
     private Boolean highlightVisitedCities;
     private Integer photoWallPageSize;
     private String photoWallStyle;
+    private String globeTitle;
+    private String globeDesc;
+    private String tiandituKey;
+    private Boolean enableTerrainDefault;
 }

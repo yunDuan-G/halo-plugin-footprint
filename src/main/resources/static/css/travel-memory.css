@@ -1,0 +1,2895 @@
+        /* 2. 设置地球容器的样式，使其占满全屏（仅 3D 模式生效，避免污染 2D 高德页面） */
+        html {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        body.mode-3d,
+        body.mode-3d #view-3d,
+        body.mode-3d #cesiumContainer {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        /* 视图层级：3D 在上（交叉淡化时覆盖下方的高德页），2D 在下 */
+        #view-3d {
+            position: relative;
+            z-index: 2;
+        }
+        #view-2d {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            height: 100%;
+        }
+        /* 2D 模式：隐藏顶部导航栏，切换按钮改到高德页底部控制栏（#back3dBtn） */
+        body.mode-2d #topNav {
+            display: none;
+        }
+
+        /* ============ 顶部导航栏（报头式极简） ============
+           结构：左侧双语字标（行楷中文 + 字距拉宽的英文），
+           右侧只有三个控制项（视角 / 旋转 / 底图下拉），
+           6 个底图收进菜单，避免一排小字造成的杂乱。
+           状态用白色文字 + 细下划线表达；导航本身无卡片容器。 */
+        #topNav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            height: 64px;
+            padding: 0 28px;
+            box-sizing: border-box;
+            background: linear-gradient(180deg, rgba(5, 7, 12, 0.85), rgba(5, 7, 12, 0.45) 72%, transparent);
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            user-select: none;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.6s ease, visibility 0.6s;
+        }
+        #topNav.visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            white-space: nowrap;
+        }
+        .nav-brand-zh {
+            font-family: "STXingkai", "华文行楷", "KaiTi", "楷体", serif;
+            font-size: 22px;
+            letter-spacing: 0.1em;
+            color: #f7f5f1;
+            text-shadow: 0 1px 12px rgba(0, 0, 0, 0.5);
+        }
+        .nav-brand-sep {
+            width: 1px;
+            height: 18px;
+            background: rgba(247, 245, 241, 0.18);
+        }
+        .nav-brand-en {
+            font-size: 9px;
+            font-weight: 500;
+            letter-spacing: 0.42em;
+            text-transform: uppercase;
+            color: rgba(247, 245, 241, 0.5);
+        }
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            flex-wrap: wrap;
+        }
+        .nav-sep {
+            width: 1px;
+            height: 16px;
+            margin: 0 10px;
+            background: rgba(247, 245, 241, 0.16);
+        }
+
+        /* 导航按钮：无底色，白色 + 细下划线表示状态 */
+        #topNav button {
+            appearance: none;
+            border: 0;
+            background: transparent;
+            padding: 9px 14px;
+            font: 13px/1.4 "PingFang SC", "Microsoft YaHei", sans-serif;
+            letter-spacing: 0.06em;
+            white-space: nowrap;
+            color: rgba(247, 245, 241, 0.78);
+            cursor: pointer;
+            position: relative;
+            transition: color 0.18s ease;
+        }
+        #topNav button::after {
+            content: "";
+            position: absolute;
+            left: 14px;
+            right: 14px;
+            bottom: 5px;
+            height: 1px;
+            background: currentColor;
+            opacity: 0;
+            transform: scaleX(0.5);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        #topNav button:hover:not(:disabled) {
+            color: #ffffff;
+        }
+        #topNav button:hover:not(:disabled)::after {
+            opacity: 0.8;
+            transform: scaleX(1);
+        }
+        #topNav button.active {
+            color: #ffffff;
+        }
+        #topNav button.active::after {
+            opacity: 1;
+            transform: scaleX(1);
+        }
+        #topNav button:disabled {
+            opacity: 0.32;
+            cursor: default;
+        }
+        #topNav button:focus-visible {
+            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline-offset: 2px;
+        }
+
+        /* 视角按钮：当前模式指示，始终加亮 */
+        #topNav #sceneModeBtn {
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        /* 底图下拉菜单 */
+        .nav-menu {
+            position: relative;
+        }
+        .nav-menu > button {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+        .nav-chev {
+            opacity: 0.7;
+            transition: transform 0.2s ease;
+        }
+        .nav-menu.open .nav-chev {
+            transform: rotate(180deg);
+        }
+        #layerButtons.nav-menu-panel {
+            position: absolute;
+            top: calc(100% + 10px);
+            right: 0;
+            min-width: 212px;
+            padding: 6px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(8, 10, 16, 0.9);
+            backdrop-filter: blur(18px) saturate(140%);
+            -webkit-backdrop-filter: blur(18px) saturate(140%);
+            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            animation: navPanelIn 0.18s ease;
+        }
+        #layerButtons.nav-menu-panel[hidden] {
+            display: none;
+        }
+        @keyframes navPanelIn {
+            from { opacity: 0; transform: translateY(-6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        #layerButtons.nav-menu-panel button {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            text-align: left;
+            padding: 9px 12px;
+            border-radius: 8px;
+            letter-spacing: 0.02em;
+        }
+        #layerButtons.nav-menu-panel button::after {
+            content: none;
+            position: static;
+            transform: none;
+            background: none;
+            opacity: 1;
+            margin-left: 12px;
+            font-size: 12px;
+            line-height: 1;
+        }
+        #layerButtons.nav-menu-panel button:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        #layerButtons.nav-menu-panel button.active {
+            background: rgba(255, 255, 255, 0.06);
+        }
+        #layerButtons.nav-menu-panel button.active::after {
+            content: "✓";
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #topNav {
+                transition: none;
+            }
+            #topNav button,
+            #topNav button::after,
+            .nav-chev {
+                transition: none;
+            }
+            #layerButtons.nav-menu-panel {
+                animation: none;
+            }
+        }
+
+        /* 窄屏：报头自动换行，英文小字隐藏 */
+        @media (max-width: 820px) {
+            #topNav {
+                flex-wrap: wrap;
+                height: auto;
+                padding: 10px 16px;
+                gap: 8px;
+            }
+            .nav-brand-zh {
+                font-size: 18px;
+            }
+            .nav-brand-sep,
+            .nav-brand-en {
+                display: none;
+            }
+        }
+
+        /* 左下角状态/版权提示 */
+        #status {
+            position: fixed;
+            left: 12px;
+            bottom: 12px;
+            z-index: 9999;
+            padding: 6px 12px;
+            font: 13px/1.6 "Microsoft YaHei", sans-serif;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.55);
+            border-radius: 6px;
+            pointer-events: none;
+            max-width: 70vw;
+        }
+        #statusRetry {
+            pointer-events: auto;
+            margin-left: 10px;
+            padding: 3px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 999px;
+            background: transparent;
+            color: #ffffff;
+            font: 12px/1.4 "Microsoft YaHei", sans-serif;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        #statusRetry:hover {
+            background: rgba(255, 255, 255, 0.18);
+        }
+        #statusRetry:focus-visible {
+            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline-offset: 2px;
+        }
+
+        /* 右下角浮动按钮：纯图标、圆形、单色极简，3D 放大后显示 */
+        #backGlobeBtn,
+        #cityFillFloatBtn {
+            position: fixed;
+            right: 24px;
+            z-index: 9998;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 1px solid rgba(247, 245, 241, 0.28);
+            background: rgba(5, 7, 12, 0.5);
+            color: rgba(247, 245, 241, 0.82);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: opacity 0.35s ease, visibility 0.35s, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+        #backGlobeBtn {
+            bottom: 24px;
+        }
+        #cityFillFloatBtn {
+            bottom: 70px;
+        }
+        #backGlobeBtn svg,
+        #cityFillFloatBtn svg {
+            width: 17px;
+            height: 17px;
+        }
+        #backGlobeBtn.show,
+        #cityFillFloatBtn.show {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+        #cityFillFloatBtn.active {
+            background: #f7f5f1;
+            border-color: #f7f5f1;
+            color: #0b0e14;
+        }
+        #backGlobeBtn:hover,
+        #cityFillFloatBtn:hover {
+            background: #f7f5f1;
+            border-color: #f7f5f1;
+            color: #0b0e14;
+        }
+        #backGlobeBtn:focus-visible,
+        #cityFillFloatBtn:focus-visible {
+            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline-offset: 2px;
+        }
+
+        /* 详情卡打开时，右下角浮动按钮让位，避免遮挡卡片 */
+        body.card-open #backGlobeBtn.show,
+        body.card-open #cityFillFloatBtn.show {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        /* 标记键盘按钮：默认屏幕外，聚焦时在左下角显示 */
+        .marker-focus-btn {
+            position: fixed;
+            left: -10000px;
+            top: 0;
+        }
+        .marker-focus-btn:focus-visible {
+            left: 12px;
+            top: auto;
+            bottom: 48px;
+            padding: 8px 14px;
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            border-radius: 999px;
+            background: rgba(8, 10, 16, 0.92);
+            color: #f7f5f1;
+            font: 13px "PingFang SC", "Microsoft YaHei", sans-serif;
+            cursor: pointer;
+            z-index: 9999;
+            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline-offset: 2px;
+        }
+
+        /* 悬停名称：标注式引导线（名称在标记右侧，细线连接），无背景 */
+        #markerTip {
+            position: fixed;
+            z-index: 9997;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            font-size: 13px;
+            letter-spacing: 0.12em;
+            color: rgba(255, 255, 255, 0.98);
+            text-shadow:
+                0 1px 2px rgba(0, 0, 0, 0.8),
+                0 0 10px rgba(0, 0, 0, 0.45),
+                0 0 2px rgba(0, 0, 0, 0.9);
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-50%);
+            transition: opacity 0.15s ease, visibility 0.15s;
+        }
+        #markerTip.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .marker-tip-dot {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.7);
+            opacity: 0;
+            transform: scale(0);
+            transition: opacity 0.18s ease 0.1s, transform 0.18s ease 0.1s;
+        }
+        #markerTip.show .marker-tip-dot {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .marker-tip-line {
+            width: 16px;
+            height: 1px;
+            background: rgba(247, 245, 241, 0.55);
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.7);
+            transform-origin: left center;
+            transform: scaleX(0);
+            transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #markerTip.show .marker-tip-line {
+            transform: scaleX(1);
+        }
+        .marker-tip-name {
+            padding-left: 7px;
+            opacity: 0;
+            transform: translateX(-3px);
+            transition: opacity 0.2s ease 0.1s, transform 0.2s ease 0.1s;
+        }
+        #markerTip.show .marker-tip-name {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        /* 靠近屏幕右缘时镜像到标记左侧 */
+        #markerTip.left {
+            flex-direction: row-reverse;
+        }
+        #markerTip.left .marker-tip-line {
+            transform-origin: right center;
+        }
+        #markerTip.left .marker-tip-name {
+            padding-left: 0;
+            padding-right: 7px;
+            transform: translateX(3px);
+        }
+        #markerTip.left.show .marker-tip-name {
+            transform: translateX(0);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #backGlobeBtn {
+                transition: none;
+            }
+            #cityFillFloatBtn {
+                transition: none;
+            }
+            #markerTip {
+                transition: none;
+            }
+            #markerTip .marker-tip-line,
+            #markerTip .marker-tip-name,
+            #markerTip .marker-tip-dot {
+                transition: none;
+            }
+        }
+
+        /* ============ 左侧标题卡（整合自 left-intro） ============
+           仅 3D 整球视图显示；深色锁定、单色系、行楷标题；
+           入场动画只在 .visible 时播放，每次显示都会重放 */
+        #pageIntro {
+            position: fixed;
+            left: 7%;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 9998;
+            width: min(520px, 42vw);
+            color: #f7f5f1;
+            font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 32px rgba(0, 0, 0, 0.45);
+            pointer-events: none;          /* 不挡地图交互 */
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.7s ease, visibility 0.7s;
+        }
+        #pageIntro.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* 入场动画：元素默认隐藏，仅在本卡 visible 时播放 */
+        #pageIntro .intro-eyebrow,
+        #pageIntro .intro-title,
+        #pageIntro .intro-desc,
+        #pageIntro .intro-stat,
+        #pageIntro .intro-hint {
+            opacity: 0;
+        }
+        #pageIntro.visible .intro-eyebrow {
+            animation: introFade 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.15s forwards;
+        }
+        #pageIntro.visible .intro-title {
+            animation: introRise 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.45s forwards;
+        }
+        #pageIntro.visible .intro-desc {
+            animation: introFade 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.85s forwards;
+        }
+        #pageIntro.visible .intro-stat {
+            animation: statRise 0.9s cubic-bezier(0.16, 1, 0.3, 1) 1.3s forwards;
+        }
+        #pageIntro.visible .intro-stat + .intro-stat {
+            animation-delay: 1.42s;          /* 两个数字错峰入场 */
+        }
+        #pageIntro.visible .intro-hint {
+            animation: introFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1.55s forwards,
+                       hintBreathe 4s ease-in-out 2.4s infinite;
+        }
+
+        /* 英文小标题 */
+        #pageIntro .intro-eyebrow {
+            margin: 0;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.55em;
+            text-indent: 0.55em;             /* 抵消末字字距，视觉对齐 */
+            color: rgba(244, 240, 230, 0.62);
+        }
+        /* 主标题：行楷书法体 */
+        #pageIntro .intro-title {
+            margin: 24px 0 0;
+            font-family: "STXingkai", "华文行楷", "KaiTi", "楷体", "FangSong", "仿宋", serif;
+            font-weight: 400;                /* 行楷无粗体，避免合成假粗体 */
+            font-size: clamp(70px, 8vw, 88px);
+            letter-spacing: 0.06em;
+            line-height: 1.15;
+        }
+        /* 描述文字 */
+        #pageIntro .intro-desc {
+            margin: 40px 0 0;
+            max-width: 26em;
+            font-size: 17px;
+            line-height: 1.8;
+            color: rgba(247, 245, 241, 0.72);
+        }
+        /* 数据统计：顶部一条稀疏分隔线 */
+        #pageIntro .intro-stats {
+            display: flex;
+            gap: 64px;
+            width: fit-content;
+            margin-top: 44px;
+            padding-top: 24px;
+            border-top: 1px solid rgba(247, 245, 241, 0.14);
+        }
+        #pageIntro .intro-stat {
+            display: flex;
+            flex-direction: column;
+        }
+        #pageIntro .intro-num {
+            font-family: "STXingkai", "华文行楷", "KaiTi", "楷体", "FangSong", "仿宋", serif;
+            font-weight: 400;                /* 行楷无粗体 */
+            font-size: 52px;
+            line-height: 1;
+            letter-spacing: 0.02em;
+        }
+        #pageIntro .intro-label {
+            margin-top: 10px;
+            font-size: 13px;
+            letter-spacing: 0.18em;
+            color: rgba(247, 245, 241, 0.5);
+        }
+        /* 底部提示 */
+        #pageIntro .intro-hint {
+            margin: 48px 0 0;
+            font-size: 13px;
+            letter-spacing: 0.12em;
+            color: rgba(247, 245, 241, 0.5);
+        }
+
+        @keyframes introFade {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+        @keyframes introRise {
+            from { opacity: 0; transform: translateY(28px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes statRise {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes hintBreathe {
+            0%, 100% { opacity: 0.5; }
+            50%      { opacity: 0.92; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #pageIntro {
+                transition: none;
+            }
+            #pageIntro .intro-eyebrow,
+            #pageIntro .intro-title,
+            #pageIntro .intro-desc,
+            #pageIntro .intro-stat,
+            #pageIntro .intro-hint {
+                opacity: 1;
+                animation: none;
+            }
+        }
+
+        /* ============ 足迹详情卡（右侧，点击标记后显示） ============ */
+        #markerCard {
+            position: fixed;
+            right: 4.5%;
+            top: 50%;
+            transform: translateY(-50%) translateX(28px);
+            z-index: 9997;
+            width: min(380px, 34vw);
+            color: #f7f5f1;
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            /* 整卡毛玻璃面板：图片与正文统一在一个圆角玻璃容器内 */
+            background: rgba(5, 7, 12, 0.62);
+            border: 1px solid rgba(247, 245, 241, 0.12);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.45s ease, visibility 0.45s, transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #markerCard.visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transform: translateY(-50%) translateX(0);
+        }
+        .marker-card-media {
+            height: auto;
+            aspect-ratio: 3 / 2;   /* 主图比例：比 16:9 更饱满，不再扁长 */
+            border-radius: 0;      /* 由卡片容器统一裁切圆角 */
+            background-size: cover;
+            background-position: center;
+        }
+        .marker-card-media.no-image {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 6px;
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02)), rgba(8, 10, 16, 0.75);
+        }
+        .marker-card-monogram {
+            font-family: "STXingkai", "华文行楷", "KaiTi", "楷体", serif;
+            font-size: 76px;
+            line-height: 1;
+            color: rgba(247, 245, 241, 0.88);
+            text-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+        }
+        .marker-card-retry {
+            padding: 5px 14px;
+            border: 1px solid rgba(247, 245, 241, 0.35);
+            border-radius: 999px;
+            background: transparent;
+            color: rgba(247, 245, 241, 0.85);
+            font: 12px/1.4 "PingFang SC", "Microsoft YaHei", sans-serif;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        .marker-card-retry:hover {
+            background: #f7f5f1;
+            color: #0b0e14;
+        }
+        .marker-card-body {
+            padding: 16px 18px 18px;
+        }
+        .marker-card-eyebrow {
+            margin: 0;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.42em;
+            text-transform: uppercase;
+            color: rgba(247, 245, 241, 0.5);
+        }
+        .marker-card-title {
+            margin: 10px 0 0;
+            font-family: "STXingkai", "华文行楷", "KaiTi", "楷体", serif;
+            font-weight: 400;
+            font-size: 34px;
+            line-height: 1.15;
+            letter-spacing: 0.05em;
+        }
+        .marker-card-addr {
+            margin: 10px 0 0;
+            font-size: 12px;
+            letter-spacing: 0.06em;
+            color: rgba(247, 245, 241, 0.55);
+        }
+        .marker-card-desc {
+            margin: 14px 0 0;
+            max-width: 30em;
+            font-size: 14px;
+            line-height: 1.8;
+            color: rgba(247, 245, 241, 0.78);
+        }
+        .marker-card-meta {
+            margin: 12px 0 0;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            color: rgba(247, 245, 241, 0.55);
+        }
+        .marker-card-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 18px;
+        }
+        .marker-card-link {
+            font-size: 13px;
+            letter-spacing: 0.05em;
+            color: rgba(247, 245, 241, 0.85);
+            text-decoration: none;
+            border-bottom: 1px solid rgba(247, 245, 241, 0.35);
+            padding-bottom: 2px;
+            transition: color 0.2s ease, border-color 0.2s ease;
+        }
+        .marker-card-link:hover {
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.8);
+        }
+        #markerCardLocate {
+            appearance: none;
+            border: 1px solid rgba(247, 245, 241, 0.35);
+            border-radius: 999px;
+            background: transparent;
+            color: rgba(247, 245, 241, 0.88);
+            font: 12.5px/1 "PingFang SC", "Microsoft YaHei", sans-serif;
+            letter-spacing: 0.08em;
+            padding: 7px 16px;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+        #markerCardLocate:hover {
+            background: #f7f5f1;
+            border-color: #f7f5f1;
+            color: #0b0e14;
+        }
+        #markerCardLocate:focus-visible {
+            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline-offset: 2px;
+        }
+
+        /* 详情卡内容分段入场：图片 → 标题 → 信息 → 正文 → 操作 */
+        .marker-card-media,
+        .marker-card-eyebrow,
+        .marker-card-title,
+        .marker-card-meta,
+        .marker-card-addr,
+        .marker-card-desc,
+        .marker-card-actions {
+            opacity: 1;               /* 基础可见：关闭淡出时内容跟随容器 */
+        }
+        #markerCard.visible .marker-card-media {
+            animation: cardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
+        }
+        #markerCard.visible .marker-card-eyebrow {
+            animation: cardIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+        }
+        #markerCard.visible .marker-card-title {
+            animation: cardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.22s both;
+        }
+        #markerCard.visible .marker-card-meta {
+            animation: cardIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+        }
+        #markerCard.visible .marker-card-addr {
+            animation: cardIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.36s both;
+        }
+        #markerCard.visible .marker-card-desc {
+            animation: cardIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.42s both;
+        }
+        #markerCard.visible .marker-card-actions {
+            animation: cardIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.52s both;
+        }
+        @keyframes cardIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        #markerCardClose {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 50%;
+            background: rgba(5, 7, 12, 0.55);
+            color: rgba(247, 245, 241, 0.9);
+            font-size: 16px;
+            line-height: 1;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        #markerCardClose:hover {
+            background: #f7f5f1;
+            color: #0b0e14;
+        }
+        #markerCardClose:focus-visible {
+            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline-offset: 2px;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #markerCard {
+                transition: none;
+            }
+            #markerCard .marker-card-media,
+            #markerCard .marker-card-eyebrow,
+            #markerCard .marker-card-title,
+            #markerCard .marker-card-meta,
+            #markerCard .marker-card-addr,
+            #markerCard .marker-card-desc,
+            #markerCard .marker-card-actions {
+                animation: none;
+            }
+        }
+        @media (max-width: 820px) {
+            #markerCard {
+                right: 12px;
+                left: 12px;
+                width: auto;
+                top: auto;
+                bottom: 12px;
+                transform: translateY(16px);
+            }
+            #markerCard.visible {
+                transform: translateY(0);
+            }
+            .marker-card-media {
+                aspect-ratio: 16 / 10;   /* 窄屏底部抽屉保持紧凑 */
+            }
+        }
+
+        /* ============ 城市足迹全屏视图（左侧足迹 Tab 卡片 + 右侧详情） ============ */
+        #cityView {
+            position: fixed;
+            inset: 0;
+            z-index: 10015;   /* 相册之上、灯箱之下 */
+            display: flex;
+            flex-direction: column;
+            background:
+                radial-gradient(1100px 640px at 50% 18%, rgba(38, 48, 70, 0.30), transparent 62%),
+                rgba(4, 6, 10, 0.96);
+            backdrop-filter: blur(18px) saturate(120%);
+            -webkit-backdrop-filter: blur(18px) saturate(120%);
+            color: #f7f5f1;
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s;
+        }
+        #cityView.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .city-view-top {
+            width: 100%;
+            flex: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            padding: 20px 28px 8px;
+            box-sizing: border-box;
+            z-index: 4;
+        }
+        #cityViewBack {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border: 1px solid rgba(247, 245, 241, 0.22);
+            border-radius: 999px;
+            background: rgba(8, 10, 16, 0.42);
+            color: rgba(247, 245, 241, 0.85);
+            font: 13px/1.4 "PingFang SC", "Microsoft YaHei", sans-serif;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+        #cityViewBack svg {
+            width: 16px;
+            height: 16px;
+        }
+        #cityViewBack:hover {
+            background: #f7f5f1;
+            border-color: #f7f5f1;
+            color: #0b0e14;
+        }
+        .city-view-head {
+            text-align: center;
+            min-width: 0;
+        }
+        .city-view-eyebrow {
+            margin: 0;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.42em;
+            text-transform: uppercase;
+            color: rgba(247, 245, 241, 0.5);
+        }
+        #cityViewTitle {
+            margin: 6px 0 0;
+            font-family: "STXingkai", "华文行楷", "KaiTi", "楷体", serif;
+            font-weight: 400;
+            font-size: 32px;
+            line-height: 1.15;
+            letter-spacing: 0.08em;
+        }
+        #cityViewStats {
+            margin: 7px 0 0;
+            font-size: 12px;
+            letter-spacing: 0.12em;
+            color: rgba(247, 245, 241, 0.55);
+        }
+        .city-view-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .city-view-nav button {
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(247, 245, 241, 0.2);
+            border-radius: 50%;
+            background: rgba(8, 10, 16, 0.42);
+            color: rgba(247, 245, 241, 0.9);
+            font-size: 19px;
+            line-height: 1;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        .city-view-nav button:hover {
+            background: #f7f5f1;
+            color: #0b0e14;
+        }
+        #cityViewBack:focus-visible,
+        .city-view-nav button:focus-visible,
+        .city-tab:focus-visible,
+        .city-wall-tile:focus-visible {
+            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline-offset: 2px;
+        }
+
+        /* 两栏布局：左侧 Tab 列表 + 右侧详情 */
+        .city-view-body {
+            flex: 1;
+            width: 100%;
+            min-height: 0;
+            display: flex;
+            gap: 24px;
+            padding: 8px 28px 40px;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        .city-tabs {
+            width: 288px;
+            flex: none;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 4px;
+        }
+        .city-tab {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 10px;
+            border: 1px solid rgba(247, 245, 241, 0.12);
+            border-radius: 14px;
+            background: rgba(8, 10, 16, 0.35);
+            color: rgba(247, 245, 241, 0.75);
+            text-align: left;
+            cursor: pointer;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        }
+        .city-tab:hover {
+            background: rgba(247, 245, 241, 0.08);
+            color: #ffffff;
+        }
+        .city-tab.active {
+            background: rgba(247, 245, 241, 0.1);
+            border-color: rgba(247, 245, 241, 0.4);
+            color: #ffffff;
+        }
+        .city-tab-thumb {
+            width: 52px;
+            height: 52px;
+            flex: none;
+            border-radius: 10px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .city-tab-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .city-tab-info {
+            min-width: 0;
+        }
+        .city-tab-name {
+            display: block;
+            font-family: "STXingkai", "华文行楷", "KaiTi", "楷体", serif;
+            font-weight: 400;
+            font-size: 17px;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .city-tab-meta {
+            display: block;
+            margin-top: 4px;
+            font-size: 10.5px;
+            letter-spacing: 0.06em;
+            color: rgba(247, 245, 241, 0.45);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .city-stage {
+            flex: 1;
+            min-width: 0;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .city-stage-content {
+            animation: cityStageIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+        @keyframes cityStageIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 右侧详情：大图 + 描述 + 图片墙 */
+        .city-fp-hero {
+            position: relative;
+            height: min(42vh, 430px);
+            border-radius: 18px;
+            overflow: hidden;
+            background:
+                linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+                rgba(10, 13, 20, 0.92);
+            background-size: cover;
+            background-position: center;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+        }
+        .city-fp-hero::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(4, 6, 10, 0.94) 0%, rgba(4, 6, 10, 0.26) 46%, transparent 72%);
+            pointer-events: none;
+        }
+        .city-fp-hero-body {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1;
+            padding: 22px 24px;
+        }
+        .city-fp-eyebrow {
+            margin: 0;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.42em;
+            text-transform: uppercase;
+            color: rgba(247, 245, 241, 0.66);
+        }
+        .city-fp-name {
+            margin: 9px 0 0;
+            font-family: "STXingkai", "华文行楷", "KaiTi", "楷体", serif;
+            font-weight: 400;
+            font-size: 34px;
+            line-height: 1.15;
+            letter-spacing: 0.06em;
+        }
+        .city-fp-meta {
+            margin: 8px 0 0;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            color: rgba(247, 245, 241, 0.62);
+        }
+        .city-fp-desc {
+            margin: 18px 24px 0;
+            max-width: 58ch;
+            font-size: 14px;
+            line-height: 1.85;
+            color: rgba(247, 245, 241, 0.78);
+        }
+        /* 图片墙：错落瀑布，首图与第 3n+1 张为竖版，其余横版 */
+        .city-fp-wall {
+            margin: 20px 24px 8px;
+            columns: 3;
+            column-gap: 10px;
+        }
+        .city-wall-tile {
+            position: relative;
+            display: block;
+            width: 100%;
+            margin: 0 0 10px;
+            padding: 0;
+            border: 0;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.06);
+            break-inside: avoid;
+            transition: transform 0.3s ease, filter 0.3s ease;
+        }
+        .city-wall-tile img {
+            width: 100%;
+            display: block;
+            object-fit: cover;
+        }
+        .city-wall-tile:first-child img,
+        .city-wall-tile:nth-child(3n+1) img {
+            aspect-ratio: 3 / 4;
+        }
+        .city-wall-tile:not(:first-child):not(:nth-child(3n+1)) img {
+            aspect-ratio: 4 / 3;
+        }
+        .city-wall-tile:hover {
+            transform: translateY(-3px) scale(1.02);
+            filter: brightness(1.08);
+        }
+        .city-wall-empty {
+            padding: 34px 0;
+            text-align: center;
+            font-size: 12px;
+            letter-spacing: 0.1em;
+            color: rgba(247, 245, 241, 0.45);
+        }
+
+        @media (max-width: 820px) {
+            .city-view-top {
+                padding: 14px 14px 6px;
+                gap: 10px;
+            }
+            #cityViewBack span {
+                display: none;
+            }
+            #cityViewBack {
+                padding: 8px;
+            }
+            #cityViewTitle {
+                font-size: 24px;
+            }
+            .city-view-nav button {
+                width: 34px;
+                height: 34px;
+            }
+            .city-view-body {
+                flex-direction: column;
+                gap: 12px;
+                padding: 8px 14px 30px;
+            }
+            .city-tabs {
+                width: 100%;
+                flex-direction: row;
+                overflow-x: auto;
+                overflow-y: hidden;
+                gap: 8px;
+                padding: 2px 2px 6px;
+            }
+            .city-tab {
+                flex: none;
+                width: 190px;
+            }
+            .city-fp-hero {
+                height: 38vh;
+            }
+            .city-fp-desc {
+                margin: 16px 14px 0;
+            }
+            .city-fp-wall {
+                columns: 2;
+                margin: 16px 14px 8px;
+                column-gap: 8px;
+            }
+            .city-fp-hero-body {
+                padding: 16px;
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #cityView,
+            .city-tab,
+            .city-wall-tile,
+            .city-stage-content {
+                transition: none;
+                animation: none;
+            }
+        }
+
+        /* ============ 城市图片墙重设计：旅行杂志式浏览 ============ */
+        #cityView {
+            --city-ink: #f4efe6;
+            --city-muted: rgba(244, 239, 230, 0.58);
+            --city-faint: rgba(244, 239, 230, 0.34);
+            --city-line: rgba(244, 239, 230, 0.14);
+            --city-accent: #d9a86c;
+            background:
+                radial-gradient(900px 520px at 72% 5%, rgba(97, 75, 50, 0.22), transparent 66%),
+                linear-gradient(135deg, #0d1117 0%, #10151c 50%, #0b0e13 100%);
+        }
+        .city-view-top {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 28px 48px 18px;
+        }
+        #cityViewBack {
+            border-color: var(--city-line);
+            background: rgba(255, 255, 255, 0.035);
+            color: var(--city-muted);
+            letter-spacing: 0.05em;
+        }
+        #cityViewBack:hover,
+        .city-view-nav button:hover {
+            background: var(--city-ink);
+            border-color: var(--city-ink);
+            color: #10151c;
+        }
+        .city-view-head {
+            transform: translateX(2.5%);
+        }
+        .city-view-eyebrow {
+            color: var(--city-accent);
+            letter-spacing: 0.28em;
+        }
+        #cityViewTitle {
+            color: var(--city-ink);
+            font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+            font-size: clamp(28px, 3vw, 42px);
+            letter-spacing: 0.04em;
+        }
+        #cityViewStats {
+            color: var(--city-muted);
+            letter-spacing: 0.08em;
+        }
+        .city-view-nav {
+            gap: 6px;
+        }
+        .city-view-nav button {
+            width: 40px;
+            height: 40px;
+            border-color: var(--city-line);
+            background: rgba(255, 255, 255, 0.035);
+            color: var(--city-muted);
+        }
+        .city-view-body {
+            max-width: 1440px;
+            margin: 0 auto;
+            gap: 42px;
+            padding: 18px 48px 54px;
+        }
+        .city-tabs {
+            width: 246px;
+            gap: 5px;
+            padding: 10px 0;
+            border-top: 1px solid var(--city-line);
+        }
+        .city-tabs::before {
+            content: "这座城市的足迹";
+            display: block;
+            margin: 0 12px 12px;
+            color: var(--city-faint);
+            font-size: 10px;
+            letter-spacing: 0.18em;
+        }
+        .city-tab {
+            position: relative;
+            gap: 14px;
+            padding: 12px;
+            border: 0;
+            border-radius: 10px;
+            background: transparent;
+            color: var(--city-muted);
+        }
+        .city-tab::after {
+            content: "";
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: transparent;
+            transform: translateY(-50%);
+        }
+        .city-tab:hover {
+            background: rgba(255, 255, 255, 0.045);
+            color: var(--city-ink);
+        }
+        .city-tab.active {
+            background: rgba(217, 168, 108, 0.11);
+            color: var(--city-ink);
+        }
+        .city-tab.active::after {
+            background: var(--city-accent);
+        }
+        .city-tab-thumb {
+            width: 58px;
+            height: 58px;
+            border-radius: 7px;
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .city-tab-name {
+            font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+            font-size: 16px;
+            letter-spacing: 0.02em;
+        }
+        .city-tab-meta {
+            margin-top: 5px;
+            color: var(--city-faint);
+        }
+        .city-stage {
+            padding-right: 6px;
+        }
+        .city-stage-content {
+            max-width: 920px;
+            margin: 0 auto;
+        }
+        .city-fp-hero {
+            height: min(48vh, 480px);
+            min-height: 330px;
+            border-radius: 3px;
+            box-shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
+        }
+        .city-fp-hero::after {
+            background: linear-gradient(to top, rgba(8, 11, 16, 0.9) 0%, rgba(8, 11, 16, 0.14) 62%, transparent 84%);
+        }
+        .city-fp-hero-body {
+            padding: 30px 32px;
+        }
+        .city-fp-eyebrow {
+            color: var(--city-accent);
+            letter-spacing: 0.22em;
+        }
+        .city-fp-name {
+            margin-top: 10px;
+            font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+            font-size: clamp(32px, 4vw, 52px);
+            letter-spacing: 0.025em;
+        }
+        .city-fp-meta {
+            color: rgba(244, 239, 230, 0.64);
+            letter-spacing: 0.05em;
+        }
+        .city-fp-desc {
+            margin: 24px 0 0;
+            padding: 0 0 22px;
+            max-width: 60ch;
+            border-bottom: 1px solid var(--city-line);
+            color: var(--city-muted);
+            font-size: 14px;
+            line-height: 1.9;
+        }
+        .city-fp-wall {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin: 26px 0 8px;
+        }
+        .city-fp-wall::before {
+            content: "照片记录";
+            grid-column: 1 / -1;
+            margin-bottom: 2px;
+            color: var(--city-faint);
+            font-size: 10px;
+            letter-spacing: 0.22em;
+        }
+        .city-wall-tile {
+            aspect-ratio: 1 / 1;
+            margin: 0;
+            border-radius: 2px;
+            background: rgba(255, 255, 255, 0.05);
+            transition: transform 0.28s ease, filter 0.28s ease;
+        }
+        .city-wall-tile:first-of-type {
+            grid-column: span 2;
+            grid-row: span 2;
+            aspect-ratio: 1 / 1;
+        }
+        .city-wall-tile:nth-of-type(4n + 2) {
+            aspect-ratio: 4 / 5;
+        }
+        .city-wall-tile:nth-of-type(4n + 3) {
+            aspect-ratio: 5 / 4;
+        }
+        .city-wall-tile:nth-of-type(4n + 4) {
+            aspect-ratio: 4 / 5;
+        }
+        .city-wall-tile:hover {
+            transform: translateY(-4px);
+            filter: brightness(1.12) saturate(1.05);
+        }
+        .city-wall-empty {
+            grid-column: 1 / -1;
+            padding: 48px 0;
+            border-top: 1px solid var(--city-line);
+            color: var(--city-faint);
+        }
+        @media (max-width: 1020px) {
+            .city-view-top,
+            .city-view-body { padding-left: 28px; padding-right: 28px; }
+            .city-view-body { gap: 26px; }
+            .city-tabs { width: 216px; }
+        }
+        @media (max-width: 820px) {
+            .city-view-top { padding: 16px 16px 10px; }
+            .city-view-head { transform: none; }
+            .city-view-body { gap: 16px; padding: 10px 16px 34px; }
+            .city-tabs { border-top: 0; padding: 0; }
+            .city-tabs::before { display: none; }
+            .city-tab { width: 184px; padding: 9px; }
+            .city-tab-thumb { width: 50px; height: 50px; }
+            .city-fp-hero { height: 42vh; min-height: 270px; }
+            .city-fp-hero-body { padding: 20px; }
+            .city-fp-desc { margin-top: 18px; }
+            .city-fp-wall { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 20px; }
+            .city-wall-tile:first-of-type { grid-column: span 2; grid-row: span 1; aspect-ratio: 4 / 3; }
+        }
+
+        /* ============ 中央展陈二稿：电影分镜式画廊 ============ */
+        .city-stage-content {
+            display: grid;
+            grid-template-columns: minmax(0, 1.55fr) minmax(220px, 0.75fr);
+            align-items: stretch;
+            gap: 0 28px;
+            max-width: 1060px;
+        }
+        .city-fp-hero {
+            grid-column: 1;
+            grid-row: 1;
+            height: auto;
+            min-height: 520px;
+            border-radius: 0;
+            box-shadow: 14px 18px 0 rgba(217, 168, 108, 0.12), 0 26px 70px rgba(0, 0, 0, 0.34);
+        }
+        .city-fp-hero::before {
+            content: "";
+            position: absolute;
+            inset: 16px;
+            z-index: 1;
+            border: 1px solid rgba(244, 239, 230, 0.32);
+            pointer-events: none;
+        }
+        .city-fp-hero::after {
+            background: linear-gradient(to top, rgba(8, 11, 16, 0.72), transparent 50%);
+        }
+        .city-fp-hero-body {
+            padding: 28px 30px;
+        }
+        .city-fp-eyebrow,
+        .city-fp-name,
+        .city-fp-meta {
+            text-shadow: 0 2px 14px rgba(0, 0, 0, 0.68);
+        }
+        .city-fp-desc {
+            grid-column: 2;
+            grid-row: 1;
+            align-self: center;
+            margin: 0;
+            padding: 30px 0 30px 28px;
+            border-top: 1px solid var(--city-line);
+            border-bottom: 1px solid var(--city-line);
+            color: var(--city-muted);
+            font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+            font-size: 16px;
+            line-height: 2;
+        }
+        .city-fp-wall {
+            grid-column: 1 / -1;
+            grid-row: 2;
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            margin: 32px 0 8px;
+            padding: 0 0 12px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(244, 239, 230, 0.24) transparent;
+        }
+        .city-fp-wall::before {
+            content: "FILM STRIP / 照片记录";
+            flex: 0 0 128px;
+            align-self: center;
+            margin: 0 8px 0 0;
+            color: var(--city-faint);
+            font-size: 10px;
+            line-height: 1.7;
+            letter-spacing: 0.16em;
+            writing-mode: vertical-rl;
+        }
+        .city-wall-tile,
+        .city-wall-tile:first-of-type,
+        .city-wall-tile:nth-of-type(4n + 2),
+        .city-wall-tile:nth-of-type(4n + 3),
+        .city-wall-tile:nth-of-type(4n + 4) {
+            flex: 0 0 154px;
+            width: 154px;
+            aspect-ratio: 4 / 5;
+            border-radius: 0;
+            box-shadow: inset 0 0 0 1px rgba(244, 239, 230, 0.08);
+        }
+        .city-wall-tile:nth-of-type(3n + 2) {
+            aspect-ratio: 1 / 1;
+            margin-top: 18px;
+        }
+        .city-wall-tile:nth-of-type(3n + 3) {
+            aspect-ratio: 5 / 4;
+            margin-top: 7px;
+        }
+        .city-wall-empty {
+            flex: 1 0 auto;
+            border-top: 1px solid var(--city-line);
+            border-bottom: 1px solid var(--city-line);
+        }
+        @media (max-width: 820px) {
+            .city-stage-content {
+                display: block;
+            }
+            .city-fp-hero {
+                min-height: 360px;
+                height: 54vh;
+            }
+            .city-fp-hero::before { inset: 10px; }
+            .city-fp-desc {
+                margin: 22px 0 0;
+                padding: 20px 0;
+                font-size: 14px;
+                line-height: 1.85;
+            }
+            .city-fp-wall {
+                margin-top: 22px;
+            }
+            .city-fp-wall::before {
+                flex-basis: 76px;
+            }
+            .city-wall-tile,
+            .city-wall-tile:first-of-type,
+            .city-wall-tile:nth-of-type(4n + 2),
+            .city-wall-tile:nth-of-type(4n + 3),
+            .city-wall-tile:nth-of-type(4n + 4) {
+                flex-basis: 126px;
+                width: 126px;
+            }
+        }
+
+        /* ============ 中央展陈三稿：摄影作品集网格 ============ */
+        .city-stage-content {
+            display: grid;
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+            gap: 12px;
+            max-width: 1080px;
+        }
+        .city-fp-hero {
+            grid-column: span 7;
+            grid-row: span 2;
+            height: auto;
+            min-height: 570px;
+            border: 0;
+            border-radius: 0;
+            padding: 0;
+            color: inherit;
+            text-align: left;
+            cursor: zoom-in;
+            background-color: #1a2028;
+            box-shadow: none;
+            transition: filter 0.35s ease, transform 0.35s ease;
+        }
+        .city-fp-hero:hover {
+            transform: translateY(-3px);
+            filter: brightness(1.08) saturate(1.05);
+        }
+        .city-fp-hero:focus-visible {
+            outline: 2px solid var(--city-accent);
+            outline-offset: 4px;
+        }
+        .city-fp-hero::before {
+            display: none;
+        }
+        .city-fp-hero::after {
+            background: linear-gradient(to top, rgba(7, 10, 15, 0.86), transparent 54%);
+        }
+        .city-fp-hero-body {
+            padding: 30px;
+        }
+        .city-fp-desc {
+            grid-column: span 5;
+            grid-row: span 2;
+            align-self: stretch;
+            display: flex;
+            align-items: flex-end;
+            min-height: 190px;
+            margin: 0;
+            padding: 24px 20px 24px 24px;
+            border: 1px solid var(--city-line);
+            border-left: 3px solid var(--city-accent);
+            color: var(--city-muted);
+            font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+            font-size: 16px;
+            line-height: 1.95;
+        }
+        .city-fp-wall {
+            grid-column: 1 / -1;
+            grid-row: 3;
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 12px;
+            overflow: visible;
+            margin: 0;
+            padding: 0;
+        }
+        .city-fp-wall::before {
+            content: "";
+            display: none;
+        }
+        .city-wall-tile,
+        .city-wall-tile:first-of-type,
+        .city-wall-tile:nth-of-type(3n + 2),
+        .city-wall-tile:nth-of-type(3n + 3),
+        .city-wall-tile:nth-of-type(4n + 2),
+        .city-wall-tile:nth-of-type(4n + 3),
+        .city-wall-tile:nth-of-type(4n + 4) {
+            width: 100%;
+            min-width: 0;
+            height: auto;
+            aspect-ratio: 1 / 1;
+            margin: 0;
+            border-radius: 0;
+            box-shadow: none;
+        }
+        .city-wall-tile:first-of-type {
+            grid-column: span 2;
+            grid-row: span 2;
+            aspect-ratio: 1 / 1;
+        }
+        .city-wall-tile:nth-of-type(3n + 2) { aspect-ratio: 4 / 5; }
+        .city-wall-tile:nth-of-type(3n + 3) { aspect-ratio: 5 / 4; }
+        .city-wall-tile:nth-of-type(4n + 4) { grid-column: span 2; aspect-ratio: 5 / 3; }
+        .city-wall-tile img {
+            filter: saturate(0.9);
+            transition: filter 0.35s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .city-wall-tile:hover img {
+            filter: saturate(1.08) brightness(1.08);
+            transform: scale(1.045);
+        }
+        .city-wall-empty {
+            grid-column: 1 / -1;
+            padding: 56px 0;
+            border-top: 1px solid var(--city-line);
+            border-bottom: 1px solid var(--city-line);
+        }
+        @media (max-width: 820px) {
+            .city-stage-content { display: block; }
+            .city-fp-hero { min-height: 360px; height: 54vh; }
+            .city-fp-desc { min-height: 0; margin-top: 12px; }
+            .city-fp-wall {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                margin-top: 12px;
+            }
+        }
+        /* ============ 全屏相册（城市 → 足迹 → 图片组） ============ */
+        #albumOverlay {
+            position: fixed;
+            inset: 0;
+            z-index: 10010;
+            display: flex;
+            flex-direction: column;
+            background: rgba(5, 7, 12, 0.88);
+            backdrop-filter: blur(18px) saturate(130%);
+            -webkit-backdrop-filter: blur(18px) saturate(130%);
+            color: #f7f5f1;
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease, visibility 0.25s;
+        }
+        #albumOverlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .album-top {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            padding: 22px 32px 14px;
+        }
+        .album-eyebrow {
+            margin: 0;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.42em;
+            text-transform: uppercase;
+            color: rgba(247, 245, 241, 0.5);
+        }
+        .album-title {
+            margin: 6px 0 0;
+            font-family: "STXingkai", "华文行楷", "KaiTi", "楷体", serif;
+            font-weight: 400;
+            font-size: 28px;
+            letter-spacing: 0.06em;
+        }
+        #albumClose {
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 50%;
+            background: rgba(8, 10, 16, 0.45);
+            color: rgba(247, 245, 241, 0.9);
+            font-size: 17px;
+            line-height: 1;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        #albumClose:hover {
+            background: #f7f5f1;
+            color: #0b0e14;
+        }
+        #albumClose:focus-visible {
+            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline-offset: 2px;
+        }
+        .album-body {
+            flex: 1;
+            overflow-y: auto;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 32px 80px;
+            box-sizing: border-box;
+        }
+        .album-city {
+            padding-top: 22px;
+        }
+        .album-city-head {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 0 10px;
+            background: rgba(5, 7, 12, 0.82);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(247, 245, 241, 0.1);
+        }
+        .album-city-name {
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+        }
+        .album-city-count {
+            font-size: 11px;
+            letter-spacing: 0.06em;
+            color: rgba(247, 245, 241, 0.5);
+            white-space: nowrap;
+        }
+        .album-footprint {
+            padding-top: 18px;
+        }
+        .album-fp-head {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+        }
+        .album-fp-name {
+            font-family: "STXingkai", "华文行楷", "KaiTi", "楷体", serif;
+            font-size: 18px;
+            letter-spacing: 0.04em;
+        }
+        .album-fp-date {
+            font-size: 11px;
+            letter-spacing: 0.06em;
+            color: rgba(247, 245, 241, 0.5);
+        }
+        .album-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .album-tile {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            padding: 0;
+            border: 0;
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.06);
+            transition: transform 0.2s ease, filter 0.2s ease;
+        }
+        .album-tile img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .album-tile:hover {
+            transform: scale(1.03);
+            filter: brightness(1.08);
+        }
+        .album-tile:focus-visible {
+            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline-offset: 2px;
+        }
+        .album-empty {
+            grid-column: 1 / -1;
+            padding: 26px;
+            text-align: center;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            color: rgba(247, 245, 241, 0.45);
+        }
+        /* 网格逐张入场 */
+        #albumOverlay.show .album-tile {
+            animation: albumTileIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+            animation-delay: calc(var(--tile-i, 0) * 40ms);
+        }
+        @keyframes albumTileIn {
+            from { opacity: 0; transform: translateY(14px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ============ 图片灯箱 ============ */
+        #lightbox {
+            position: fixed;
+            inset: 0;
+            z-index: 10020;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(4, 6, 10, 0.92);
+            color: #f7f5f1;
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s;
+        }
+        #lightbox.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .lightbox-stage {
+            position: relative;
+            width: min(88vw, 1100px);
+            height: min(72vh, 780px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #lightboxImg {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+        }
+        .lightbox-skeleton {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(110deg, rgba(255, 255, 255, 0.05) 40%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0.05) 60%);
+            background-size: 200% 100%;
+            animation: skeletonShimmer 1.2s ease infinite;
+        }
+        @keyframes skeletonShimmer {
+            from { background-position: 120% 0; }
+            to   { background-position: -80% 0; }
+        }
+        .lightbox-error {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            font-size: 13px;
+            letter-spacing: 0.08em;
+            color: rgba(247, 245, 241, 0.6);
+        }
+        .lightbox-error button {
+            padding: 6px 16px;
+            border: 1px solid rgba(247, 245, 241, 0.35);
+            border-radius: 999px;
+            background: transparent;
+            color: #f7f5f1;
+            font: 12px/1.4 "PingFang SC", "Microsoft YaHei", sans-serif;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        .lightbox-error button:hover {
+            background: #f7f5f1;
+            color: #0b0e14;
+        }
+        #lightboxClose {
+            position: fixed;
+            top: 20px;
+            right: 22px;
+            z-index: 2;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 50%;
+            background: rgba(8, 10, 16, 0.45);
+            color: rgba(247, 245, 241, 0.9);
+            font-size: 18px;
+            line-height: 1;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        #lightboxClose:hover {
+            background: #f7f5f1;
+            color: #0b0e14;
+        }
+        #lightboxPrev,
+        #lightboxNext {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 2;
+            width: 46px;
+            height: 46px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            background: rgba(8, 10, 16, 0.45);
+            color: rgba(247, 245, 241, 0.9);
+            font-size: 22px;
+            line-height: 1;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        #lightboxPrev { left: 22px; }
+        #lightboxNext { right: 22px; }
+        #lightboxPrev:hover,
+        #lightboxNext:hover {
+            background: #f7f5f1;
+            color: #0b0e14;
+        }
+        #lightboxPrev[hidden],
+        #lightboxNext[hidden],
+        #lightboxError[hidden],
+        #lightboxSkeleton[hidden] {
+            display: none;
+        }
+        #lightboxClose:focus-visible,
+        #lightboxPrev:focus-visible,
+        #lightboxNext:focus-visible,
+        #lightboxRetry:focus-visible,
+        #lightboxMap:focus-visible {
+            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline-offset: 2px;
+        }
+        .lightbox-meta {
+            position: fixed;
+            left: 50%;
+            bottom: 26px;
+            transform: translateX(-50%);
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            color: rgba(247, 245, 241, 0.78);
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+            white-space: nowrap;
+        }
+        #lightboxCount {
+            color: rgba(247, 245, 241, 0.5);
+        }
+        #lightboxMap {
+            padding: 6px 14px;
+            border: 1px solid rgba(247, 245, 241, 0.35);
+            border-radius: 999px;
+            background: transparent;
+            color: #f7f5f1;
+            font: 12px/1.4 "PingFang SC", "Microsoft YaHei", sans-serif;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        #lightboxMap:hover {
+            background: #f7f5f1;
+            color: #0b0e14;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #albumOverlay,
+            #lightbox {
+                transition: none;
+            }
+            #albumOverlay.show .album-tile,
+            .lightbox-skeleton {
+                animation: none;
+            }
+        }
+        @media (max-width: 820px) {
+            .album-top {
+                padding: 16px 16px 12px;
+            }
+            .album-body {
+                padding: 0 16px 60px;
+            }
+            .album-grid {
+                grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+                gap: 8px;
+            }
+            .lightbox-stage {
+                width: 94vw;
+                height: 62vh;
+            }
+            #lightboxPrev { left: 8px; }
+            #lightboxNext { right: 8px; }
+            .lightbox-meta {
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 10px;
+                width: 92vw;
+                text-align: center;
+            }
+        }
+        /* ============ 左侧足迹目录优化：展览目录式导航 ============ */
+        @media (min-width: 821px) {
+            .city-tabs {
+                position: relative;
+                width: 300px;
+                flex: 0 0 300px;
+                box-sizing: border-box;
+                gap: 8px;
+                padding: 14px 0 14px 18px;
+                border-top: 0;
+                border-left: 1px solid var(--city-line);
+                overflow-x: hidden;
+                overflow-y: auto;
+            }
+            .city-tabs::before {
+                margin: 0 12px 14px;
+                color: var(--city-accent);
+                content: "THIS CITY / 足迹目录";
+                font-size: 10px;
+                letter-spacing: 0.16em;
+            }
+            .city-tab {
+                display: grid;
+                grid-template-columns: 24px 68px minmax(0, 1fr);
+                align-items: center;
+                gap: 12px;
+                min-height: 84px;
+                box-sizing: border-box;
+                width: 100%;
+                max-width: 100%;
+                padding: 10px 14px 10px 10px;
+                border: 1px solid transparent;
+                border-radius: 0;
+                color: var(--city-muted);
+                transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, transform 0.25s ease;
+            }
+            .city-tab:hover {
+                background: rgba(255, 255, 255, 0.045);
+                border-color: var(--city-line);
+                color: var(--city-ink);
+                transform: translateX(3px);
+            }
+            .city-tab.active {
+                background: linear-gradient(90deg, rgba(217, 168, 108, 0.14), rgba(217, 168, 108, 0.035));
+                border-color: rgba(217, 168, 108, 0.28);
+                color: var(--city-ink);
+                transform: translateX(6px);
+            }
+            .city-tab.active::before {
+                content: "";
+                position: absolute;
+                left: -2px;
+                width: 3px;
+                height: 46px;
+                background: var(--city-accent);
+            }
+            .city-tab-index {
+                align-self: start;
+                padding-top: 5px;
+                color: var(--city-faint);
+                font: 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+                letter-spacing: 0.04em;
+            }
+            .city-tab.active .city-tab-index { color: var(--city-accent); }
+            .city-tab-thumb {
+                width: 68px;
+                height: 68px;
+                border: 1px solid rgba(244, 239, 230, 0.13);
+                border-radius: 2px;
+                background: rgba(255, 255, 255, 0.06);
+                box-shadow: 0 7px 16px rgba(0, 0, 0, 0.16);
+            }
+            .city-tab.active .city-tab-thumb {
+                border-color: rgba(217, 168, 108, 0.65);
+                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
+            }
+            .city-tab-info {
+                min-width: 0;
+                max-width: 100%;
+                overflow: hidden;
+            }
+            .city-tab-name {
+                font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+                font-size: 17px;
+                line-height: 1.35;
+                white-space: normal;
+                overflow: visible;
+                text-overflow: clip;
+                overflow-wrap: anywhere;
+            }
+            .city-tab-meta {
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 5px 9px;
+                margin-top: 7px;
+                color: var(--city-faint);
+                font-size: 10px;
+                line-height: 1.35;
+                letter-spacing: 0.03em;
+                white-space: normal;
+            }
+            .city-tab-date {
+                color: var(--city-accent);
+                font: 600 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+                letter-spacing: 0.03em;
+            }
+            .city-tab-photos {
+                color: var(--city-faint);
+            }
+            .city-stage {
+                min-width: 0;
+            }
+        }
+        .city-map-wall {
+            display: none;
+            width: 100%;
+            overflow: hidden;
+            background: #151b22;
+            border: 1px solid rgba(244, 239, 230, 0.14);
+            box-shadow: 0 28px 70px rgba(0, 0, 0, 0.3);
+        }
+        .city-map-canvas {
+            position: relative;
+            min-height: 900px;
+            overflow: hidden;
+            background:
+                linear-gradient(rgba(244, 239, 230, 0.055) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(244, 239, 230, 0.055) 1px, transparent 1px),
+                radial-gradient(ellipse at 50% 42%, rgba(91, 119, 106, 0.28), transparent 42%),
+                #151b22;
+            background-size: 42px 42px, 42px 42px, auto, auto;
+        }
+        .city-map-canvas::before,
+        .city-map-canvas::after {
+            content: "";
+            position: absolute;
+            pointer-events: none;
+            border: 1px solid rgba(155, 183, 157, 0.16);
+            border-radius: 48% 52% 44% 56%;
+        }
+        .city-map-canvas::before {
+            top: 13%;
+            left: 30%;
+            width: 40%;
+            height: 54%;
+            transform: rotate(18deg);
+        }
+        .city-map-canvas::after {
+            top: 20%;
+            left: 35%;
+            width: 30%;
+            height: 41%;
+            transform: rotate(-12deg);
+        }
+        .city-map-route {
+            position: absolute;
+            top: 9%;
+            left: 20%;
+            width: 60%;
+            height: 62%;
+            border: 1px dashed rgba(217, 168, 108, 0.45);
+            border-radius: 47% 53% 61% 39%;
+            transform: rotate(-12deg);
+            pointer-events: none;
+        }
+        .city-map-route::after {
+            content: "";
+            position: absolute;
+            top: 48%;
+            left: 49%;
+            width: 9px;
+            height: 9px;
+            border: 2px solid #151b22;
+            border-radius: 50%;
+            background: var(--city-accent);
+            box-shadow: 0 0 0 8px rgba(217, 168, 108, 0.12);
+        }
+        .city-map-core {
+            position: absolute;
+            z-index: 3;
+            top: 278px;
+            left: 50%;
+            display: flex;
+            width: 300px;
+            min-height: 210px;
+            box-sizing: border-box;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 24px;
+            border: 1px solid rgba(217, 168, 108, 0.48);
+            border-radius: 50%;
+            background: rgba(20, 28, 29, 0.82);
+            box-shadow: 0 0 0 12px rgba(217, 168, 108, 0.045), 0 20px 50px rgba(0, 0, 0, 0.34);
+            transform: translateX(-50%);
+            text-align: center;
+        }
+        .city-map-core::before,
+        .city-map-core::after {
+            content: "";
+            position: absolute;
+            border: 1px solid rgba(155, 183, 157, 0.22);
+            border-radius: 50%;
+        }
+        .city-map-core::before { inset: -28px; }
+        .city-map-core::after { inset: -54px; border-style: dashed; opacity: 0.55; }
+        .city-map-core-kicker {
+            position: relative;
+            z-index: 1;
+            color: var(--city-accent);
+            font: 600 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+            letter-spacing: 0.22em;
+        }
+        .city-map-core strong {
+            position: relative;
+            z-index: 1;
+            color: var(--city-ink);
+            font: 400 24px/1.35 "Noto Serif SC", "Songti SC", "STSong", serif;
+        }
+        .city-map-core small {
+            position: relative;
+            z-index: 1;
+            color: var(--city-faint);
+            font: 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+            letter-spacing: 0.08em;
+        }
+        .city-map-photo {
+            position: absolute;
+            z-index: 4;
+            width: 150px;
+            height: 184px;
+            padding: 7px 7px 24px;
+            border: 1px solid rgba(39, 43, 39, 0.22);
+            border-radius: 1px;
+            background: #fffef9;
+            box-shadow: 5px 8px 16px rgba(0, 0, 0, 0.24);
+            cursor: zoom-in;
+            transform: rotate(var(--map-rotation, 0deg));
+            transition: transform 0.28s ease, box-shadow 0.28s ease;
+        }
+        .city-map-photo:nth-of-type(3n) { --map-rotation: -2deg; }
+        .city-map-photo:nth-of-type(4n) { --map-rotation: 2deg; }
+        .city-map-photo:hover,
+        .city-map-photo:focus-visible {
+            z-index: 8;
+            outline: none;
+            box-shadow: 9px 15px 28px rgba(0, 0, 0, 0.35);
+            transform: translateY(-7px) rotate(0) scale(1.06);
+        }
+        .city-map-photo img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: #e6e3db;
+        }
+        .city-map-photo::before {
+            content: "";
+            position: absolute;
+            z-index: -1;
+            top: 50%;
+            left: 50%;
+            width: 180px;
+            height: 1px;
+            background: linear-gradient(90deg, rgba(217, 168, 108, 0.7), rgba(217, 168, 108, 0.05));
+            transform-origin: left center;
+            transform: rotate(var(--line-angle, 0deg));
+        }
+        .city-map-pin {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            border: 2px solid #151b22;
+            border-radius: 50%;
+            background: var(--city-accent);
+            box-shadow: 0 0 0 5px rgba(217, 168, 108, 0.14);
+            transform: translate(-50%, -50%);
+        }
+
+        /* 聚焦与经典方案的安全卡位：避免照片过多时绝对定位互相覆盖 */
+        .city-wall-overflow-note {
+            display: none;
+        }
+
+        /* ============ 城市图片墙整体收敛：统一信息层级与画布 ============ */
+        #cityView {
+            background:
+                radial-gradient(720px 460px at 68% 12%, rgba(113, 83, 48, 0.16), transparent 70%),
+                #0d1117;
+        }
+        .city-view-top {
+            border-bottom: 1px solid rgba(244, 239, 230, 0.1);
+        }
+        .city-view-body {
+            gap: 44px;
+            padding-top: 30px;
+        }
+        .city-tabs {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(244, 239, 230, 0.22) transparent;
+        }
+        .city-stage {
+            padding-right: 0;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(244, 239, 230, 0.22) transparent;
+        }
+        .city-stage-content {
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .city-fp-hero,
+        .city-wall-tile,
+        .city-tab-thumb {
+            background-color: #1a2028;
+        }
+        .city-fp-desc {
+            position: relative;
+            color: rgba(244, 239, 230, 0.68);
+        }
+        .city-fp-desc::before {
+            content: "故事";
+            display: block;
+            margin-bottom: 8px;
+            color: var(--city-accent);
+            font: 600 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+            letter-spacing: 0.18em;
+        }
+        .city-fp-wall {
+            align-items: start;
+        }
+        .city-wall-tile {
+            overflow: hidden;
+        }
+        .city-wall-empty {
+            display: flex;
+            min-height: 140px;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            border: 1px dashed rgba(244, 239, 230, 0.18);
+        }
+        @media (min-width: 821px) {
+            .city-view-head {
+                min-width: 220px;
+            }
+            .city-stage-content {
+                margin-left: 0;
+                margin-right: 0;
+            }
+            .city-tab {
+                transform-origin: left center;
+            }
+            .city-tab.active {
+                transform: translateX(4px);
+            }
+        }
+        /* ============ 最终统一方案：米白手账照片墙 ============ */
+        #cityView {
+            background: #202825;
+            color: #3d4038;
+        }
+        .city-view-top {
+            border-bottom: 1px solid rgba(248, 246, 239, 0.12);
+        }
+        .city-view-eyebrow { color: #d8ae78; }
+        #cityViewTitle { color: #f4efe6; }
+        #cityViewStats { color: rgba(244, 239, 230, 0.62); }
+        .city-view-nav { gap: 7px; }
+        .city-view-body {
+            align-items: flex-start;
+            gap: 34px;
+            overflow: hidden;
+        }
+        .city-stage {
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 0 8px 28px 0;
+        }
+        .city-stage-content {
+            display: block;
+            width: 100%;
+            max-width: 980px;
+            margin: 0 auto;
+        }
+        .city-fp-hero,
+        .city-fp-desc,
+        .city-fp-wall,
+        .city-map-wall {
+            display: none !important;
+        }
+        .city-journal-wall {
+            position: relative;
+            padding: 34px 38px 36px;
+            background:
+                linear-gradient(rgba(118, 92, 61, 0.035) 1px, transparent 1px),
+                #f3eee2;
+            background-size: 100% 34px;
+            color: #3d4038;
+            box-shadow: 0 22px 55px rgba(0, 0, 0, 0.25);
+        }
+        .city-journal-wall::before {
+            content: "";
+            position: absolute;
+            inset: 12px;
+            border: 1px solid rgba(118, 92, 61, 0.18);
+            pointer-events: none;
+        }
+        .city-journal-head {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: end;
+            gap: 8px 18px;
+            padding: 0 0 18px;
+            border-bottom: 1px solid rgba(118, 92, 61, 0.22);
+        }
+        .city-journal-kicker {
+            grid-column: 1 / -1;
+            color: #8b6e52;
+            font: 600 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+            letter-spacing: 0.2em;
+        }
+        .city-journal-head h3 {
+            margin: 0;
+            color: #35423d;
+            font: 400 32px/1.2 "Noto Serif SC", "Songti SC", "STSong", serif;
+        }
+        .city-journal-head time {
+            color: #9b704e;
+            font: 600 11px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+            letter-spacing: 0.05em;
+        }
+        .city-journal-count {
+            grid-column: 1 / -1;
+            color: #9b8874;
+            font: 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+            letter-spacing: 0.08em;
+        }
+        .city-journal-description {
+            position: relative;
+            z-index: 1;
+            max-width: 680px;
+            margin: 18px 0 20px;
+            color: #766049;
+            font: 15px/1.9 "Noto Serif SC", "Songti SC", "STSong", serif;
+        }
+        .city-journal-grid {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 22px 18px;
+            padding: 8px 4px 18px;
+        }
+        .city-journal-card {
+            position: relative;
+            display: block;
+            min-width: 0;
+            min-height: 210px;
+            padding: 7px 7px 28px;
+            border: 1px solid rgba(87, 66, 46, 0.19);
+            background: #fffdf7;
+            box-shadow: 3px 6px 11px rgba(87, 66, 46, 0.17);
+            cursor: zoom-in;
+            transform: rotate(var(--journal-rotation, 0deg));
+            transition: transform 0.28s ease, box-shadow 0.28s ease;
+        }
+        .city-journal-card:nth-child(3n + 1) { --journal-rotation: -1.6deg; }
+        .city-journal-card:nth-child(3n + 2) { --journal-rotation: 1.1deg; }
+        .city-journal-card:nth-child(3n) { --journal-rotation: -0.6deg; }
+        .city-journal-card:hover,
+        .city-journal-card:focus-visible {
+            z-index: 3;
+            outline: none;
+            box-shadow: 8px 14px 22px rgba(87, 66, 46, 0.25);
+            transform: translateY(-6px) rotate(0) scale(1.025);
+        }
+        .city-journal-card img {
+            display: block;
+            width: 100%;
+            height: 220px;
+            object-fit: cover;
+            background: #e6e3db;
+        }
+        .city-journal-card:nth-child(4n + 1) img { height: 260px; }
+        .city-journal-caption {
+            position: absolute;
+            right: 9px;
+            bottom: 8px;
+            left: 9px;
+            overflow: hidden;
+            color: #766049;
+            font: 11px/1.2 "Noto Serif SC", "Songti SC", "STSong", serif;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .city-journal-empty {
+            grid-column: 1 / -1;
+            padding: 74px 0;
+            color: #8b6e52;
+            text-align: center;
+            font: 14px/1.6 "Noto Serif SC", "Songti SC", "STSong", serif;
+        }
+        .city-journal-more {
+            position: relative;
+            z-index: 1;
+            display: block;
+            margin: 12px auto 0;
+            padding: 10px 22px;
+            border: 1px solid rgba(118, 92, 61, 0.34);
+            border-radius: 2px;
+            background: rgba(255, 253, 247, 0.72);
+            color: #6e5945;
+            font: 12px/1 "Noto Serif SC", "Songti SC", "STSong", serif;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+        }
+        .city-journal-more:hover,
+        .city-journal-more:focus-visible {
+            outline: none;
+            background: #6e5945;
+            color: #fffdf7;
+            transform: translateY(-2px);
+        }
+        @media (min-width: 821px) {
+            .city-tabs {
+                width: 260px;
+                flex-basis: 260px;
+                padding: 16px 10px 16px 0;
+                border-left: 0;
+                border-right: 1px solid rgba(248, 246, 239, 0.14);
+                box-sizing: border-box;
+            }
+            .city-tabs::before {
+                margin: 0 12px 14px;
+                color: #d8ae78;
+                content: "THIS CITY / 足迹目录";
+            }
+            .city-tab {
+                grid-template-columns: 20px 6px 62px 16px minmax(0, 1fr);
+                min-height: 82px;
+                gap: 0;
+                margin: 0;
+                padding: 9px 10px;
+                border: 1px solid transparent;
+                background: transparent;
+                color: #655a4d;
+                transform-origin: right center;
+            }
+            .city-tab:hover {
+                background: rgba(255, 253, 247, 0.68);
+                border-color: rgba(118, 92, 61, 0.16);
+                color: #35423d;
+                transform: translateX(-3px);
+            }
+            .city-tab.active {
+                background: #f3eee2;
+                border-color: rgba(118, 92, 61, 0.2);
+                color: #35423d;
+                box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+                transform: translateX(-4px);
+            }
+            .city-tab.active::before {
+                right: -1px;
+                left: auto;
+                width: 3px;
+                height: 44px;
+                background: #b36b4e;
+            }
+            .city-tab-index { grid-column: 1; color: #a08c76; }
+            .city-tab.active .city-tab-index { color: #b36b4e; }
+            .city-tab-thumb {
+                grid-column: 3;
+                width: 62px;
+                height: 62px;
+                box-sizing: border-box;
+                border: 4px solid #fffdf7;
+                box-shadow: 0 4px 10px rgba(87, 66, 46, 0.18);
+            }
+            .city-tab.active .city-tab-thumb {
+                border-color: #fffdf7;
+                box-shadow: 0 5px 12px rgba(87, 66, 46, 0.24);
+            }
+            .city-tab-info { grid-column: 5; }
+            .city-tab-name {
+                color: inherit;
+                font-size: 16px;
+            }
+            .city-tab-meta { color: #a08c76; }
+            .city-tab-date { color: #9b704e; }
+            .city-tab-photos { color: #a08c76; }
+        }
+
+        /* ============ 城市图片墙滚动模型：右侧独立滚动，边界传递到外层 ============ */
+        #cityView {
+            overflow-x: hidden;
+            overflow-y: auto;
+            overscroll-behavior-y: auto;
+        }
+        .city-view-top {
+            position: sticky;
+            top: 0;
+            background: rgba(32, 40, 37, 0.94);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .city-view-body {
+            flex: 0 0 auto;
+            min-height: 0;
+            height: calc(100dvh - 108px);
+            overflow: visible;
+        }
+        .city-tabs {
+            position: sticky;
+            top: 112px;
+            align-self: flex-start;
+            max-height: calc(100dvh - 150px);
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        .city-stage {
+            height: calc(100dvh - 150px);
+            min-height: 420px;
+            overflow-x: hidden;
+            overflow-y: auto;
+            overscroll-behavior-y: auto;
+            scrollbar-gutter: stable;
+        }
+        .city-stage-content {
+            padding-bottom: 54px;
+        }
+        .city-journal-wall {
+            margin-bottom: 28px;
+        }
+        /* ============ cityView 最终浅色统一 ============ */
+        #cityView {
+            background: #e8e0d2;
+            color: #3d4038;
+            overflow: hidden;
+        }
+        .city-view-top {
+            background: rgba(243, 238, 226, 0.96);
+            border-bottom: 1px solid rgba(118, 92, 61, 0.18);
+            box-shadow: 0 4px 18px rgba(87, 66, 46, 0.08);
+        }
+        .city-view-eyebrow { color: #9b704e; }
+        #cityViewTitle { color: #35423d; }
+        #cityViewStats { color: #8b7865; }
+        #cityViewBack,
+        .city-view-nav button {
+            border-color: rgba(118, 92, 61, 0.25);
+            background: rgba(255, 253, 247, 0.58);
+            color: #6e5945;
+        }
+        #cityViewBack:hover,
+        .city-view-nav button:hover {
+            border-color: #6e5945;
+            background: #6e5945;
+            color: #fffdf7;
+        }
+        .city-view-body {
+            min-height: 0;
+            height: calc(100dvh - 108px);
+            background: #e8e0d2;
+            overflow: hidden !important;
+        }
+        .city-tabs {
+            scrollbar-color: rgba(118, 92, 61, 0.28) transparent;
+        }
+        .city-stage {
+            scrollbar-color: rgba(118, 92, 61, 0.28) transparent;
+        }
+        .city-stage-content {
+            padding-bottom: 44px;
+        }
+        /* ============ 自然比例手账瀑布流 ============ */
+        .city-journal-grid {
+            display: block;
+            columns: 3;
+            column-gap: 18px;
+            padding: 12px 4px 24px;
+        }
+        .city-journal-card {
+            display: block;
+            width: 100%;
+            min-height: 0;
+            height: auto;
+            margin: 0 0 22px;
+            box-sizing: border-box;
+            break-inside: avoid;
+            -webkit-column-break-inside: avoid;
+            transform: rotate(var(--journal-rotation, 0deg));
+        }
+        .city-journal-card img,
+        .city-journal-card:nth-child(4n + 1) img {
+            display: block;
+            width: 100%;
+            height: auto;
+            max-height: 620px;
+            min-height: 0;
+            object-fit: contain;
+        }
+        .city-journal-card .city-journal-caption {
+            position: static;
+            display: block;
+            margin-top: 8px;
+            overflow: hidden;
+            color: #766049;
+            font: 11px/1.45 "Noto Serif SC", "Songti SC", "STSong", serif;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .city-journal-empty {
+            display: block;
+            break-inside: avoid;
+        }
+        .city-journal-more {
+            clear: both;
+        }
+
+        /* 城市图片墙顶部：将三排信息收敛为一行紧凑标题栏 */
+        .city-view-top {
+            padding-top: 14px;
+            padding-bottom: 12px;
+        }
+        .city-view-head {
+            display: grid;
+            grid-template-columns: auto auto auto;
+            align-items: baseline;
+            justify-content: center;
+            column-gap: 14px;
+            text-align: left;
+            transform: none;
+        }
+        .city-view-eyebrow {
+            margin: 0;
+            white-space: nowrap;
+            font-size: 10px;
+            letter-spacing: 0.16em;
+        }
+        #cityViewTitle {
+            margin: 0;
+            font-family: "STXingkai", "华文行楷", "FZKai-Z03", "KaiTi", cursive;
+            font-size: clamp(24px, 2.4vw, 32px);
+            font-weight: 400;
+            line-height: 1;
+            letter-spacing: 0.06em;
+            white-space: nowrap;
+        }
+        #cityViewStats {
+            margin: 0;
+            color: #8b7865;
+            font-size: 11px;
+            line-height: 1;
+            letter-spacing: 0.06em;
+            white-space: nowrap;
+        }
+
+        /* 图片加载状态：先给目录缩略图和照片卡片保留稳定的视觉占位 */
+        .city-tab-thumb,
+        .city-journal-card {
+            position: relative;
+            overflow: hidden;
+        }
+        .city-tab-thumb.is-loading::before,
+        .city-journal-card.is-loading::before {
+            content: "";
+            position: absolute;
+            z-index: 2;
+            inset: 0;
+            background: linear-gradient(105deg, #e8dfd1 20%, #f7f0e5 42%, #e8dfd1 64%);
+            background-size: 220% 100%;
+            animation: cityImageSkeleton 1.25s ease-in-out infinite;
+        }
+        .city-tab-thumb.is-loading::after,
+        .city-journal-card.is-loading::after {
+            content: "加载中";
+            position: absolute;
+            z-index: 3;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9f8c77;
+            font: 10px/1 "Noto Serif SC", "Songti SC", serif;
+            letter-spacing: 0.08em;
+        }
+        .city-journal-card.is-loading {
+            min-height: 220px;
+        }
+        .city-tab-thumb.is-loading img,
+        .city-journal-card.is-loading img,
+        .city-tab-thumb.is-error img,
+        .city-journal-card.is-error img {
+            opacity: 0;
+        }
+        .city-tab-thumb.is-error::before,
+        .city-journal-card.is-error::before,
+        .city-tab-thumb.is-empty::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: #e8dfd1;
+        }
+        .city-tab-thumb.is-error::after,
+        .city-journal-card.is-error::after,
+        .city-tab-thumb.is-empty::after {
+            content: "暂无图片";
+            position: absolute;
+            z-index: 2;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #a18e7a;
+            font: 10px/1.2 "Noto Serif SC", "Songti SC", serif;
+            letter-spacing: 0.04em;
+        }
+        @keyframes cityImageSkeleton {
+            from { background-position: 100% 0; }
+            to { background-position: -100% 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .city-tab-thumb.is-loading::before,
+            .city-journal-card.is-loading::before {
+                animation: none;
+            }
+        }
