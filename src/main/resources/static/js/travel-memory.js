@@ -2279,7 +2279,11 @@
         if (!cityBoundaryCache.has(adcode)) {
             cityBoundaryCache.set(
                 adcode,
-                fetch('https://geo.datav.aliyun.com/areas_v3/bound/' + adcode + '.json')
+                // DataV 服务带防盗链：请求携带站点 Referer（如 lik.cc）会返回 403，
+                // 这里显式关闭 Referer（no-referrer），与无 Referer 的 curl 结果一致（200）。
+                fetch('https://geo.datav.aliyun.com/areas_v3/bound/' + adcode + '.json', {
+                    referrerPolicy: 'no-referrer'
+                })
                     .then(res => {
                         if (!res.ok) throw new Error('HTTP ' + res.status);
                         return res.json();
