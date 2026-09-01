@@ -2920,8 +2920,7 @@
             overflow-y: auto;
             overflow-x: hidden;
             color: #f4efe6;
-            /* 票根页用纯色背景，不在图片背后叠加网格/渐变，避免透明票根透出方格 */
-            background: #202825;
+            /* 背景透明：票根页直接透出背后的 3D 地球 */
         }
         .ticket-gallery-top {
             position: sticky;

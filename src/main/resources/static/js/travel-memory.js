@@ -304,8 +304,10 @@
         // 这里用 getElementById 动态判断，避免引用后置声明的变量（TDZ）。
         const cityViewEl = document.getElementById('cityView');
         const albumOverlayEl = document.getElementById('albumOverlay');
+        const ticketGalleryEl = document.getElementById('ticketGallery');
         const overlayOpen = !!(cityViewEl && cityViewEl.classList.contains('show')) ||
-            !!(albumOverlayEl && albumOverlayEl.classList.contains('show'));
+            !!(albumOverlayEl && albumOverlayEl.classList.contains('show')) ||
+            !!(ticketGalleryEl && ticketGalleryEl.classList.contains('show'));
         if (overlayOpen) {
             if (introVisible) {
                 introVisible = false;
@@ -2528,6 +2530,8 @@
             ticketGallery.classList.add('show');
             ticketGallery.setAttribute('aria-hidden', 'false');
             document.body.classList.add('ticket-gallery-open');
+            // 打开票根页：地球作为背景，若未开启自转则自动开启
+            if (!autoRotate) setAutoRotate(true);
             if (ticketItems.length) {
                 ticketIndex = 0;
                 buildTicketWallet();
