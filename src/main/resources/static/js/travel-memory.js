@@ -2515,8 +2515,11 @@
         };
     }
 
-    // 票根页只通过导航栏“票根”按钮进入，不写 URL、不响应 ?view=tickets，
-    // 避免刷新/直接访问该路径时以残缺状态加载票根页。
+    // 通过 /footprints?view=tickets 查询参数可直接进入票根页；
+    // 打开/关闭时同步地址，浏览器前进/后退也能切换。
+    function isTicketsView() {
+        return new URLSearchParams(window.location.search).get('view') === 'tickets';
+    }
     function setTicketView(open) {
         if (!ticketGallery) return;
         if (open) {
@@ -2531,6 +2534,8 @@
             ticketGallery.classList.add('show');
             ticketGallery.setAttribute('aria-hidden', 'false');
             document.body.classList.add('ticket-gallery-open');
+            // 打开票根页时把地址同步为 ?view=tickets，便于分享/直达
+            if (!isTicketsView()) history.pushState({ ticketGallery: true }, '', window.location.pathname + '?view=tickets');
             // 打开票根页：地球作为背景，若未开启自转则自动开启
             if (!autoRotate) setAutoRotate(true);
             if (ticketItems.length) {
@@ -2545,6 +2550,8 @@
             ticketGallery.classList.remove('show');
             ticketGallery.setAttribute('aria-hidden', 'true');
             document.body.classList.remove('ticket-gallery-open');
+            // 关闭后还原地址，避免刷新又回到票根页
+            if (isTicketsView()) history.replaceState({}, '', window.location.pathname);
             if (ticketTrigger) ticketTrigger.focus();
         }
     }
@@ -2585,6 +2592,8 @@
             ticketWallet.appendChild(img);
             return { fp, img };
         });
+        const isTouch = window.matchMedia('(hover: none)').matches || 'ontouchstart' in window;
+        ticketGalleryHint.textContent = isTouch ? '左右滑动切换票根 · 点击信息展开详情' : '点击票根或滚动鼠标切换';
         ticketGalleryHint.hidden = ticketItems.length < 2;
     }
 
@@ -2690,12 +2699,11 @@
         switchTicket(event.deltaY > 0 ? 1 : -1);
         setTimeout(() => { wheelLocked = false; }, 320);
     }, { passive: false });
-    // 触摸滑动切换（作用于整个票根区域）
-    const ticketGalleryStage = document.querySelector('.ticket-gallery-stage');
-    (ticketGalleryStage || ticketWallet).addEventListener('touchstart', event => {
+    // 触摸滑动切换（只在票根区域上滑动时切换，信息区滑动不切换）
+    ticketWallet.addEventListener('touchstart', event => {
         walletTouchX = event.touches[0].clientX;
     }, { passive: true });
-    (ticketGalleryStage || ticketWallet).addEventListener('touchend', event => {
+    ticketWallet.addEventListener('touchend', event => {
         if (walletTouchX === null) return;
         const dx = event.changedTouches[0].clientX - walletTouchX;
         walletTouchX = null;
@@ -2728,6 +2736,16 @@
             renderTicketWallet();
         }
     });
+    // 浏览器前进/后退：按 ?view=tickets 参数在票根页与地球页之间切换
+    window.addEventListener('popstate', () => {
+        setTicketView(isTicketsView());
+    });
+    // 直接访问 /footprints?view=tickets 时打开票根页（数据就绪后再打开，避免空状态闪烁）
+    if (isTicketsView()) {
+        document.addEventListener('footprints:loaded', () => {
+            if (!ticketGallery.classList.contains('show')) setTicketView(true);
+        }, { once: true });
+    }
 
     const chinaDataSource = Cesium.GeoJsonDataSource.load(
         '/plugins/footprint/assets/static/data/china-full.json',
