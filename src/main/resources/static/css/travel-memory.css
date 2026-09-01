@@ -3219,21 +3219,15 @@
             #ticketLightboxClose { top: 18px; right: 16px; }
         }
 
-        /* 票根页面本身就是沉浸式详情，不渲染缩略图网格 */
+        /* 票根页：票夹叠放展示，无左右切换按钮 */
         .ticket-gallery-content {
             display: grid;
-            grid-template-columns: 52px minmax(0, 1fr) 52px;
+            grid-template-columns: minmax(0, 1fr);
             align-items: center;
-            gap: clamp(12px, 3vw, 44px);
             min-height: calc(100vh - 120px);
             padding-top: 34px;
             padding-bottom: 64px;
         }
-        /* 显式指定三列位置：上一张/下一张按钮 hidden（display:none）时，
-           网格自动布局会跳过它们，导致内容列被挤进 52px 的按钮列而塌陷为 0 宽。 */
-        .ticket-gallery-prev { grid-column: 1; }
-        .ticket-gallery-view { grid-column: 2; }
-        .ticket-gallery-next { grid-column: 3; }
         .ticket-gallery-view {
             display: grid;
             grid-template-columns: minmax(0, 1.6fr) minmax(250px, 0.7fr);
@@ -3246,29 +3240,54 @@
         .ticket-gallery-stage {
             position: relative;
             display: flex;
-            min-height: 280px;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
         }
-        #ticketGalleryImage {
+        .ticket-wallet {
+            position: relative;
+            width: 100%;
+            margin-bottom: 40px;   /* 给露出的票根边缘留空间 */
+            cursor: pointer;
+            touch-action: pan-y;
+        }
+        .ticket-wallet-item {
             display: block;
             width: 100%;
             height: auto;
-            max-width: 100%;
-            /* 票根按实际比例展示，页面高度随图片自然撑开 */
-            max-height: none;
-            object-fit: contain;
-            box-shadow: 0 26px 76px rgba(0, 0, 0, 0.46);
+            /* 不给图片元素加任何背景/圆角：透明票根的透明区域直接透出页面背景，
+               避免在图片背后形成一块独立的“盒子” */
+            transition: transform 0.32s ease, filter 0.32s ease;
+            user-select: none;
+            -webkit-user-drag: none;
         }
-        #ticketGalleryImage:not(.is-loaded) { min-height: 260px; }
+        .ticket-wallet-item.is-active {
+            position: relative;
+            z-index: 10;
+            cursor: pointer;
+        }
+        .ticket-wallet-item.is-behind {
+            position: absolute;
+            left: 0;
+            bottom: -16px;   /* 底部对齐并统一露出 16px 边缘 */
+            width: 100%;
+            height: auto;
+            cursor: pointer;
+            filter: brightness(0.82) saturate(0.88);
+        }
+        .ticket-wallet-item.is-behind:hover,
+        .ticket-wallet-item.is-behind:focus-visible {
+            filter: brightness(1) saturate(1);
+            outline: 2px solid #d8ae78;
+            outline-offset: -2px;
+        }
         .ticket-gallery-loading,
         .ticket-gallery-error {
-            /* 覆盖在票根占位区域正中央，与图片本身位置一致 */
-            position: absolute;
-            inset: 0;
+            /* 加载/失败提示按内容紧凑显示，不留任何占位盒 */
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 18px 0;
             color: rgba(244, 239, 230, 0.72);
             font-size: 13px;
             letter-spacing: 0.08em;
@@ -3278,7 +3297,6 @@
         .ticket-gallery-error {
             flex-direction: column;
             gap: 16px;
-            justify-items: center;
         }
         .ticket-gallery-error button {
             min-height: 42px;
@@ -3288,6 +3306,14 @@
             color: #f4efe6;
             cursor: pointer;
         }
+        .ticket-gallery-hint {
+            margin: 14px 0 0;
+            color: rgba(244, 239, 230, 0.45);
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-align: center;
+        }
+        .ticket-gallery-hint[hidden] { display: none; }
         .ticket-gallery-meta { max-width: 360px; }
         .ticket-gallery-meta h2 {
             margin: 0;
@@ -3299,30 +3325,13 @@
         .ticket-gallery-meta dl > div { display: grid; grid-template-columns: 62px 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid rgba(244, 239, 230, 0.11); }
         .ticket-gallery-meta dt { color: rgba(244, 239, 230, 0.48); font-size: 11px; }
         .ticket-gallery-meta dd { margin: 0; color: #f4efe6; font-size: 13px; line-height: 1.55; }
-        .ticket-gallery-nav {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            font-size: 32px;
-            line-height: 1;
-        }
-        .ticket-gallery-nav:disabled { opacity: 0.25; cursor: default; }
         .ticket-gallery-empty { grid-column: 1 / -1; width: 100%; }
         @media (max-width: 900px) {
-            .ticket-gallery-content { grid-template-columns: 1fr; gap: 18px; }
             .ticket-gallery-view { grid-template-columns: minmax(0, 1fr); gap: 28px; }
             .ticket-gallery-meta { width: min(100%, 560px); max-width: none; margin: 0 auto; }
-            .ticket-gallery-prev,
-            .ticket-gallery-view,
-            .ticket-gallery-next { grid-column: auto; }
-            .ticket-gallery-prev { grid-row: 2; justify-self: start; }
-            .ticket-gallery-next { grid-row: 2; justify-self: end; }
-            #ticketGalleryImage { max-height: none; }
         }
         @media (max-width: 520px) {
             .ticket-gallery-content { width: min(100% - 28px, 700px); padding-top: 20px; }
-            .ticket-gallery-stage { min-height: 180px; }
-            #ticketGalleryImage { max-height: none; }
             .ticket-gallery-meta h2 { font-size: 38px; }
         }
         @media (prefers-reduced-motion: reduce) {
@@ -3331,6 +3340,7 @@
             #ticketLightboxClose,
             #ticketLightboxPrev,
             #ticketLightboxNext,
+            .ticket-wallet-item,
             .ticket-card { transition: none; }
             .ticket-card:hover,
             .ticket-card:focus-visible { transform: none; }

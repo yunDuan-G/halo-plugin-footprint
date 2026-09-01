@@ -20,7 +20,7 @@
     <script src="/plugins/footprint/assets/static/cesium/Cesium.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/pako.min.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/tdtplug.umd.min.js"></script>
-    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=ticket-v5" rel="stylesheet">
+    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=ticket-wallet-v2" rel="stylesheet">
 
 
 <!--    <link rel="stylesheet" href="../static/css/footprint.css" type="text/css">-->
@@ -184,15 +184,15 @@
             </div>
         </div>
         <div class="ticket-gallery-content">
-            <button id="ticketGalleryPrev" class="ticket-gallery-nav ticket-gallery-prev" type="button" aria-label="上一张票根">‹</button>
             <div class="ticket-gallery-view" aria-live="polite">
                 <div class="ticket-gallery-stage">
+                    <div id="ticketWallet" class="ticket-wallet" role="group" aria-label="旅行票夹"></div>
                     <div id="ticketGalleryLoading" class="ticket-gallery-loading" role="status">票根加载中</div>
-                    <img id="ticketGalleryImage" alt="">
                     <div id="ticketGalleryError" class="ticket-gallery-error" hidden>
                         <span>票根加载失败</span>
                         <button id="ticketGalleryRetry" type="button">重新加载</button>
                     </div>
+                    <p id="ticketGalleryHint" class="ticket-gallery-hint" hidden>点击票根或滚动鼠标切换</p>
                 </div>
                 <aside class="ticket-gallery-meta">
                     <p class="ticket-meta-kicker">FOOTPRINT RECORD</p>
@@ -203,7 +203,6 @@
                     <p id="ticketGalleryPosition" class="ticket-meta-count"></p>
                 </aside>
             </div>
-            <button id="ticketGalleryNext" class="ticket-gallery-nav ticket-gallery-next" type="button" aria-label="下一张票根">›</button>
             <div id="ticketGalleryEmpty" class="ticket-gallery-empty" hidden>
                 <p>还没有收集票根</p>
                 <span>回到地球，继续记录下一段旅程。</span>
@@ -395,6 +394,6 @@
 </div>
 </div>
 
-<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=ticket-v5"></script>
+<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=ticket-wallet-v2"></script>
 </body>
 </html>

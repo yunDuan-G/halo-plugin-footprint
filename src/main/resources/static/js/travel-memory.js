@@ -2453,7 +2453,8 @@
     const ticketGalleryStats = document.getElementById('ticketGalleryStats');
     const ticketGalleryCount = document.getElementById('ticketGalleryCount');
     const ticketLightbox = ticketGallery;
-    const ticketLightboxImage = document.getElementById('ticketGalleryImage');
+    const ticketWallet = document.getElementById('ticketWallet');
+    const ticketGalleryHint = document.getElementById('ticketGalleryHint');
     const ticketLightboxLoading = document.getElementById('ticketGalleryLoading');
     const ticketLightboxError = document.getElementById('ticketGalleryError');
     const ticketLightboxTitle = document.getElementById('ticketGalleryTitle');
@@ -2461,12 +2462,13 @@
     const ticketLightboxDetails = document.getElementById('ticketGalleryDetails');
     const ticketLightboxDescription = document.getElementById('ticketGalleryDescription');
     const ticketLightboxCount = document.getElementById('ticketGalleryPosition');
-    const ticketLightboxPrev = document.getElementById('ticketGalleryPrev');
-    const ticketLightboxNext = document.getElementById('ticketGalleryNext');
     const ticketLightboxRetry = document.getElementById('ticketGalleryRetry');
     let ticketItems = [];
     let ticketIndex = 0;
     let ticketTrigger = null;
+    let walletItems = [];      // 票夹中的票根元素 [{ fp, img }]
+    let wheelLocked = false;   // 滚轮切换节流
+    let walletTouchX = null;   // 触摸滑动起点
 
     function ticketEscape(value) {
         return String(value || '').replace(/[&<>"']/g, char => ({
@@ -2528,7 +2530,8 @@
             document.body.classList.add('ticket-gallery-open');
             if (ticketItems.length) {
                 ticketIndex = 0;
-                renderTicketLightbox();
+                buildTicketWallet();
+                renderTicketWallet();
                 ticketGalleryClose.focus();
             } else {
                 ticketGalleryClose.focus();
@@ -2541,7 +2544,46 @@
         }
     }
 
-    function renderTicketLightbox() {
+    // 票夹：把每张票根叠成一层，第一张完整展示，后面的从边缘露出一条边。
+    function buildTicketWallet() {
+        ticketWallet.innerHTML = '';
+        walletItems = ticketItems.map((fp, i) => {
+            const img = document.createElement('img');
+            img.className = 'ticket-wallet-item';
+            img.alt = fp.ticketTitle || fp.name || '';
+            img.referrerPolicy = 'no-referrer';
+            img.decoding = 'async';
+            img.dataset.index = String(i);
+            const originalUrl = ticketImageUrl(fp.ticketImage);
+            let triedHttps = false;
+            img.onload = () => {
+                img.classList.add('is-loaded');
+                if (i === ticketIndex) {
+                    ticketLightboxLoading.hidden = true;
+                    ticketLightboxError.hidden = true;
+                }
+            };
+            img.onerror = () => {
+                // HTTPS 页面会拦截 HTTP 图片；同一域名通常可直接升级为 HTTPS。
+                if (!triedHttps && window.location.protocol === 'https:' && /^http:\/\//i.test(originalUrl)) {
+                    triedHttps = true;
+                    img.src = originalUrl.replace(/^http:\/\//i, 'https://');
+                    return;
+                }
+                img.classList.add('is-error');
+                if (i === ticketIndex) {
+                    ticketLightboxLoading.hidden = true;
+                    ticketLightboxError.hidden = false;
+                }
+            };
+            img.src = originalUrl;
+            ticketWallet.appendChild(img);
+            return { fp, img };
+        });
+        ticketGalleryHint.hidden = ticketItems.length < 2;
+    }
+
+    function renderTicketWallet() {
         const fp = ticketItems[ticketIndex];
         if (!fp) return;
         const meta = ticketMeta(fp);
@@ -2554,45 +2596,44 @@
             ['日期', meta.date], ['目的地', meta.route], ['类型', meta.type], ['票号', meta.no]
         ].filter(item => item[1]).map(item => '<div><dt>' + ticketEscape(item[0]) + '</dt><dd>' + ticketEscape(item[1]) + '</dd></div>').join('');
         ticketLightboxCount.textContent = (ticketIndex + 1) + ' / ' + ticketItems.length;
-        ticketLightboxPrev.hidden = ticketItems.length < 2;
-        ticketLightboxNext.hidden = ticketItems.length < 2;
-        ticketLightboxLoading.hidden = false;
-        ticketLightboxError.hidden = true;
-        ticketLightboxImage.hidden = false;
-        ticketLightboxImage.referrerPolicy = 'no-referrer';
-        ticketLightboxImage.decoding = 'async';
-        const originalUrl = ticketImageUrl(fp.ticketImage);
-        let triedHttps = false;
-        ticketLightboxImage.onload = () => {
-            ticketLightboxLoading.hidden = true;
-            ticketLightboxImage.classList.add('is-loaded');
-        };
-        ticketLightboxImage.onerror = () => {
-            // HTTPS 页面会拦截 HTTP 图片；同一域名通常可直接升级为 HTTPS。
-            if (!triedHttps && window.location.protocol === 'https:' && /^http:\/\//i.test(originalUrl)) {
-                triedHttps = true;
-                ticketLightboxImage.src = originalUrl.replace(/^http:\/\//i, 'https://');
-                return;
+
+        walletItems.forEach((item, i) => {
+            const img = item.img;
+            const active = i === ticketIndex;
+            img.classList.toggle('is-active', active);
+            img.classList.toggle('is-behind', !active);
+            img.setAttribute('aria-label', (i + 1) + ' / ' + walletItems.length + ' ' + (item.fp.ticketTitle || item.fp.name || '票根'));
+            if (active) {
+                img.style.transform = '';
+                img.style.zIndex = '10';
+                img.tabIndex = -1;
+                // 未加载完成且未失败时显示加载提示；加载完或失败后隐藏
+                ticketLightboxLoading.hidden = img.classList.contains('is-loaded') || img.classList.contains('is-error');
+                ticketLightboxError.hidden = !img.classList.contains('is-error');
+            } else {
+                const distance = Math.abs(i - ticketIndex);
+                const k = Math.min(distance, 5);
+                const dir = i < ticketIndex ? -1 : 1;
+                img.style.transform = 'translate(' + (dir * (6 + k * 3)) + 'px, 0) rotate(' + (dir * (0.6 + k * 1.1)) + 'deg)';
+                img.style.zIndex = String(10 - distance);
+                img.tabIndex = 0;
             }
-            ticketLightboxLoading.hidden = true;
-            ticketLightboxImage.hidden = true;
-            ticketLightboxError.hidden = false;
-        };
-        ticketLightboxImage.classList.remove('is-loaded');
-        ticketLightboxImage.src = originalUrl;
+        });
     }
 
     function openTicketLightbox(index, trigger) {
         ticketItems = ticketItemsFromFootprints();
         ticketIndex = Math.max(0, Math.min(index, ticketItems.length - 1));
         ticketTrigger = trigger || null;
-        renderTicketLightbox();
+        buildTicketWallet();
+        renderTicketWallet();
         ticketGalleryClose.focus();
     }
 
     function closeTicketLightbox(returnFocus = true) {
         if (!ticketLightbox) return;
-        ticketLightboxImage.removeAttribute('src');
+        walletItems.forEach(item => item.img.removeAttribute('src'));
+        walletItems = [];
         setTicketView(false);
         if (returnFocus && ticketTrigger) ticketTrigger.focus();
         ticketTrigger = null;
@@ -2601,15 +2642,55 @@
     function switchTicket(delta) {
         if (ticketItems.length < 2) return;
         ticketIndex = (ticketIndex + delta + ticketItems.length) % ticketItems.length;
-        renderTicketLightbox();
+        renderTicketWallet();
+    }
+
+    function reloadTicket(index) {
+        const item = walletItems[index];
+        if (!item) return;
+        const img = item.img;
+        img.classList.remove('is-loaded', 'is-error');
+        if (index === ticketIndex) {
+            ticketLightboxLoading.hidden = false;
+            ticketLightboxError.hidden = true;
+        }
+        img.src = ticketImageUrl(item.fp.ticketImage);
     }
 
     ticketGalleryBtn.addEventListener('click', () => setTicketView(true));
     ticketGalleryBack.addEventListener('click', () => setTicketView(false));
     ticketGalleryClose.addEventListener('click', () => setTicketView(false));
-    ticketLightboxPrev.addEventListener('click', () => switchTicket(-1));
-    ticketLightboxNext.addEventListener('click', () => switchTicket(1));
-    ticketLightboxRetry.addEventListener('click', renderTicketLightbox);
+    ticketLightboxRetry.addEventListener('click', () => reloadTicket(ticketIndex));
+    // 点露出的边缘 → 翻到前面；点当前票根 → 转到下一张
+    ticketWallet.addEventListener('click', event => {
+        const img = event.target.closest('.ticket-wallet-item');
+        if (!img) return;
+        const index = Number(img.dataset.index);
+        if (index === ticketIndex) {
+            switchTicket(1);
+        } else {
+            ticketIndex = index;
+            renderTicketWallet();
+        }
+    });
+    // 鼠标滚轮切换
+    ticketWallet.addEventListener('wheel', event => {
+        if (ticketItems.length < 2 || wheelLocked) return;
+        event.preventDefault();
+        wheelLocked = true;
+        switchTicket(event.deltaY > 0 ? 1 : -1);
+        setTimeout(() => { wheelLocked = false; }, 320);
+    }, { passive: false });
+    // 触摸滑动切换
+    ticketWallet.addEventListener('touchstart', event => {
+        walletTouchX = event.touches[0].clientX;
+    }, { passive: true });
+    ticketWallet.addEventListener('touchend', event => {
+        if (walletTouchX === null) return;
+        const dx = event.changedTouches[0].clientX - walletTouchX;
+        if (Math.abs(dx) > 40) switchTicket(dx < 0 ? 1 : -1);
+        walletTouchX = null;
+    }, { passive: true });
     ticketLightbox.addEventListener('click', event => {
         if (event.target === ticketLightbox) closeTicketLightbox();
     });
@@ -2629,7 +2710,8 @@
         if (ticketGallery.classList.contains('show')) {
             ticketItems = ticketItemsFromFootprints();
             ticketIndex = 0;
-            renderTicketLightbox();
+            buildTicketWallet();
+            renderTicketWallet();
         }
     });
 
