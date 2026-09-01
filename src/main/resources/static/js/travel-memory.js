@@ -2471,6 +2471,7 @@
     let walletItems = [];      // 票夹中的票根元素 [{ fp, img }]
     let wheelLocked = false;   // 滚轮切换节流
     let walletTouchX = null;   // 触摸滑动起点
+    let walletSwiped = false;  // 滑动后抑制随后的 click，避免一次滑动触发两次切换
 
     function ticketEscape(value) {
         return String(value || '').replace(/[&<>"']/g, char => ({
@@ -2667,6 +2668,10 @@
     ticketLightboxRetry.addEventListener('click', () => reloadTicket(ticketIndex));
     // 点露出的边缘 → 翻到前面；点当前票根 → 转到下一张
     ticketWallet.addEventListener('click', event => {
+        if (walletSwiped) {
+            walletSwiped = false;
+            return;
+        }
         const img = event.target.closest('.ticket-wallet-item');
         if (!img) return;
         const index = Number(img.dataset.index);
@@ -2685,15 +2690,20 @@
         switchTicket(event.deltaY > 0 ? 1 : -1);
         setTimeout(() => { wheelLocked = false; }, 320);
     }, { passive: false });
-    // 触摸滑动切换
-    ticketWallet.addEventListener('touchstart', event => {
+    // 触摸滑动切换（作用于整个票根区域）
+    const ticketGalleryStage = document.querySelector('.ticket-gallery-stage');
+    (ticketGalleryStage || ticketWallet).addEventListener('touchstart', event => {
         walletTouchX = event.touches[0].clientX;
     }, { passive: true });
-    ticketWallet.addEventListener('touchend', event => {
+    (ticketGalleryStage || ticketWallet).addEventListener('touchend', event => {
         if (walletTouchX === null) return;
         const dx = event.changedTouches[0].clientX - walletTouchX;
-        if (Math.abs(dx) > 40) switchTicket(dx < 0 ? 1 : -1);
         walletTouchX = null;
+        if (Math.abs(dx) > 40) {
+            walletSwiped = true;
+            switchTicket(dx < 0 ? 1 : -1);
+            setTimeout(() => { walletSwiped = false; }, 400);
+        }
     }, { passive: true });
     ticketLightbox.addEventListener('click', event => {
         if (event.target === ticketLightbox) closeTicketLightbox();
