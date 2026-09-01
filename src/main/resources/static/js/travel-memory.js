@@ -257,6 +257,7 @@
     const INTRO_HIDE_HEIGHT = 9500000;
     let introVisible = false;
     let amapMode = false;   // 当前是否处于 2D 高德地图视图（切换按钮逻辑与导航栏显隐共用）
+    let entranceActive = false;   // 开场动画进行中（暂缓标题卡显示）
 
     // 中国边界线：仅在放大到国内范围时显示，首屏整球视图保持干净。
     // 低于 SHOW 高度显示，高于 HIDE 高度隐藏，中间区间保持原状态防闪烁。
@@ -288,6 +289,17 @@
     };
 
     function updateIntroVisibility() {
+        // 开场动画期间：标题卡暂缓显示，动画结束后由下一帧的相机高度逻辑自动显示
+        if (entranceActive) {
+            if (introVisible) {
+                introVisible = false;
+                pageIntro.classList.remove('visible');
+            }
+            topNav.classList.add('visible');
+            backGlobeBtn.classList.remove('show');
+            cityFillFloatBtn.classList.remove('show');
+            return;
+        }
         // 全屏覆盖层（城市足迹 / 相册）打开时隐藏顶部导航栏与标题卡，避免遮挡；
         // 这里用 getElementById 动态判断，避免引用后置声明的变量（TDZ）。
         const cityViewEl = document.getElementById('cityView');
@@ -750,11 +762,6 @@
         }
     });
 
-    // 页面加载后自动开启自动旋转（尊重系统减弱动效设置）
-    if (!reduceMotion) {
-        setAutoRotate(true);
-    }
-
     // ================= 底图切换 =================
     // gcj: true 表示该底图基于 GCJ-02（高德），标记需从 WGS84 转换后再放置
     const baseProviders = {
@@ -833,6 +840,13 @@
             article: s.article || '',
             zoomLevel: Number(s.zoomLevel) || 12,
             image: s.image || '',
+            ticketImage: s.ticketImage || '',
+            ticketTitle: s.ticketTitle || '',
+            ticketSubtitle: s.ticketSubtitle || '',
+            ticketDate: s.ticketDate || '',
+            ticketRoute: s.ticketRoute || '',
+            ticketNo: s.ticketNo || '',
+            ticketType: s.ticketType || '',
             galleryImages: (s.galleryImages || []).map(g => ({ url: g.url, caption: '' }))
         };
     }
@@ -1155,12 +1169,55 @@
     }
     applyTerrainBtnState();
 
-    // ================= 初始视角 =================
-    // 首次加载不飞行，直接把初始视角定位到“中国朝向”的整球视图，
-    // 随后自动旋转（若开启）就会从中国方向开始转；足迹标记仍会放置。
-    viewer.camera.setView({
-        destination: Cesium.Cartesian3.fromDegrees(104.0, 35.0, 21000000) // 中国大致中心，整球可见
-    });
+    // ================= 初始视角与开场动画 =================
+    // 首次加载：地球从另一侧（太平洋方向）旋转入场，飞到“中国朝向”的整球视图，
+    // 动画结束再开启自动旋转；尊重系统减弱动效，2D 模式恢复时不播动画。
+    function playEntranceAnimation() {
+        entranceActive = true;
+        const startLng = -60, startLat = 30, startH = 25000000;   // 从太平洋一侧开始
+        const endLng = 104.0, endLat = 35.0, endH = 21000000;     // 中国大致中心，整球可见
+        const duration = 2.6;   // 秒
+        const startTime = performance.now();
+
+        const cancelEntrance = () => {
+            if (!entranceActive) return;
+            entranceActive = false;
+            viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(endLng, endLat, endH) });
+            if (!reduceMotion) setAutoRotate(true);
+        };
+        // 用户拖动/滚轮交互时立即结束入场动画，避免相机被“抢”
+        cesiumCanvas.addEventListener('pointerdown', cancelEntrance);
+        cesiumCanvas.addEventListener('wheel', cancelEntrance, { passive: true });
+
+        viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(startLng, startLat, startH) });
+        function tick(now) {
+            if (!entranceActive) return;
+            const t = Math.min((now - startTime) / (duration * 1000), 1);
+            const k = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;   // easeInOutQuad
+            viewer.camera.setView({
+                destination: Cesium.Cartesian3.fromDegrees(
+                    startLng + (endLng - startLng) * k,
+                    startLat + (endLat - startLat) * k,
+                    startH + (endH - startH) * k
+                )
+            });
+            if (t < 1) {
+                requestAnimationFrame(tick);
+            } else {
+                entranceActive = false;
+                if (!reduceMotion) setAutoRotate(true);   // 入场完成后再开始自转
+            }
+        }
+        requestAnimationFrame(tick);
+    }
+
+    if (reduceMotion || getSavedViewMode() === '2d') {
+        viewer.camera.setView({
+            destination: Cesium.Cartesian3.fromDegrees(104.0, 35.0, 21000000) // 中国大致中心，整球可见
+        });
+    } else {
+        playEntranceAnimation();
+    }
 
     // ================= 足迹标记点 =================
     // 样式：中间白色实心圆点 + 外围白色圆环，圆环与圆点之间留空隙（内联 SVG data URI）。
@@ -2262,6 +2319,7 @@
             if (cityFillEnabled) buildCityFills();   // 城市高亮开关开启时才随新数据重建
         }
         updateIntroStats();
+        document.dispatchEvent(new CustomEvent('footprints:loaded'));
     });
 
     // ================= 中国轮廓 GeoJSON =================
@@ -2384,6 +2442,196 @@
             });
         });
     }
+
+    // ================= 票根墙 =================
+    // 票根是独立于足迹封面和图片墙的单图资源：一条足迹最多对应一张票根。
+    const ticketGallery = document.getElementById('ticketGallery');
+    const ticketGalleryBtn = document.getElementById('ticketGalleryBtn');
+    const ticketGalleryBack = document.getElementById('ticketGalleryBack');
+    const ticketGalleryClose = document.getElementById('ticketGalleryClose');
+    const ticketGalleryEmpty = document.getElementById('ticketGalleryEmpty');
+    const ticketGalleryStats = document.getElementById('ticketGalleryStats');
+    const ticketGalleryCount = document.getElementById('ticketGalleryCount');
+    const ticketLightbox = ticketGallery;
+    const ticketLightboxImage = document.getElementById('ticketGalleryImage');
+    const ticketLightboxLoading = document.getElementById('ticketGalleryLoading');
+    const ticketLightboxError = document.getElementById('ticketGalleryError');
+    const ticketLightboxTitle = document.getElementById('ticketGalleryTitle');
+    const ticketLightboxSubtitle = document.getElementById('ticketGallerySubtitle');
+    const ticketLightboxDetails = document.getElementById('ticketGalleryDetails');
+    const ticketLightboxDescription = document.getElementById('ticketGalleryDescription');
+    const ticketLightboxCount = document.getElementById('ticketGalleryPosition');
+    const ticketLightboxPrev = document.getElementById('ticketGalleryPrev');
+    const ticketLightboxNext = document.getElementById('ticketGalleryNext');
+    const ticketLightboxRetry = document.getElementById('ticketGalleryRetry');
+    let ticketItems = [];
+    let ticketIndex = 0;
+    let ticketTrigger = null;
+
+    function ticketEscape(value) {
+        return String(value || '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[char]));
+    }
+
+    function ticketImageUrl(value) {
+        // Halo 附件字段在不同版本/配置下可能返回 URL 字符串、对象或单元素数组。
+        if (Array.isArray(value)) value = value.find(item => ticketImageUrl(item)) || '';
+        if (value && typeof value === 'object') {
+            value = value.url || value.src || value.thumbnail || value.path || value.spec?.url || '';
+        }
+        const url = String(value || '').trim();
+        if (/^https?:\/\//i.test(url)) return url;
+        if (/^\/\//.test(url)) return window.location.protocol + url;
+        if (/^\//.test(url)) return url;
+        return '';
+    }
+
+    function ticketDate(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+        return match ? match[1] + '.' + match[2] + '.' + match[3] : raw;
+    }
+
+    function ticketItemsFromFootprints() {
+        return FOOTPRINTS.filter(fp => ticketImageUrl(fp.ticketImage));
+    }
+
+    function ticketMeta(fp) {
+        return {
+            title: fp.ticketTitle || fp.name || '未命名足迹',
+            subtitle: fp.ticketSubtitle || fp.city || fp.province || '',
+            date: ticketDate(fp.ticketDate || fp.createTime),
+            route: fp.ticketRoute || fp.address || '',
+            no: fp.ticketNo || '',
+            type: fp.ticketType || fp.footprintType || '',
+            description: fp.description || ''
+        };
+    }
+
+    // 票根页只通过导航栏“票根”按钮进入，不写 URL、不响应 ?view=tickets，
+    // 避免刷新/直接访问该路径时以残缺状态加载票根页。
+    function setTicketView(open) {
+        if (!ticketGallery) return;
+        if (open) {
+            ticketItems = ticketItemsFromFootprints();
+            ticketGalleryEmpty.hidden = ticketItems.length > 0;
+            ticketGalleryCount.textContent = ticketItems.length ? ticketItems.length + ' 张票根' : '';
+            const cities = new Set(ticketItems.map(fp => fp.city).filter(Boolean));
+            const latest = ticketItems.map(fp => ticketDate(fp.ticketDate || fp.createTime)).filter(Boolean)[0] || '';
+            ticketGalleryStats.textContent = ticketItems.length
+                ? ticketItems.length + ' 张票根 · ' + (cities.size || '多个') + ' 个目的地' + (latest ? ' · 最近 ' + latest : '')
+                : '收集每一次出发的凭证';
+            ticketGallery.classList.add('show');
+            ticketGallery.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('ticket-gallery-open');
+            if (ticketItems.length) {
+                ticketIndex = 0;
+                renderTicketLightbox();
+                ticketGalleryClose.focus();
+            } else {
+                ticketGalleryClose.focus();
+            }
+        } else {
+            ticketGallery.classList.remove('show');
+            ticketGallery.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('ticket-gallery-open');
+            if (ticketTrigger) ticketTrigger.focus();
+        }
+    }
+
+    function renderTicketLightbox() {
+        const fp = ticketItems[ticketIndex];
+        if (!fp) return;
+        const meta = ticketMeta(fp);
+        ticketLightboxTitle.textContent = meta.title;
+        ticketLightboxSubtitle.textContent = meta.subtitle;
+        ticketLightboxSubtitle.hidden = !meta.subtitle;
+        ticketLightboxDescription.textContent = meta.description;
+        ticketLightboxDescription.hidden = !meta.description;
+        ticketLightboxDetails.innerHTML = [
+            ['日期', meta.date], ['目的地', meta.route], ['类型', meta.type], ['票号', meta.no]
+        ].filter(item => item[1]).map(item => '<div><dt>' + ticketEscape(item[0]) + '</dt><dd>' + ticketEscape(item[1]) + '</dd></div>').join('');
+        ticketLightboxCount.textContent = (ticketIndex + 1) + ' / ' + ticketItems.length;
+        ticketLightboxPrev.hidden = ticketItems.length < 2;
+        ticketLightboxNext.hidden = ticketItems.length < 2;
+        ticketLightboxLoading.hidden = false;
+        ticketLightboxError.hidden = true;
+        ticketLightboxImage.hidden = false;
+        ticketLightboxImage.referrerPolicy = 'no-referrer';
+        ticketLightboxImage.decoding = 'async';
+        const originalUrl = ticketImageUrl(fp.ticketImage);
+        let triedHttps = false;
+        ticketLightboxImage.onload = () => {
+            ticketLightboxLoading.hidden = true;
+            ticketLightboxImage.classList.add('is-loaded');
+        };
+        ticketLightboxImage.onerror = () => {
+            // HTTPS 页面会拦截 HTTP 图片；同一域名通常可直接升级为 HTTPS。
+            if (!triedHttps && window.location.protocol === 'https:' && /^http:\/\//i.test(originalUrl)) {
+                triedHttps = true;
+                ticketLightboxImage.src = originalUrl.replace(/^http:\/\//i, 'https://');
+                return;
+            }
+            ticketLightboxLoading.hidden = true;
+            ticketLightboxImage.hidden = true;
+            ticketLightboxError.hidden = false;
+        };
+        ticketLightboxImage.classList.remove('is-loaded');
+        ticketLightboxImage.src = originalUrl;
+    }
+
+    function openTicketLightbox(index, trigger) {
+        ticketItems = ticketItemsFromFootprints();
+        ticketIndex = Math.max(0, Math.min(index, ticketItems.length - 1));
+        ticketTrigger = trigger || null;
+        renderTicketLightbox();
+        ticketGalleryClose.focus();
+    }
+
+    function closeTicketLightbox(returnFocus = true) {
+        if (!ticketLightbox) return;
+        ticketLightboxImage.removeAttribute('src');
+        setTicketView(false);
+        if (returnFocus && ticketTrigger) ticketTrigger.focus();
+        ticketTrigger = null;
+    }
+
+    function switchTicket(delta) {
+        if (ticketItems.length < 2) return;
+        ticketIndex = (ticketIndex + delta + ticketItems.length) % ticketItems.length;
+        renderTicketLightbox();
+    }
+
+    ticketGalleryBtn.addEventListener('click', () => setTicketView(true));
+    ticketGalleryBack.addEventListener('click', () => setTicketView(false));
+    ticketGalleryClose.addEventListener('click', () => setTicketView(false));
+    ticketLightboxPrev.addEventListener('click', () => switchTicket(-1));
+    ticketLightboxNext.addEventListener('click', () => switchTicket(1));
+    ticketLightboxRetry.addEventListener('click', renderTicketLightbox);
+    ticketLightbox.addEventListener('click', event => {
+        if (event.target === ticketLightbox) closeTicketLightbox();
+    });
+    document.addEventListener('keydown', event => {
+        if (ticketLightbox.classList.contains('show')) {
+            if (event.key === 'ArrowLeft') { event.preventDefault(); switchTicket(-1); }
+            if (event.key === 'ArrowRight') { event.preventDefault(); switchTicket(1); }
+            if (event.key === 'Escape') { event.preventDefault(); closeTicketLightbox(); }
+            return;
+        }
+        if (ticketGallery.classList.contains('show') && event.key === 'Escape') {
+            event.preventDefault();
+            setTicketView(false);
+        }
+    });
+    document.addEventListener('footprints:loaded', () => {
+        if (ticketGallery.classList.contains('show')) {
+            ticketItems = ticketItemsFromFootprints();
+            ticketIndex = 0;
+            renderTicketLightbox();
+        }
+    });
 
     const chinaDataSource = Cesium.GeoJsonDataSource.load(
         '/plugins/footprint/assets/static/data/china-full.json',

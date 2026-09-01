@@ -95,6 +95,12 @@ public class Footprint extends AbstractExtension {
         private String image;
 
         /**
+         * 票根图片（每个足迹最多一张）
+         */
+        @Schema(description = "票根图片URL")
+        private String ticketImage;
+
+        /**
          * 图片墙图片
          */
         @Schema(description = "图片墙图片及显示顺序")

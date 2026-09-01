@@ -22,6 +22,7 @@ export interface FootprintSpec {
   address?: string;
   footprintType?: string;
   image?: string;
+  ticketImage?: string;
   galleryImages?: GalleryImage[] | string[];
   article?: string;
   metadataNames?: [];

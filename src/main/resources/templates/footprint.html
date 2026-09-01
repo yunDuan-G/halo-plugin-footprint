@@ -20,7 +20,7 @@
     <script src="/plugins/footprint/assets/static/cesium/Cesium.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/pako.min.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/tdtplug.umd.min.js"></script>
-    <link href="/plugins/footprint/assets/static/css/travel-memory.css" rel="stylesheet">
+    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=ticket-v5" rel="stylesheet">
 
 
 <!--    <link rel="stylesheet" href="../static/css/footprint.css" type="text/css">-->
@@ -61,6 +61,8 @@
     </div>
     <div class="nav-actions">
         <button id="sceneModeBtn" type="button" title="切换 2D / 3D 视角">3D</button>
+        <span class="nav-sep"></span>
+        <button id="ticketGalleryBtn" type="button" title="查看票根墙">票根</button>
         <span class="nav-sep"></span>
         <button id="rotateBtn" class="globe-only" type="button" aria-pressed="false">自动旋转</button>
         <span class="nav-sep"></span>
@@ -160,6 +162,52 @@
         <div class="city-view-body" id="cityViewBody">
             <aside class="city-tabs" id="cityTabs" role="tablist" aria-label="城市足迹列表"></aside>
             <section class="city-stage" id="cityStage" aria-live="polite"></section>
+        </div>
+    </div>
+    <!-- 票根墙：仅展示配置了 ticketImage 的足迹 -->
+    <div id="ticketGallery" role="region" aria-label="旅行票根墙" aria-hidden="true">
+        <div class="ticket-gallery-top">
+            <button id="ticketGalleryBack" type="button" aria-label="返回地球">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3.4 12h17.2"/>
+                </svg>
+                <span>返回地球</span>
+            </button>
+            <div class="ticket-gallery-heading">
+                <p class="ticket-gallery-eyebrow">TRAVEL TICKET ARCHIVE</p>
+                <h2>旅途票根</h2>
+                <p id="ticketGalleryStats">收集每一次出发的凭证</p>
+            </div>
+            <div class="ticket-gallery-actions">
+                <span id="ticketGalleryCount" aria-live="polite"></span>
+                <button id="ticketGalleryClose" type="button" aria-label="关闭票根墙">×</button>
+            </div>
+        </div>
+        <div class="ticket-gallery-content">
+            <button id="ticketGalleryPrev" class="ticket-gallery-nav ticket-gallery-prev" type="button" aria-label="上一张票根">‹</button>
+            <div class="ticket-gallery-view" aria-live="polite">
+                <div class="ticket-gallery-stage">
+                    <div id="ticketGalleryLoading" class="ticket-gallery-loading" role="status">票根加载中</div>
+                    <img id="ticketGalleryImage" alt="">
+                    <div id="ticketGalleryError" class="ticket-gallery-error" hidden>
+                        <span>票根加载失败</span>
+                        <button id="ticketGalleryRetry" type="button">重新加载</button>
+                    </div>
+                </div>
+                <aside class="ticket-gallery-meta">
+                    <p class="ticket-meta-kicker">FOOTPRINT RECORD</p>
+                    <h2 id="ticketGalleryTitle"></h2>
+                    <p id="ticketGallerySubtitle" class="ticket-meta-subtitle"></p>
+                    <dl id="ticketGalleryDetails"></dl>
+                    <p id="ticketGalleryDescription" class="ticket-meta-description"></p>
+                    <p id="ticketGalleryPosition" class="ticket-meta-count"></p>
+                </aside>
+            </div>
+            <button id="ticketGalleryNext" class="ticket-gallery-nav ticket-gallery-next" type="button" aria-label="下一张票根">›</button>
+            <div id="ticketGalleryEmpty" class="ticket-gallery-empty" hidden>
+                <p>还没有收集票根</p>
+                <span>回到地球，继续记录下一段旅程。</span>
+            </div>
         </div>
     </div>
     <!-- 图片灯箱 -->
@@ -347,6 +395,6 @@
 </div>
 </div>
 
-<script src="/plugins/footprint/assets/static/js/travel-memory.js"></script>
+<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=ticket-v5"></script>
 </body>
 </html>

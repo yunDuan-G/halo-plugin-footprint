@@ -40,6 +40,7 @@ const initialFormState: Footprint = {
     address: "",
     footprintType: "旅游",
     image: "",
+    ticketImage: "",
     galleryImages: [],
     article: "",
     zoomLevel: "14",
@@ -89,8 +90,16 @@ const handleResetForm = () => {
 };
 
 const normalizeAttachmentImageUrl = (url: unknown): string => {
-  const value = String(url ?? "").trim();
-  return value.replace(
+  // attachment 组件在不同 Halo 版本中可能返回 URL、对象或单元素数组。
+  // 不能直接对对象调用 String，否则会把附件保存成 "[object Object]"。
+  let value: unknown = url;
+  if (Array.isArray(value)) value = value[0];
+  if (value && typeof value === "object") {
+    const image = value as {url?: unknown; src?: unknown; thumbnail?: unknown; path?: unknown};
+    value = image.url ?? image.src ?? image.thumbnail ?? image.path ?? "";
+  }
+  const normalizedValue = String(value ?? "").trim();
+  return normalizedValue.replace(
     /(\.(?:jpe?g|png|gif|webp|bmp|svg|avif|ico))(?:![^/?#]*)?(?=([?#]|$))/i,
     "$1",
   );
@@ -211,6 +220,7 @@ const validateGalleryImageOrders = () => {
 const getSubmitFormState = (): Footprint => {
   const submitState = deepClone(formState.value);
   submitState.spec.galleryImages = getGalleryImagesForSubmit();
+  submitState.spec.ticketImage = normalizeAttachmentImageUrl(submitState.spec.ticketImage);
   return submitState;
 };
 
@@ -583,6 +593,13 @@ onMounted(async () => {
             :type="'attachment' as any"
             name="image"
             label="足迹图片"
+          ></FormKit>
+          <FormKit
+            v-model="formState.spec.ticketImage"
+            :type="'attachment' as any"
+            name="ticketImage"
+            label="票根图片"
+            help="每个足迹最多上传一张票根，票根墙只展示已配置票根的足迹"
           ></FormKit>
           <FormKit
             v-model="galleryImageUrls"

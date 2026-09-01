@@ -2893,3 +2893,481 @@
                 animation: none;
             }
         }
+
+        /* ============ 票根档案墙 ============ */
+        body.ticket-gallery-open #topNav {
+            visibility: hidden;
+            pointer-events: none;
+        }
+        body.ticket-gallery-open #cesiumContainer,
+        body.ticket-gallery-open #view-2d {
+            pointer-events: none;
+        }
+        #ticketGallery,
+        #ticketLightbox {
+            position: fixed;
+            inset: 0;
+            z-index: 11000;
+            display: none;
+            box-sizing: border-box;
+            font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+        #ticketGallery.show,
+        #ticketLightbox.show {
+            display: block;
+        }
+        #ticketGallery {
+            overflow-y: auto;
+            overflow-x: hidden;
+            color: #f4efe6;
+            /* 票根页用纯色背景，不在图片背后叠加网格/渐变，避免透明票根透出方格 */
+            background: #202825;
+        }
+        .ticket-gallery-top {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            display: grid;
+            grid-template-columns: minmax(150px, 1fr) auto minmax(150px, 1fr);
+            align-items: center;
+            gap: 20px;
+            min-height: 86px;
+            padding: max(16px, env(safe-area-inset-top)) 34px 16px;
+            border-bottom: 1px solid rgba(244, 239, 230, 0.13);
+            background: rgba(32, 40, 37, 0.88);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+        .ticket-gallery-heading {
+            text-align: center;
+        }
+        .ticket-gallery-eyebrow,
+        .ticket-meta-kicker {
+            margin: 0 0 8px;
+            color: #d8ae78;
+            font: 600 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+            letter-spacing: 0.2em;
+        }
+        .ticket-gallery-heading h2 {
+            margin: 0;
+            color: #f4efe6;
+            font: 400 clamp(26px, 3vw, 38px)/1.15 "STXingkai", "华文行楷", "FZKai-Z03", "KaiTi", cursive;
+            letter-spacing: 0.08em;
+        }
+        .ticket-gallery-heading p:last-child {
+            margin: 8px 0 0;
+            color: rgba(244, 239, 230, 0.58);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+        }
+        #ticketGalleryBack,
+        #ticketGalleryClose,
+        #ticketLightboxClose,
+        #ticketLightboxPrev,
+        #ticketLightboxNext {
+            appearance: none;
+            border: 1px solid rgba(244, 239, 230, 0.25);
+            background: rgba(12, 16, 15, 0.28);
+            color: #f4efe6;
+            cursor: pointer;
+            transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+        }
+        #ticketGalleryBack {
+            display: inline-flex;
+            align-items: center;
+            justify-self: start;
+            gap: 8px;
+            min-height: 44px;
+            padding: 9px 14px;
+            border-radius: 999px;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+        }
+        #ticketGalleryBack svg { width: 17px; height: 17px; }
+        .ticket-gallery-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 16px;
+            color: rgba(244, 239, 230, 0.55);
+            font: 11px ui-monospace, SFMono-Regular, Consolas, monospace;
+            letter-spacing: 0.08em;
+        }
+        #ticketGalleryClose {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            font-size: 25px;
+            font-weight: 300;
+            line-height: 1;
+        }
+        #ticketGalleryBack:hover,
+        #ticketGalleryClose:hover,
+        #ticketLightboxClose:hover,
+        #ticketLightboxPrev:hover,
+        #ticketLightboxNext:hover {
+            border-color: #d8ae78;
+            background: #d8ae78;
+            color: #202825;
+            transform: translateY(-2px);
+        }
+        #ticketGalleryBack:focus-visible,
+        #ticketGalleryClose:focus-visible,
+        #ticketLightboxClose:focus-visible,
+        #ticketLightboxPrev:focus-visible,
+        #ticketLightboxNext:focus-visible,
+        .ticket-card:focus-visible,
+        #ticketLightboxRetry:focus-visible {
+            outline: 2px solid #d8ae78;
+            outline-offset: 3px;
+        }
+        .ticket-gallery-content {
+            width: min(1420px, calc(100% - 68px));
+            margin: 0 auto;
+            padding: 42px 0 70px;
+        }
+        .ticket-gallery-grid {
+            columns: 3;
+            column-gap: 24px;
+        }
+        .ticket-card {
+            display: block;
+            width: 100%;
+            margin: 0 0 26px;
+            padding: 8px 8px 32px;
+            break-inside: avoid;
+            border: 1px solid rgba(102, 76, 48, 0.28);
+            background: #fffdf7;
+            box-shadow: 6px 12px 24px rgba(0, 0, 0, 0.25);
+            color: #35423d;
+            cursor: zoom-in;
+            text-align: left;
+            transform: rotate(var(--ticket-rotation, 0deg));
+            transition: transform 0.28s ease, box-shadow 0.28s ease;
+        }
+        .ticket-card:nth-child(3n + 1) { --ticket-rotation: -1.2deg; }
+        .ticket-card:nth-child(3n + 2) { --ticket-rotation: 0.8deg; }
+        .ticket-card:nth-child(3n) { --ticket-rotation: -0.45deg; }
+        .ticket-card:hover,
+        .ticket-card:focus-visible {
+            position: relative;
+            z-index: 2;
+            box-shadow: 12px 20px 32px rgba(0, 0, 0, 0.34);
+            transform: translateY(-7px) rotate(0deg) scale(1.018);
+        }
+        .ticket-card-image {
+            position: relative;
+            display: block;
+            overflow: hidden;
+            background: #e8dfd1;
+        }
+        .ticket-card-image::after {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.24) 50%, transparent 70%);
+            content: "";
+            opacity: 0;
+            transform: translateX(-100%);
+        }
+        .ticket-card-image img {
+            display: block;
+            width: 100%;
+            height: auto;
+            min-height: 120px;
+            object-fit: contain;
+        }
+        .ticket-card-caption {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 3px 0;
+        }
+        .ticket-card-caption strong {
+            overflow: hidden;
+            font: 600 15px/1.3 "Noto Serif SC", "Songti SC", "STSong", serif;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .ticket-card-caption span {
+            flex: 0 0 auto;
+            color: #9b704e;
+            font: 10px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace;
+            white-space: nowrap;
+        }
+        .ticket-card.is-error .ticket-card-image::before {
+            display: flex;
+            min-height: 180px;
+            align-items: center;
+            justify-content: center;
+            color: #9b8874;
+            content: "票根暂时无法加载";
+            font: 12px "Noto Serif SC", "Songti SC", "STSong", serif;
+        }
+        .ticket-card.is-error .ticket-card-image img { display: none; }
+        .ticket-gallery-empty {
+            padding: 18vh 20px;
+            color: rgba(244, 239, 230, 0.72);
+            text-align: center;
+        }
+        .ticket-gallery-empty p {
+            margin: 0 0 10px;
+            color: #f4efe6;
+            font: 400 30px "STXingkai", "华文行楷", cursive;
+        }
+        .ticket-gallery-empty span { font-size: 13px; letter-spacing: 0.08em; }
+
+        /* 票根灯箱：票根完整展示，右侧补充足迹档案 */
+        body.ticket-lightbox-open #ticketGallery { overflow: hidden; }
+        #ticketLightbox {
+            padding: 7vh 8vw;
+            overflow: auto;
+            background: rgba(8, 11, 12, 0.94);
+            color: #f4efe6;
+        }
+        .ticket-lightbox-body {
+            display: grid;
+            grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.65fr);
+            align-items: center;
+            gap: clamp(28px, 6vw, 100px);
+            width: min(1300px, 100%);
+            min-height: 86vh;
+            margin: 0 auto;
+        }
+        .ticket-lightbox-stage {
+            position: relative;
+            display: flex;
+            min-height: 260px;
+            align-items: center;
+            justify-content: center;
+        }
+        #ticketLightboxImage {
+            display: block;
+            max-width: 100%;
+            max-height: 78vh;
+            object-fit: contain;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+        }
+        .ticket-lightbox-loading,
+        .ticket-lightbox-error {
+            color: rgba(244, 239, 230, 0.7);
+            font-size: 13px;
+            letter-spacing: 0.08em;
+        }
+        .ticket-lightbox-loading[hidden],
+        .ticket-lightbox-error[hidden] { display: none; }
+        .ticket-lightbox-error {
+            display: grid;
+            gap: 16px;
+            justify-items: center;
+        }
+        #ticketLightboxRetry {
+            min-height: 42px;
+            padding: 8px 16px;
+            border: 1px solid rgba(244, 239, 230, 0.3);
+            background: transparent;
+            color: #f4efe6;
+            cursor: pointer;
+        }
+        .ticket-lightbox-meta { max-width: 340px; }
+        .ticket-lightbox-meta h2 {
+            margin: 0;
+            color: #f4efe6;
+            font: 400 clamp(30px, 4vw, 56px)/1.15 "STXingkai", "华文行楷", cursive;
+            letter-spacing: 0.05em;
+        }
+        .ticket-meta-subtitle { margin: 8px 0 28px; color: #d8ae78; font-size: 12px; letter-spacing: 0.14em; }
+        .ticket-lightbox-meta dl { margin: 0; border-top: 1px solid rgba(244, 239, 230, 0.16); }
+        .ticket-lightbox-meta dl > div { display: grid; grid-template-columns: 62px 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid rgba(244, 239, 230, 0.11); }
+        .ticket-lightbox-meta dt { color: rgba(244, 239, 230, 0.48); font-size: 11px; }
+        .ticket-lightbox-meta dd { margin: 0; color: #f4efe6; font-size: 13px; line-height: 1.55; }
+        .ticket-meta-description { margin: 24px 0 0; color: rgba(244, 239, 230, 0.68); font: 14px/1.8 "Noto Serif SC", "Songti SC", serif; }
+        .ticket-meta-count { margin: 28px 0 0; color: #d8ae78; font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: 0.12em; }
+        #ticketLightboxClose,
+        #ticketLightboxPrev,
+        #ticketLightboxNext { position: fixed; z-index: 2; border-radius: 50%; }
+        #ticketLightboxClose { top: 24px; right: 28px; width: 46px; height: 46px; font-size: 26px; }
+        #ticketLightboxPrev,
+        #ticketLightboxNext { top: 50%; width: 48px; height: 48px; font-size: 32px; line-height: 1; transform: translateY(-50%); }
+        #ticketLightboxPrev { left: 24px; }
+        #ticketLightboxNext { right: 24px; }
+        #ticketLightboxPrev:hover,
+        #ticketLightboxNext:hover { transform: translateY(-50%) scale(1.05); }
+
+        @media (max-width: 1023px) {
+            .ticket-gallery-grid { columns: 2; }
+            .ticket-lightbox-body { grid-template-columns: minmax(0, 1fr) minmax(220px, 0.6fr); gap: 32px; }
+            #ticketLightbox { padding-right: 7vw; padding-left: 7vw; }
+        }
+        @media (max-width: 700px) {
+            .ticket-gallery-top { grid-template-columns: 1fr auto; gap: 12px; padding-right: 16px; padding-left: 16px; }
+            .ticket-gallery-heading { grid-column: 1 / -1; grid-row: 1; }
+            #ticketGalleryBack { grid-column: 1; grid-row: 2; }
+            .ticket-gallery-actions { grid-column: 2; grid-row: 2; }
+            .ticket-gallery-content { width: min(100% - 28px, 560px); padding-top: 24px; }
+            .ticket-gallery-grid { columns: 1; }
+            .ticket-card { transform: none; }
+            .ticket-card:hover,
+            .ticket-card:focus-visible { transform: translateY(-3px); }
+            #ticketLightbox { padding: 78px 22px 30px; }
+            .ticket-lightbox-body { display: flex; flex-direction: column; justify-content: center; gap: 28px; min-height: auto; }
+            #ticketLightboxImage { max-height: 58vh; }
+            .ticket-lightbox-meta { width: min(100%, 430px); }
+            #ticketLightboxPrev { left: 10px; }
+            #ticketLightboxNext { right: 10px; }
+            #ticketLightboxClose { top: 18px; right: 16px; }
+        }
+
+        /* 票根页面本身就是沉浸式详情，不渲染缩略图网格 */
+        .ticket-gallery-content {
+            display: grid;
+            grid-template-columns: 52px minmax(0, 1fr) 52px;
+            align-items: center;
+            gap: clamp(12px, 3vw, 44px);
+            min-height: calc(100vh - 120px);
+            padding-top: 34px;
+            padding-bottom: 64px;
+        }
+        /* 显式指定三列位置：上一张/下一张按钮 hidden（display:none）时，
+           网格自动布局会跳过它们，导致内容列被挤进 52px 的按钮列而塌陷为 0 宽。 */
+        .ticket-gallery-prev { grid-column: 1; }
+        .ticket-gallery-view { grid-column: 2; }
+        .ticket-gallery-next { grid-column: 3; }
+        .ticket-gallery-view {
+            display: grid;
+            grid-template-columns: minmax(0, 1.6fr) minmax(250px, 0.7fr);
+            align-items: center;
+            gap: clamp(30px, 6vw, 96px);
+            width: 100%;
+            max-width: 1320px;
+            margin: 0 auto;
+        }
+        .ticket-gallery-stage {
+            position: relative;
+            display: flex;
+            min-height: 280px;
+            align-items: center;
+            justify-content: center;
+        }
+        #ticketGalleryImage {
+            display: block;
+            width: 100%;
+            height: auto;
+            max-width: 100%;
+            /* 票根按实际比例展示，页面高度随图片自然撑开 */
+            max-height: none;
+            object-fit: contain;
+            box-shadow: 0 26px 76px rgba(0, 0, 0, 0.46);
+        }
+        #ticketGalleryImage:not(.is-loaded) { min-height: 260px; }
+        .ticket-gallery-loading,
+        .ticket-gallery-error {
+            /* 覆盖在票根占位区域正中央，与图片本身位置一致 */
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(244, 239, 230, 0.72);
+            font-size: 13px;
+            letter-spacing: 0.08em;
+        }
+        .ticket-gallery-loading[hidden],
+        .ticket-gallery-error[hidden] { display: none; }
+        .ticket-gallery-error {
+            flex-direction: column;
+            gap: 16px;
+            justify-items: center;
+        }
+        .ticket-gallery-error button {
+            min-height: 42px;
+            padding: 8px 16px;
+            border: 1px solid rgba(244, 239, 230, 0.3);
+            background: transparent;
+            color: #f4efe6;
+            cursor: pointer;
+        }
+        .ticket-gallery-meta { max-width: 360px; }
+        .ticket-gallery-meta h2 {
+            margin: 0;
+            color: #f4efe6;
+            font: 400 clamp(32px, 4vw, 60px)/1.15 "STXingkai", "华文行楷", cursive;
+            letter-spacing: 0.05em;
+        }
+        .ticket-gallery-meta dl { margin: 0; border-top: 1px solid rgba(244, 239, 230, 0.16); }
+        .ticket-gallery-meta dl > div { display: grid; grid-template-columns: 62px 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid rgba(244, 239, 230, 0.11); }
+        .ticket-gallery-meta dt { color: rgba(244, 239, 230, 0.48); font-size: 11px; }
+        .ticket-gallery-meta dd { margin: 0; color: #f4efe6; font-size: 13px; line-height: 1.55; }
+        .ticket-gallery-nav {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            font-size: 32px;
+            line-height: 1;
+        }
+        .ticket-gallery-nav:disabled { opacity: 0.25; cursor: default; }
+        .ticket-gallery-empty { grid-column: 1 / -1; width: 100%; }
+        @media (max-width: 900px) {
+            .ticket-gallery-content { grid-template-columns: 1fr; gap: 18px; }
+            .ticket-gallery-view { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+            .ticket-gallery-meta { width: min(100%, 560px); max-width: none; margin: 0 auto; }
+            .ticket-gallery-prev,
+            .ticket-gallery-view,
+            .ticket-gallery-next { grid-column: auto; }
+            .ticket-gallery-prev { grid-row: 2; justify-self: start; }
+            .ticket-gallery-next { grid-row: 2; justify-self: end; }
+            #ticketGalleryImage { max-height: none; }
+        }
+        @media (max-width: 520px) {
+            .ticket-gallery-content { width: min(100% - 28px, 700px); padding-top: 20px; }
+            .ticket-gallery-stage { min-height: 180px; }
+            #ticketGalleryImage { max-height: none; }
+            .ticket-gallery-meta h2 { font-size: 38px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #ticketGalleryBack,
+            #ticketGalleryClose,
+            #ticketLightboxClose,
+            #ticketLightboxPrev,
+            #ticketLightboxNext,
+            .ticket-card { transition: none; }
+            .ticket-card:hover,
+            .ticket-card:focus-visible { transform: none; }
+        }
+
+        /* 票根墙使用大图档案布局：页面直接展示可阅读尺寸，不做三列缩略图 */
+        .ticket-gallery-content {
+            width: min(1500px, calc(100% - 56px));
+        }
+        .ticket-gallery-grid {
+            columns: 2;
+            column-gap: 30px;
+        }
+        .ticket-card {
+            padding: 10px 10px 34px;
+        }
+        .ticket-card-image img {
+            min-height: 220px;
+        }
+        .ticket-card-caption {
+            padding: 13px 5px 0;
+        }
+        .ticket-card-caption strong {
+            font-size: 17px;
+        }
+        @media (max-width: 1023px) {
+            .ticket-gallery-grid {
+                columns: 1;
+                max-width: 920px;
+                margin: 0 auto;
+            }
+        }
+        @media (max-width: 700px) {
+            .ticket-gallery-content {
+                width: min(100% - 28px, 700px);
+            }
+            .ticket-card-image img {
+                min-height: 0;
+            }
+        }
