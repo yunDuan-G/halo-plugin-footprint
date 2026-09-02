@@ -2628,7 +2628,12 @@
                 const distance = Math.abs(i - ticketIndex);
                 const k = Math.min(distance, 5);
                 const dir = i < ticketIndex ? -1 : 1;
-                img.style.transform = 'translate(' + (dir * (6 + k * 3)) + 'px, 0) rotate(' + (dir * (0.6 + k * 1.1)) + 'deg)';
+                const dx = dir * (8 + k * 4);
+                // 移动端保留扇形折叠（第2张约1.7°、后续最大2.8°），配合限高不戳出顶部
+                const deg = window.matchMedia('(max-width: 900px)').matches
+                    ? dir * Math.min(2.8, 0.6 + k * 1.1)
+                    : dir * Math.min(1.2, 0.4 + k * 0.4);
+                img.style.transform = 'translate(' + dx + 'px, 0) rotate(' + deg + 'deg)';
                 img.style.zIndex = String(10 - distance);
                 img.tabIndex = 0;
             }
