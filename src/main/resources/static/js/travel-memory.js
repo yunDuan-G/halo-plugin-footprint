@@ -2593,7 +2593,7 @@
             return { fp, img };
         });
         const isTouch = window.matchMedia('(hover: none)').matches || 'ontouchstart' in window;
-        ticketGalleryHint.textContent = isTouch ? '左右滑动切换票根 · 点击信息展开详情' : '点击票根或滚动鼠标切换';
+        ticketGalleryHint.textContent = isTouch ? '左右滑动切换票根' : '点击票根或滚动鼠标切换';
         ticketGalleryHint.hidden = ticketItems.length < 2;
     }
 
