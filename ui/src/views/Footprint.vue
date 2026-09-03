@@ -12,11 +12,10 @@ import {
   Toast,
   VSpace,
   IconAddCircle,
-  IconCloseCircle,
   VDropdown,
   VModal} from "@halo-dev/components";
 import {useQuery, useQueryClient} from "@tanstack/vue-query";
-import {computed, h, onMounted, ref, watch} from "vue";
+import {computed, onMounted, ref, watch} from "vue";
 import { formatDatetime } from "@/utils/date";
 import FootprintEditingModal from "../components/FootprintEditingModal.vue";
 import { footprintApiClient } from "@/api";

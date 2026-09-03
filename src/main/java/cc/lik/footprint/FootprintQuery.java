@@ -20,8 +20,8 @@ import java.util.Optional;
 
 import static java.util.Comparator.comparing;
 import static org.springdoc.core.fn.builders.parameter.Builder.parameterBuilder;
-import static run.halo.app.extension.index.query.QueryFactory.contains;
-import static run.halo.app.extension.index.query.QueryFactory.equal;
+import static run.halo.app.extension.index.query.Queries.contains;
+import static run.halo.app.extension.index.query.Queries.equal;
 import static run.halo.app.extension.router.QueryParamBuildUtil.sortParameter;
 
 public class FootprintQuery extends SortableRequest {
@@ -122,4 +122,4 @@ public class FootprintQuery extends SortableRequest {
     }
 
 
-} 
+}

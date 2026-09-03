@@ -7,6 +7,7 @@ import cc.lik.footprint.model.Footprint;
 import cc.lik.footprint.service.FootprintService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import run.halo.app.plugin.ReactiveSettingFetcher;
 import run.halo.app.extension.ReactiveExtensionClient;
+import run.halo.app.extension.Secret;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.*;
@@ -33,17 +35,21 @@ public class FootprintServiceImpl implements FootprintService {
     @Override
     public Mono<BaseConfig> getConfigByGroupName() {
         return Mono.zip(
-                settingFetcher.get("base")
+                fetchSetting("base")
                     .switchIfEmpty(Mono.error(new RuntimeException("配置不存在"))),
-                settingFetcher.get("globe3d").defaultIfEmpty(objectMapper.createObjectNode())
+                fetchSetting("globe3d")
+                    .defaultIfEmpty(objectMapper.createObjectNode())
             )
             .map(tuple -> {
                 JsonNode item = tuple.getT1();
                 JsonNode globe = tuple.getT2();
-                return new BaseConfig(
+                return Mono.zip(
+                    getSecretValue(item.path("gaoDeKeySecretName").asText()),
+                    getSecretValue(item.path("gaoDeWebKeySecretName").asText())
+                ).map(keys -> new BaseConfig(
                     item.path("title").asText("Handsome足迹"),
-                    item.path("gaoDeKey").asText(),
-                    item.path("gaoDeWebKey").asText(),
+                    keys.getT1(),
+                    keys.getT2(),
                     item.path("describe").asText("每一处足迹都充满了故事，那是对人生的思考和无限的风光。"),
                     item.path("hsla").asText("109,42%,60%"),
                     item.path("logoName").asText(),
@@ -58,7 +64,25 @@ public class FootprintServiceImpl implements FootprintService {
                     globe.path("globeDesc").asText("把每一次出发，收藏成地球上的坐标；让走过的城市，成为星空下的故事。"),
                     globe.path("tiandituKey").asText(""),
                     globe.path("enableTerrainDefault").asBoolean(false)
-                );
+                ));
+            })
+            .flatMap(config -> config);
+    }
+
+    private Mono<ObjectNode> fetchSetting(String groupName) {
+        return settingFetcher.fetch(groupName, Map.class)
+            .map(values -> objectMapper.valueToTree(values));
+    }
+
+    private Mono<String> getSecretValue(String secretName) {
+        if (secretName == null || secretName.isBlank()) {
+            return Mono.just("");
+        }
+        return client.fetch(Secret.class, secretName)
+            .switchIfEmpty(Mono.error(new IllegalStateException("未找到配置的 Secret: " + secretName)))
+            .map(secret -> {
+                Map<String, String> stringData = secret.getStringData();
+                return stringData == null ? "" : stringData.getOrDefault("key", "");
             });
     }
 

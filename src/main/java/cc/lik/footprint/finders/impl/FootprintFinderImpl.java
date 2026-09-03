@@ -1,10 +1,7 @@
 package cc.lik.footprint.finders.impl;
 
 import static org.springframework.data.domain.Sort.Order.asc;
-import static run.halo.app.extension.index.query.QueryFactory.all;
-import static run.halo.app.extension.index.query.QueryFactory.and;
-import static run.halo.app.extension.index.query.QueryFactory.equal;
-import static run.halo.app.extension.index.query.QueryFactory.isNull;
+import static run.halo.app.extension.index.query.Queries.equal;
 
 import cc.lik.footprint.finders.FootprintFinder;
 import cc.lik.footprint.model.Footprint;
@@ -39,8 +36,6 @@ public class FootprintFinderImpl implements FootprintFinder {
     @Override
     public Flux<FootprintVo> listAll() {
         var listOptions = new ListOptions();
-        var query = all();
-        listOptions.setFieldSelector(FieldSelector.of(query));
         return client.listAll(Footprint.class, listOptions, defaultSort())
             .flatMap(this::getFootprintVo);
     }
@@ -68,11 +63,9 @@ public class FootprintFinderImpl implements FootprintFinder {
 
     private Mono<ListResult<FootprintVo>> pageFootprintPost(FieldSelector fieldSelector, PageRequest page){
         var listOptions = new ListOptions();
-        var query = all();
         if (fieldSelector != null) {
-            query = and(query, fieldSelector.query());
+            listOptions.setFieldSelector(fieldSelector);
         }
-        listOptions.setFieldSelector(FieldSelector.of(query));
         return client.listBy(Footprint.class, listOptions, page)
             .flatMap(list -> Flux.fromStream(list.get())
                 .concatMap(this::getFootprintVo)

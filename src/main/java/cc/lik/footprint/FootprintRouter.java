@@ -41,7 +41,7 @@ public class FootprintRouter {
         log.info("开始渲染足迹页面");
         return footprintSvc.getConfigByGroupName()
             .flatMap(settings -> {
-                log.info("获取到配置信息: {}", settings);
+                log.info("已加载足迹页面配置");
                 // 按创建时间倒序排序
                 Comparator<Footprint> comparator = 
                     (f1, f2) -> f2.getSpec().getCreateTime()
@@ -75,4 +75,4 @@ public class FootprintRouter {
                     .bodyValue("渲染足迹页面失败: " + e.getMessage());
             });
     }
-} 
+}

@@ -66,16 +66,22 @@ spec:
             - label: 聚焦式照片墙
               value: focus
           help: "选择桌面端图片墙的展示方式；移动端仍使用原有信息窗口(部分样式为固定图片数量)"
-        - $formkit: text
-          label: 高德JsKey
-          name: gaoDeKey
-          validation: required
-          help: https://console.amap.com/dev/key/app 前往获取 主要用于创建地图
-        - $formkit: text
-          label: 高德WebKey
-          name: gaoDeWebKey
-          validation: required
-          help: https://console.amap.com/dev/key/app 前往获取 用户自动获取经纬度
+        - $formkit: secret
+          label: 高德 Js Key
+          name: gaoDeKeySecretName
+          descriptionPreset: 高德地图 Js Key
+          requiredKeys:
+            - key: key
+              help: 高德地图浏览器端 Key
+          help: 创建一个包含 key 字段的 Secret。主要用于创建地图。
+        - $formkit: secret
+          label: 高德 Web Key
+          name: gaoDeWebKeySecretName
+          descriptionPreset: 高德地图 Web Key
+          requiredKeys:
+            - key: key
+              help: 高德地图 Web 服务 Key
+          help: 创建一个包含 key 字段的 Secret。用于服务端地理编码和逆地理编码。
         - $formkit: select
           name: mapStyle
           label: 地图样式

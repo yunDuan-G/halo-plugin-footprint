@@ -1,4 +1,4 @@
-import { definePlugin } from "@halo-dev/console-shared";
+import { definePlugin } from "@halo-dev/ui-shared";
 import Footprint from "./views/Footprint.vue";
 import RiMapPinLine from "~icons/ri/map-pin-line";
 import { markRaw } from "vue";
