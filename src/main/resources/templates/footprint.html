@@ -20,7 +20,7 @@
     <script src="/plugins/footprint/assets/static/cesium/Cesium.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/pako.min.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/tdtplug.umd.min.js"></script>
-    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=ticket-wallet-v6" rel="stylesheet">
+    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v8" rel="stylesheet">
 
 
 <!--    <link rel="stylesheet" href="../static/css/footprint.css" type="text/css">-->
@@ -60,33 +60,44 @@
         <span class="nav-brand-en">Travel Memory</span>
     </div>
     <div class="nav-actions">
-        <button id="sceneModeBtn" type="button" title="切换 2D / 3D 视角">3D</button>
-        <span class="nav-sep"></span>
-        <button id="ticketGalleryBtn" type="button" title="查看票根墙">票根</button>
-        <span class="nav-sep"></span>
-        <button id="rotateBtn" class="globe-only" type="button" aria-pressed="false">自动旋转</button>
-        <span class="nav-sep"></span>
-        <button id="cityFillBtn" class="globe-only" type="button" aria-pressed="false" title="放大到国内范围时高亮显示去过的城市">城市高亮</button>
-        <span class="nav-sep"></span>
-        <button id="terrainBtn" class="globe-only" type="button" aria-pressed="false" title="天地图三维地形（可选，默认关闭；开启后中国境内显示真实地貌）" disabled>三维地形</button>
-        <span class="nav-sep"></span>
-        <div class="nav-menu globe-only" id="layerMenu">
-            <button id="layerMenuBtn" type="button" aria-haspopup="true" aria-expanded="false">
-                <span>底图</span>
-                <svg class="nav-chev" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
-                    <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            </button>
-            <div id="layerButtons" class="nav-menu-panel" role="menu" aria-label="切换底图" hidden>
-                <button data-key="amapVec" role="menuitemradio" title="高德矢量路网图（含地名标注）">高德矢量</button>
-                <button data-key="amapImg" role="menuitemradio" title="高德卫星影像（含地名标注）">高德卫星</button>
-                <button data-key="amapImgClean" role="menuitemradio" title="高德卫星影像，无地名标注">高德卫星·无字</button>
-                <button data-key="tdtImg" role="menuitemradio" title="天地图影像（含地名标注）" disabled>天地图影像</button>
-                <button data-key="tdtVec" role="menuitemradio" title="天地图矢量（含地名标注）" disabled>天地图矢量</button>
-                <button data-key="tdtImgClean" role="menuitemradio" title="天地图影像，无地名标注" class="active" disabled>天地图影像·无字</button>
-                <button data-key="tdtVecClean" role="menuitemradio" title="天地图矢量，无地名标注" disabled>天地图矢量·无字</button>
+        <div class="nav-group nav-group-primary">
+            <button id="sceneModeBtn" type="button" title="切换到 2D 平面地图">2D 地图</button>
+            <span class="nav-sep"></span>
+            <button id="ticketGalleryBtn" type="button" title="查看票根墙">票根</button>
+            <span class="nav-sep nav-sep-back"></span>
+            <button id="navBackGlobeBtn" type="button" title="回到整球视图">回到整球</button>
+        </div>
+        <div class="nav-group nav-group-more" id="navTools">
+            <button id="rotateBtn" class="globe-only" type="button" aria-pressed="false" title="开启自动旋转">自动旋转</button>
+            <span class="nav-sep"></span>
+            <button id="cityFillBtn" class="globe-only" type="button" aria-pressed="false" title="放大后高亮显示去过的城市区域">城市高亮</button>
+            <span class="nav-sep"></span>
+            <button id="terrainBtn" class="globe-only" type="button" aria-pressed="false" title="天地图三维地形（可选，默认关闭；开启后中国境内显示真实地貌）" disabled hidden>三维地形</button>
+            <span class="nav-sep nav-sep-tools"></span>
+            <div class="nav-menu globe-only" id="layerMenu">
+                <button id="layerMenuBtn" type="button" aria-haspopup="true" aria-expanded="false">
+                    <span>底图</span>
+                    <svg class="nav-chev" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+                        <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <div id="layerButtons" class="nav-menu-panel" role="menu" aria-label="切换底图" hidden>
+                    <button data-key="amapVec" role="menuitemradio" title="高德矢量路网图（含地名标注）">高德矢量</button>
+                    <button data-key="amapImg" role="menuitemradio" title="高德卫星影像（含地名标注）">高德卫星</button>
+                    <button data-key="amapImgClean" role="menuitemradio" title="高德卫星影像，无地名标注">高德卫星·无字</button>
+                    <button data-key="tdtImg" role="menuitemradio" title="天地图影像（含地名标注）" disabled>天地图影像</button>
+                    <button data-key="tdtVec" role="menuitemradio" title="天地图矢量（含地名标注）" disabled>天地图矢量</button>
+                    <button data-key="tdtImgClean" role="menuitemradio" title="天地图影像，无地名标注" class="active" disabled>天地图影像·无字</button>
+                    <button data-key="tdtVecClean" role="menuitemradio" title="天地图矢量，无地名标注" disabled>天地图矢量·无字</button>
+                </div>
             </div>
         </div>
+        <button id="navMoreBtn" type="button" aria-haspopup="true" aria-expanded="false" title="更多工具">
+            <span>工具</span>
+            <svg class="nav-chev" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+                <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
     </div>
 </header>
 <!-- ================= 3D 地球视图（默认首页） ================= -->
@@ -257,11 +268,26 @@
             <p class="marker-card-addr" id="markerCardAddr"></p>
             <p class="marker-card-desc" id="markerCardDesc"></p>
             <div class="marker-card-actions">
-                <a class="marker-card-link" id="markerCardLink" href="#" target="_blank" rel="noopener" hidden>查看完整游记</a>
-                <button id="markerCardLocate" type="button">定位</button>
+                <button id="markerCardTicket" type="button" hidden>打开票根</button>
             </div>
         </div>
         <button id="markerCardClose" type="button" aria-label="关闭详情">×</button>
+    </div>
+
+    <!-- 城市聚合卡：信息由城市内已有足迹聚合，不维护独立城市数据 -->
+    <div id="cityCard" aria-hidden="true">
+        <div class="city-card-media" id="cityCardMedia"></div>
+        <div class="city-card-body">
+            <p class="city-card-eyebrow">City Collection</p>
+            <h2 class="city-card-title" id="cityCardTitle">城市</h2>
+            <p class="city-card-meta" id="cityCardMeta"></p>
+            <p class="city-card-desc" id="cityCardDesc"></p>
+            <div class="city-card-actions">
+                <button id="cityCardGallery" type="button">打开图片墙</button>
+                <button id="cityCardLocate" type="button">重新定位</button>
+            </div>
+        </div>
+        <button id="cityCardClose" type="button" aria-label="关闭城市信息">×</button>
     </div>
 </div>
 
@@ -394,6 +420,6 @@
 </div>
 </div>
 
-<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=ticket-wallet-v4"></script>
+<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v8"></script>
 </body>
 </html>

@@ -249,6 +249,9 @@
     // ================= 左侧标题卡（仅 3D，整球视图显示） =================
     const pageIntro = document.getElementById('pageIntro');
     const topNav = document.getElementById('topNav');   // 导航栏与标题卡同步显隐
+    const navTools = document.getElementById('navTools');
+    const navMoreBtn = document.getElementById('navMoreBtn');
+    const navBackGlobeBtn = document.getElementById('navBackGlobeBtn');
     const backGlobeBtn = document.getElementById('backGlobeBtn');   // 放大后显示，一键回球
     const cityFillFloatBtn = document.getElementById('cityFillFloatBtn');   // 放大后显示，城市高亮开关
     // 相机高度（米）：高于 SHOW 时显示（能看到整个地球），低于 HIDE 时隐藏；
@@ -272,7 +275,15 @@
     let cityMarkerEntities = [];  // 城市标记实体
     const CITY_EXPAND_HEIGHT = 1500000;    // 相机低于此高度时展开为单个足迹
     const CITY_COLLAPSE_HEIGHT = 1800000;  // 高于此高度时聚合为城市标记
+    const CITY_VIEW_HEIGHT = 1200000;      // 点击城市后的落地高度：低于展开阈值，保持城市整体视野
     let cityMode = true;
+    // 程序化“飞往城市”的飞行状态：飞行期间抑制高度阈值自动切换，
+    // 落地后再统一把聚合标记展开为该城市的足迹点，避免用户手动补一次缩放。
+    let cityFlightActive = false;
+    let cityFlightIndex = -1;
+    let cityFlightTimer = null;
+    let cityMoveEndHandler = null;
+    let cityRevealRaf = null;
     // 城市淡色填充（提前声明，updateIntroVisibility 会控制显隐）
     let cityFillDataSources = [];
     let cityFillBuildId = 0;
@@ -296,6 +307,7 @@
                 pageIntro.classList.remove('visible');
             }
             topNav.classList.add('visible');
+            document.body.classList.remove('nav-zoom');
             backGlobeBtn.classList.remove('show');
             cityFillFloatBtn.classList.remove('show');
             return;
@@ -314,6 +326,9 @@
                 pageIntro.classList.remove('visible');
             }
             topNav.classList.remove('visible');
+            document.body.classList.remove('nav-zoom');
+            navTools.classList.remove('open');
+            navMoreBtn.setAttribute('aria-expanded', 'false');
             backGlobeBtn.classList.remove('show');
             cityFillFloatBtn.classList.remove('show');
             return;
@@ -322,6 +337,7 @@
         if (amapMode) {
             pageIntro.classList.remove('visible');
             topNav.classList.add('visible');
+            document.body.classList.remove('nav-zoom');
             backGlobeBtn.classList.remove('show');
             cityFillFloatBtn.classList.remove('show');
             return;
@@ -333,6 +349,7 @@
                 pageIntro.classList.remove('visible');
             }
             topNav.classList.add('visible');
+            document.body.classList.remove('nav-zoom');
             backGlobeBtn.classList.remove('show');
             cityFillFloatBtn.classList.remove('show');
         } else {
@@ -340,16 +357,21 @@
             if (!introVisible && h > INTRO_SHOW_HEIGHT) {
                 introVisible = true;
                 pageIntro.classList.add('visible');
-                topNav.classList.add('visible');
+                // 回到整球视图时复位“工具”溢出菜单，避免残留展开态
+                navTools.classList.remove('open');
+                navMoreBtn.setAttribute('aria-expanded', 'false');
                 if (markerCardReady && markerCard.classList.contains('visible')) {
                     hideMarkerCard();   // 回到整球视图时自动关闭详情卡
                 }
             } else if (introVisible && h < INTRO_HIDE_HEIGHT) {
                 introVisible = false;
                 pageIntro.classList.remove('visible');
-                topNav.classList.remove('visible');
             }
-            // 3D 下放大到看不到整球时，显示“回到整球”和“城市高亮”浮动按钮
+            // 导航常驻：整球视图显示全部工具；放大后保留 2D/票根/回到整球等入口。
+            // 每次渲染都按当前相机高度校正状态，覆盖层关闭后也能自动恢复。
+            topNav.classList.add('visible');
+            document.body.classList.toggle('nav-zoom', !introVisible);
+            // 浮动快捷按钮只作为非导航场景的补充；nav-zoom 时由 CSS 隐藏
             backGlobeBtn.classList.toggle('show', !introVisible);
             cityFillFloatBtn.classList.toggle('show', !introVisible);
         }
@@ -371,24 +393,29 @@
             ds.show = viewer.camera.positionCartographic.height < BOUNDARY_SHOW_HEIGHT;
         });
 
-        // 城市聚合切换：放大到城市范围展开为单个足迹，拉远聚合回城市标记
-        const modeH = viewer.camera.positionCartographic.height;
-        if (cityMode && modeH < CITY_EXPAND_HEIGHT) {
-            applyMarkerMode(false);
-        } else if (!cityMode && modeH > CITY_COLLAPSE_HEIGHT) {
-            applyMarkerMode(true);
+        // 城市聚合切换：放大到城市范围展开为单个足迹，拉远聚合回城市标记。
+        // 程序化“飞往城市”期间先不按高度切换，落地瞬间由 finishCityFlight 统一展开。
+        if (!cityFlightActive) {
+            const modeH = viewer.camera.positionCartographic.height;
+            if (cityMode && modeH < CITY_EXPAND_HEIGHT) {
+                applyMarkerMode(false);
+            } else if (!cityMode && modeH > CITY_COLLAPSE_HEIGHT) {
+                applyMarkerMode(true);
+            }
         }
     }
     viewer.scene.postRender.addEventListener(updateIntroVisibility);
     updateIntroVisibility();
 
     // 回到整球视图：飞回初始中国朝向的整球视角
-    backGlobeBtn.addEventListener('click', () => {
+    function flyBackToGlobe() {
         viewer.camera.flyTo({
             destination: Cesium.Cartesian3.fromDegrees(104.0, 35.0, 21000000),
             duration: 1.8
         });
-    });
+    }
+    backGlobeBtn.addEventListener('click', flyBackToGlobe);
+    if (navBackGlobeBtn) navBackGlobeBtn.addEventListener('click', flyBackToGlobe);
 
     // ================= 2D/3D 自定义切换按钮 =================
     // 3D：Cesium 地球（默认首页）；2D：切换为项目原有高德地图（懒加载，见 footprint.js 的 window.Footprint2D）。
@@ -467,7 +494,10 @@
     }
 
     function updateSceneModeBtn() {
-        sceneModeBtn.textContent = viewer.scene.mode === Cesium.SceneMode.SCENE2D ? '2D' : '3D';
+        // 按钮显示“将要切换到的视图”，避免“当前状态”造成语义歧义
+        const to2D = viewer.scene.mode !== Cesium.SceneMode.SCENE2D;
+        sceneModeBtn.textContent = to2D ? '2D 地图' : '3D 地球';
+        sceneModeBtn.title = to2D ? '切换到 2D 平面地图' : '切换到 3D 地球';
     }
 
     // 切换前收起地球侧可能打开的覆盖层，避免返回 3D 时残留
@@ -489,7 +519,8 @@
         if (view2d) view2d.hidden = false;
         document.body.classList.remove('mode-3d');
         document.body.classList.add('mode-2d');
-        sceneModeBtn.textContent = '2D';   // 与原有语义一致：按钮显示当前模式
+        sceneModeBtn.textContent = '3D 地球';
+        sceneModeBtn.title = '切换到 3D 地球';
         setAutoRotate(false);              // 进入 2D 后停止地球自转
         viewer.clock.shouldAnimate = false;   // 地球隐藏时冻结昼夜光照，降低开销
         saveViewMode('2d');
@@ -541,7 +572,8 @@
         if (view3d) view3d.hidden = false;
         document.body.classList.remove('mode-2d');
         document.body.classList.add('mode-3d');
-        sceneModeBtn.textContent = '3D';   // 与原有语义一致：按钮显示当前模式
+        sceneModeBtn.textContent = '2D 地图';
+        sceneModeBtn.title = '切换到 2D 平面地图';
         viewer.clock.shouldAnimate = true;
         saveViewMode('3d');
         if (window.Footprint2D && typeof window.Footprint2D.hide === 'function') {
@@ -701,7 +733,8 @@
     function setAutoRotate(on) {
         autoRotate = on;
         lastRotateTime = null;               // 重新开启时从零计步，避免瞬移
-        rotateBtn.textContent = on ? '暂停旋转' : '自动旋转';
+        rotateBtn.textContent = '自动旋转';   // 标签固定，状态用高亮表达，避免按钮宽度跳动
+        rotateBtn.title = on ? '暂停自动旋转' : '开启自动旋转';
         rotateBtn.classList.toggle('active', on);
         rotateBtn.setAttribute('aria-pressed', String(on));
     }
@@ -1047,6 +1080,39 @@
         }
     });
 
+    // “工具”溢出菜单（紧凑模式/窄屏）：主入口常驻，探索类工具收进菜单
+    function setNavToolsOpen(open) {
+        navTools.classList.toggle('open', open);
+        navMoreBtn.setAttribute('aria-expanded', String(open));
+        if (!open && !layerPanel.hidden) {
+            layerPanel.hidden = true;
+            layerMenuBtn.setAttribute('aria-expanded', 'false');
+            layerMenu.classList.remove('open');
+        }
+    }
+    navMoreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setNavToolsOpen(!navTools.classList.contains('open'));
+    });
+    document.addEventListener('click', (e) => {
+        if (navTools.classList.contains('open') && !navTools.contains(e.target) && !navMoreBtn.contains(e.target)) {
+            setNavToolsOpen(false);
+        }
+    });
+    // 从窄屏切回桌面时复位“工具”弹出态，避免残留的下拉样式
+    const navMobileMql = window.matchMedia('(max-width: 820px)');
+    function syncNavToolsState() {
+        if (!navMobileMql.matches) {
+            navTools.classList.remove('open');
+            navMoreBtn.setAttribute('aria-expanded', 'false');
+        }
+    }
+    if (navMobileMql.addEventListener) {
+        navMobileMql.addEventListener('change', syncNavToolsState);
+    } else {
+        navMobileMql.addListener(syncNavToolsState);
+    }
+
     document.addEventListener('keydown', (e) => {
         // 灯箱打开时：← / → 切换图片
         if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && lightbox.classList.contains('show')) {
@@ -1058,6 +1124,10 @@
             layerPanel.hidden = true;
             layerMenuBtn.setAttribute('aria-expanded', 'false');
             layerMenu.classList.remove('open');
+            return;
+        }
+        if (navTools.classList.contains('open')) {
+            setNavToolsOpen(false);
             return;
         }
         if (lightbox.classList.contains('show')) {
@@ -1074,6 +1144,10 @@
         }
         if (markerCard.classList.contains('visible')) {
             hideMarkerCard();
+            return;
+        }
+        if (cityCard && cityCard.classList.contains('visible')) {
+            hideCityCard();
         }
     });
 
@@ -1159,7 +1233,9 @@
     }
 
     terrainBtn.addEventListener('click', () => setTdtTerrain(!terrainEnabled));
-    if (!hasTDTKey || typeof TdtPlug === 'undefined' || !TdtPlug.GeoTerrainProvider) {
+    const terrainAvailable = !!(hasTDTKey && typeof TdtPlug !== 'undefined' && TdtPlug.GeoTerrainProvider);
+    terrainBtn.hidden = !terrainAvailable;   // 无 Key / 无插件时直接隐藏，不占导航位置
+    if (!terrainAvailable) {
         terrainBtn.disabled = true;
     } else {
         terrainBtn.disabled = false;
@@ -1284,11 +1360,23 @@
 
     // 切换 城市聚合 / 展开单个足迹 模式
     function applyMarkerMode(city) {
+        if (city && cityRevealRaf) {
+            cancelAnimationFrame(cityRevealRaf);
+            cityRevealRaf = null;
+            markerEntities.forEach(ent => {
+                if (ent && ent.billboard) {
+                    ent.billboard.width = 25;
+                    ent.billboard.height = 25;
+                }
+            });
+        }
         cityMode = city;
         cityMarkerEntities.forEach(ent => { ent.show = city; });
         markerEntities.forEach(ent => { ent.show = !city; });
         buildMarkerFocusButtons();
         hideMarkerTip();
+        const card = document.getElementById('cityCard');
+        if (city && card) card.classList.remove('is-revealed');
     }
 
     buildMarkers();
@@ -1302,7 +1390,17 @@
     const markerCardMeta = document.getElementById('markerCardMeta');
     const markerCardAddr = document.getElementById('markerCardAddr');
     const markerCardDesc = document.getElementById('markerCardDesc');
-    const markerCardLink = document.getElementById('markerCardLink');
+    const markerCardActions = markerCard.querySelector('.marker-card-actions');
+    const markerCardTicket = document.getElementById('markerCardTicket');
+    const cityCard = document.getElementById('cityCard');
+    const cityCardMedia = document.getElementById('cityCardMedia');
+    const cityCardTitle = document.getElementById('cityCardTitle');
+    const cityCardMeta = document.getElementById('cityCardMeta');
+    const cityCardDesc = document.getElementById('cityCardDesc');
+    const cityCardGallery = document.getElementById('cityCardGallery');
+    const cityCardLocate = document.getElementById('cityCardLocate');
+    let activeCityIndex = -1;
+    let cityCardTriggerBtn = null;
     markerCardReady = true;   // 标记卡已就绪，可响应整球视图自动关闭
     let activeFootprintIndex = -1;
     let markerRestoreRaf = null;
@@ -1311,6 +1409,10 @@
         if (markerRestoreRaf) {
             cancelAnimationFrame(markerRestoreRaf);
             markerRestoreRaf = null;
+        }
+        if (cityRevealRaf) {
+            cancelAnimationFrame(cityRevealRaf);
+            cityRevealRaf = null;
         }
         markerEntities.forEach((ent, i) => {
             const sel = i === index;
@@ -1410,6 +1512,8 @@
     }
 
     function showMarkerCard(fp, index) {
+        hideCityCard(false);
+        if (autoRotate) setAutoRotate(false);   // 打开足迹详情卡后停止地球自动旋转
         activeFootprintIndex = index;
         markerCardTitle.textContent = fp.name;
         markerCardAddr.textContent = fp.address || '';
@@ -1422,13 +1526,10 @@
         markerCardMeta.textContent = metaParts.join(' / ');
         markerCardMeta.hidden = metaParts.length === 0;
 
-        if (fp.article) {
-            markerCardLink.href = fp.article;
-            markerCardLink.hidden = false;
-        } else {
-            markerCardLink.removeAttribute('href');
-            markerCardLink.hidden = true;
-        }
+        // 足迹详情卡动作：只有配置了票根的足迹才提供“打开票根”，无票根时整行隐藏。
+        const hasTicket = !!ticketImageUrl(fp.ticketImage);
+        markerCardTicket.hidden = !hasTicket;
+        markerCardActions.hidden = !hasTicket;
 
         if (fp.image) {
             loadCardImage(fp);
@@ -1444,18 +1545,185 @@
 
     document.getElementById('markerCardClose').addEventListener('click', hideMarkerCard);
 
-    // 定位：相机缓动飞到该足迹（按数据的 zoomLevel 计算高度）
-    document.getElementById('markerCardLocate').addEventListener('click', () => {
-        if (activeFootprintIndex < 0 || !currentPositions[activeFootprintIndex]) return;
+    // 打开票根：跳到票根墙并定位到当前足迹对应的那张票根
+    markerCardTicket.addEventListener('click', () => {
+        if (activeFootprintIndex < 0) return;
         const fp = FOOTPRINTS[activeFootprintIndex];
-        const pos = currentPositions[activeFootprintIndex];
-        const height = fp.zoomLevel
-            ? (156543.03392 * Math.cos(Cesium.Math.toRadians(pos.lat))) / Math.pow(2, fp.zoomLevel) * 1000
-            : 120000;
-        viewer.camera.flyTo({
-            destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, height),
-            duration: 2.2
+        if (!fp || !ticketImageUrl(fp.ticketImage)) return;
+        const items = ticketItemsFromFootprints();
+        const ticketIndex = items.indexOf(fp);
+        if (ticketIndex < 0) return;
+        hideMarkerCard();
+        setTicketView(true, ticketIndex, false);   // 从足迹卡进入票根时不自动开启地球旋转
+    });
+
+    // 城市卡只展示已有足迹的聚合信息，不创建或维护独立的城市数据。
+    function cityViewItems(ci) {
+        const city = cityList[ci];
+        return city ? city.indices.map(i => FOOTPRINTS[i]).filter(Boolean) : [];
+    }
+
+    function cityPhotoItems(ci) {
+        return cityViewItems(ci).flatMap(fp => cityWallImages(fp));
+    }
+
+    // 点击城市后的落地视角：以该城市的平均位置为中心，停在展开阈值下方、
+    // 但不需要贴到具体足迹点的高度——落地瞬间即可展开足迹，保持“城市上空”的整体视野。
+    function cityFlightTarget(ci) {
+        const city = cityList[ci];
+        const center = city && cityCenter(city);
+        if (!center) return null;
+        return { lng: center.lng, lat: center.lat, height: CITY_VIEW_HEIGHT };
+    }
+
+    // 城市飞行落地收尾：moveEnd 与兜底定时器都可能触发，只执行一次。
+    // 落地后按高度执行与手动缩放一致的 聚合/展开 切换（阈值带逻辑不变）。
+    function finishCityFlight() {
+        if (cityFlightTimer !== null) {
+            clearTimeout(cityFlightTimer);
+            cityFlightTimer = null;
+        }
+        if (cityMoveEndHandler) {
+            viewer.camera.moveEnd.removeEventListener(cityMoveEndHandler);
+            cityMoveEndHandler = null;
+        }
+        cityFlightActive = false;
+        const ci = cityFlightIndex;
+        cityFlightIndex = -1;
+        if (ci < 0) return;
+        const h = viewer.camera.positionCartographic.height;
+        if (cityMode && h < CITY_EXPAND_HEIGHT) {
+            revealCityFootprints(ci);
+        } else if (!cityMode && h > CITY_COLLAPSE_HEIGHT) {
+            applyMarkerMode(true);
+        }
+    }
+
+    // 展开为单个足迹：切换模式后，让该城市的标记点从 0 尺寸依次长大，
+    // 形成“聚合点散开”的空间连续感；系统减弱动效时直接切换。
+    function revealCityFootprints(ci) {
+        const city = cityList[ci];
+        if (!city || !city.indices.length) return;
+        const alreadyExpanded = !cityMode;
+        applyMarkerMode(false);
+        const card = document.getElementById('cityCard');
+        if (card) card.classList.add('is-revealed');
+        if (alreadyExpanded || reduceMotion) return;
+        if (cityRevealRaf) cancelAnimationFrame(cityRevealRaf);
+        const indices = city.indices.slice();
+        indices.forEach(fi => {
+            const ent = markerEntities[fi];
+            if (ent && ent.billboard) {
+                ent.billboard.width = 0;
+                ent.billboard.height = 0;
+            }
         });
+        const startedAt = performance.now();
+        const STEP_MS = 55;
+        const DURATION_MS = 420;
+        const tick = (now) => {
+            let pending = false;
+            indices.forEach((fi, k) => {
+                const ent = markerEntities[fi];
+                if (!ent || !ent.billboard) return;
+                const t = (now - startedAt - k * STEP_MS) / DURATION_MS;
+                if (t >= 1) {
+                    ent.billboard.width = 25;
+                    ent.billboard.height = 25;
+                } else if (t > 0) {
+                    pending = true;
+                    const eased = 1 - Math.pow(1 - t, 3);
+                    ent.billboard.width = Math.max(1, Math.round(25 * eased));
+                    ent.billboard.height = Math.max(1, Math.round(25 * eased));
+                }
+            });
+            if (pending && !cityMode) {
+                cityRevealRaf = requestAnimationFrame(tick);
+            } else {
+                cityRevealRaf = null;
+            }
+        };
+        cityRevealRaf = requestAnimationFrame(tick);
+    }
+
+    // 飞往城市：终点按足迹分布计算，落地瞬间自动展开该城市的足迹点。
+    function flyToCity(ci) {
+        if (cityFlightActive && cityFlightIndex === ci) return;   // 同一城市飞行进行中不重复起飞
+        const target = cityFlightTarget(ci);
+        if (!target) return;
+        const duration = reduceMotion ? 0 : 1.8;
+        if (cityFlightTimer !== null) {
+            clearTimeout(cityFlightTimer);
+            cityFlightTimer = null;
+        }
+        if (cityMoveEndHandler) {
+            viewer.camera.moveEnd.removeEventListener(cityMoveEndHandler);
+            cityMoveEndHandler = null;
+        }
+        cityFlightActive = true;
+        cityFlightIndex = ci;
+        if (duration > 0) {
+            cityMoveEndHandler = finishCityFlight;
+            viewer.camera.moveEnd.addEventListener(cityMoveEndHandler);
+            cityFlightTimer = setTimeout(finishCityFlight, duration * 1000 + 600);
+        }
+        viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(target.lng, target.lat, target.height),
+            duration: duration
+        });
+        if (duration <= 0) finishCityFlight();
+    }
+
+    function showCityCard(ci, triggerBtn) {
+        const city = cityList[ci];
+        if (!city) return;
+        if (autoRotate) setAutoRotate(false);   // 打开城市聚合卡后停止地球自动旋转
+        if (markerCard.classList.contains('visible')) hideMarkerCard();
+        if (cityView.classList.contains('show')) closeCityView(false);
+        if (albumOverlay.classList.contains('show')) closeAlbum(false);
+        hideMarkerTip();
+
+        activeCityIndex = ci;
+        cityCardTriggerBtn = triggerBtn || null;
+        const fps = cityViewItems(ci);
+        const photos = cityPhotoItems(ci);
+        const latest = fps.map(fp => fp.createTime).filter(Boolean).sort().pop();
+        const types = [...new Set(fps.map(fp => fp.footprintType).filter(Boolean))];
+        cityCardTitle.textContent = city.city;
+        cityCardMeta.textContent = fps.length + ' 个足迹 · ' + photos.length + ' 张照片' +
+            (latest ? ' · 最近 ' + formatCityDate(latest) : '');
+        cityCardDesc.textContent = types.length
+            ? '记录类型：' + types.join('、')
+            : '这座城市的旅行足迹与照片收藏';
+        cityCardMedia.classList.toggle('no-image', !photos.length);
+        cityCardMedia.style.backgroundImage = photos.length ? 'url("' + photos[0].url + '")' : 'none';
+        cityCardMedia.textContent = photos.length ? '' : (city.city ? city.city.charAt(0) : '?');
+        cityCard.classList.add('visible');
+        cityCard.setAttribute('aria-hidden', 'false');
+        flyToCity(ci);
+    }
+
+    function hideCityCard(returnFocus = true) {
+        if (!cityCard.classList.contains('visible')) return;
+        cityCard.classList.remove('visible');
+        cityCard.classList.remove('is-revealed');
+        cityCard.setAttribute('aria-hidden', 'true');
+        const trigger = cityCardTriggerBtn;
+        cityCardTriggerBtn = null;
+        activeCityIndex = -1;
+        if (returnFocus && trigger) trigger.focus();
+    }
+
+    document.getElementById('cityCardClose').addEventListener('click', () => hideCityCard());
+    cityCardLocate.addEventListener('click', () => {
+        if (activeCityIndex >= 0) flyToCity(activeCityIndex);
+    });
+    cityCardGallery.addEventListener('click', () => {
+        if (activeCityIndex < 0) return;
+        const ci = activeCityIndex;
+        const trigger = cityCardTriggerBtn;
+        hideCityCard(false);
+        openCityView(ci, trigger);
     });
 
     // ================= 悬停名称（标注式引导线，跟随标记） =================
@@ -1582,15 +1850,17 @@
     // 鼠标离开画布时收起名称气泡
     viewer.scene.canvas.addEventListener('mouseleave', hideMarkerTip);
 
-    // 点击足迹打开详情卡；点击城市标记飞入展开；点击空白处关闭
+    // 点击足迹打开详情卡；点击城市标记显示城市聚合卡；点击空白处关闭
     markerPickHandler.setInputAction((movement) => {
         const found = findPickedMarker(viewer.scene.pick(movement.position));
         if (found && found.type === 'footprint') {
             showMarkerCard(FOOTPRINTS[found.index], found.index);
         } else if (found && found.type === 'city') {
-            openCityView(found.index);
+            showCityCard(found.index);
         } else if (markerCard.classList.contains('visible')) {
             hideMarkerCard();
+        } else if (cityCard.classList.contains('visible')) {
+            hideCityCard();
         }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
@@ -1600,7 +1870,7 @@
     function buildMarkerFocusButtons() {
         markerFocusLayer.innerHTML = '';
         if (cityMode) {
-            // 城市模式：聚焦显示「城市 · N 个足迹」，Enter 飞入展开
+                // 城市模式：聚焦显示「城市 · N 个足迹」，Enter 打开城市聚合卡
             cityList.forEach((city, ci) => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
@@ -1612,7 +1882,7 @@
                 });
                 btn.addEventListener('blur', hideMarkerTip);
                 btn.addEventListener('click', (e) => {
-                    openCityView(ci, e.detail === 0 ? btn : null);
+                    showCityCard(ci, e.detail === 0 ? btn : null);
                 });
                 markerFocusLayer.appendChild(btn);
             });
@@ -1731,6 +2001,7 @@
     function openAlbum() {
         if (cityView.classList.contains('show')) closeCityView(false);
         if (markerCard.classList.contains('visible')) hideMarkerCard();
+        if (cityCard.classList.contains('visible')) hideCityCard(false);
         hideMarkerTip();
         renderAlbum();
         albumOverlay.classList.add('show');
@@ -2265,6 +2536,7 @@
     function openCityView(ci, triggerBtn) {
         if (!cityList[ci]) return;
         if (markerCard.classList.contains('visible')) hideMarkerCard();
+        if (cityCard.classList.contains('visible')) hideCityCard(false);
         if (albumOverlay.classList.contains('show')) closeAlbum(false);
         hideMarkerTip();
         cityViewCityIndex = ci;
@@ -2520,9 +2792,12 @@
     function isTicketsView() {
         return new URLSearchParams(window.location.search).get('view') === 'tickets';
     }
-    function setTicketView(open) {
+    function setTicketView(open, targetIndex, startRotation) {
         if (!ticketGallery) return;
         if (open) {
+            // 打开票根前自动收起可能开着的足迹详情卡 / 城市聚合卡
+            if (markerCard && markerCard.classList.contains('visible')) hideMarkerCard();
+            if (cityCard && cityCard.classList.contains('visible')) hideCityCard(false);
             ticketItems = ticketItemsFromFootprints();
             ticketGalleryEmpty.hidden = ticketItems.length > 0;
             ticketGalleryCount.textContent = ticketItems.length ? ticketItems.length + ' 张票根' : '';
@@ -2536,10 +2811,12 @@
             document.body.classList.add('ticket-gallery-open');
             // 打开票根页时把地址同步为 ?view=tickets，便于分享/直达
             if (!isTicketsView()) history.pushState({ ticketGallery: true }, '', window.location.pathname + '?view=tickets');
-            // 打开票根页：地球作为背景，若未开启自转则自动开启
-            if (!autoRotate) setAutoRotate(true);
+            // 打开票根页：地球作为背景，若未开启自转则自动开启（从足迹卡进入时不开启）
+            if (startRotation !== false && !autoRotate) setAutoRotate(true);
             if (ticketItems.length) {
-                ticketIndex = 0;
+                ticketIndex = targetIndex == null
+                    ? 0
+                    : Math.max(0, Math.min(targetIndex, ticketItems.length - 1));
                 buildTicketWallet();
                 renderTicketWallet();
                 ticketGalleryClose.focus();
