@@ -53,8 +53,6 @@ build {
 
 halo {
     version = '2.25.4'
-    superAdminUsername = 'yunduan'
-    superAdminPassword = '123456'
     debug = true
 }
 
