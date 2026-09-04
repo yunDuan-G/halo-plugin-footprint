@@ -89,7 +89,7 @@ const handleResetForm = () => {
   galleryImageItems.value = [];
 };
 
-const normalizeAttachmentImageUrl = (url: unknown): string => {
+const unwrapAttachmentImageUrl = (url: unknown): string => {
   // attachment 组件在不同 Halo 版本中可能返回 URL、对象或单元素数组。
   // 不能直接对对象调用 String，否则会把附件保存成 "[object Object]"。
   let value: unknown = url;
@@ -98,8 +98,11 @@ const normalizeAttachmentImageUrl = (url: unknown): string => {
     const image = value as {url?: unknown; src?: unknown; thumbnail?: unknown; path?: unknown};
     value = image.url ?? image.src ?? image.thumbnail ?? image.path ?? "";
   }
-  const normalizedValue = String(value ?? "").trim();
-  return normalizedValue.replace(
+  return String(value ?? "").trim();
+};
+
+const normalizeAttachmentImageUrl = (url: unknown): string => {
+  return unwrapAttachmentImageUrl(url).replace(
     /(\.(?:jpe?g|png|gif|webp|bmp|svg|avif|ico))(?:![^/?#]*)?(?=([?#]|$))/i,
     "$1",
   );
@@ -220,7 +223,9 @@ const validateGalleryImageOrders = () => {
 const getSubmitFormState = (): Footprint => {
   const submitState = deepClone(formState.value);
   submitState.spec.galleryImages = getGalleryImagesForSubmit();
-  submitState.spec.ticketImage = normalizeAttachmentImageUrl(submitState.spec.ticketImage);
+  // 票根图片 URL 可能包含图片处理后缀（如 !w100），保存时不能去掉。
+  // 这里只负责解析 attachment 组件返回的对象/数组，不做任何后缀清理。
+  submitState.spec.ticketImage = unwrapAttachmentImageUrl(submitState.spec.ticketImage);
   return submitState;
 };
 

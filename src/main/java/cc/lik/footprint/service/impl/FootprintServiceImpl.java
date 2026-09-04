@@ -63,7 +63,9 @@ public class FootprintServiceImpl implements FootprintService {
                     globe.path("globeTitle").asText("旅行记忆"),
                     globe.path("globeDesc").asText("把每一次出发，收藏成地球上的坐标；让走过的城市，成为星空下的故事。"),
                     globe.path("tiandituKey").asText(""),
-                    globe.path("enableTerrainDefault").asBoolean(false)
+                    globe.path("enableTerrainDefault").asBoolean(false),
+                    globe.path("ticketGalleryStyle").asText("fan"),
+                    globe.path("ticketGalleryInfoStyle").asText("card")
                 ));
             })
             .flatMap(config -> config);

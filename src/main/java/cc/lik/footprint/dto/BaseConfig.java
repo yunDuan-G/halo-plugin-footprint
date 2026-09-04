@@ -25,4 +25,6 @@ public class BaseConfig {
     private String globeDesc;
     private String tiandituKey;
     private Boolean enableTerrainDefault;
+    private String ticketGalleryStyle;
+    private String ticketGalleryInfoStyle;
 }

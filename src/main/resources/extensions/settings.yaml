@@ -176,3 +176,13 @@ spec:
           name: enableTerrainDefault
           value: false
           help: "配置了天地图 Key 后，进入 3D 地球时是否默认开启三维地形（用户仍可在导航栏手动切换）"
+        - $formkit: select
+          label: 票根切换样式
+          name: ticketGalleryStyle
+          value: fan
+          options:
+            - label: 票夹切换（当前样式）
+              value: fan
+            - label: 横向长串浏览
+              value: strip
+          help: "选择票根页的切换样式：票夹叠放式，或横向长串滚动浏览式（主图居中，支持滚轮与拖拽切换）"

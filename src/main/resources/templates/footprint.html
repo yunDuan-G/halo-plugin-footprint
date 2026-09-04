@@ -20,7 +20,7 @@
     <script src="/plugins/footprint/assets/static/cesium/Cesium.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/pako.min.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/tdtplug.umd.min.js"></script>
-    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v8" rel="stylesheet">
+    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v26" rel="stylesheet">
 
 
 <!--    <link rel="stylesheet" href="../static/css/footprint.css" type="text/css">-->
@@ -46,7 +46,8 @@
             globeTitle: /*[[${settings.globeTitle}]]*/ '旅行记忆',
             globeDesc: /*[[${settings.globeDesc}]]*/ '把每一次出发，收藏成地球上的坐标；让走过的城市，成为星空下的故事。',
             tiandituKey: /*[[${settings.tiandituKey}]]*/ '',
-            enableTerrainDefault: /*[[${settings.enableTerrainDefault}]]*/ false
+            enableTerrainDefault: /*[[${settings.enableTerrainDefault}]]*/ false,
+            ticketGalleryStyle: /*[[${settings.ticketGalleryStyle}]]*/ 'fan',
         };
         // console.log('Footprint Config:', window.FOOTPRINT_CONFIG);
     </script>
@@ -204,13 +205,38 @@
                         <button id="ticketGalleryRetry" type="button">重新加载</button>
                     </div>
                     <p id="ticketGalleryHint" class="ticket-gallery-hint" hidden>点击票根或滚动鼠标切换</p>
+                    <div id="ticketStrip" class="ticket-strip" hidden>
+                        <div id="ticketStripScroller" class="ticket-strip-scroller" role="group" aria-label="横向票根浏览"></div>
+                        <div id="ticketStripProgress" class="ticket-strip-progress ticket-caption-progress" aria-hidden="true">
+                            <span class="ticket-progress-side">
+                                <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+                                    <path d="M7.5 2.5 4 6l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                向左滚动
+                            </span>
+                            <span class="ticket-progress-rail">
+                                <!-- 按票根数量由 JS 生成可访问的步骤点 -->
+                            </span>
+                            <span class="ticket-progress-side">
+                                向右滚动
+                                <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+                                    <path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                        </div>
+                    </div>
                 </div>
-                <aside class="ticket-gallery-meta">
+                <!-- TicketCaption：当前选中票根下方的悬浮电影字幕信息区 -->
+                <aside id="ticketMetaPanel" class="ticket-gallery-meta ticket-caption">
                     <p class="ticket-meta-kicker">FOOTPRINT RECORD</p>
-                    <h2 id="ticketGalleryTitle"></h2>
+                    <h2 id="ticketGalleryTitle">
+                        <span class="ticket-meta-title-text"></span>
+                        <span id="ticketGalleryEnglish" class="ticket-meta-english"></span>
+                    </h2>
                     <p id="ticketGallerySubtitle" class="ticket-meta-subtitle"></p>
                     <dl id="ticketGalleryDetails"></dl>
                     <p id="ticketGalleryDescription" class="ticket-meta-description"></p>
+                    <p id="ticketGalleryTagline" class="ticket-meta-tagline">DIFFERENT PLACES, A BRIGHTER YOU</p>
                     <p id="ticketGalleryPosition" class="ticket-meta-count"></p>
                 </aside>
             </div>
@@ -218,6 +244,13 @@
                 <p>还没有收集票根</p>
                 <span>回到地球，继续记录下一段旅程。</span>
             </div>
+        </div>
+        <div id="ticketStripHint" class="ticket-strip-hint" hidden>
+            <svg class="ticket-mouse-icon" viewBox="0 0 24 36" width="20" height="30" fill="none" aria-hidden="true">
+                <rect x="3.2" y="2.2" width="17.6" height="31.6" rx="8.8" stroke="currentColor" stroke-width="1.6"/>
+                <line class="ticket-mouse-wheel" x1="12" y1="8" x2="12" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span>滚动鼠标或拖动查看票根</span>
         </div>
     </div>
     <!-- 图片灯箱 -->
@@ -420,6 +453,6 @@
 </div>
 </div>
 
-<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v8"></script>
+<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v28"></script>
 </body>
 </html>

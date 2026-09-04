@@ -868,6 +868,7 @@
             lat: Number(s.latitude),
             coordType: 'gcj02',   // test.json 坐标均为高德（GCJ-02）来源
             city: s.city || '',
+            province: s.province || '',
             provinceAdcode: String(s.provinceAdcode || ''),
             cityAdcode: String(s.cityAdcode || ''),
             footprintType: s.footprintType || '',
@@ -877,6 +878,7 @@
             image: s.image || '',
             ticketImage: s.ticketImage || '',
             ticketTitle: s.ticketTitle || '',
+            ticketEnglish: s.ticketEnglish || '',
             ticketSubtitle: s.ticketSubtitle || '',
             ticketDate: s.ticketDate || '',
             ticketRoute: s.ticketRoute || '',
@@ -2729,9 +2731,15 @@
     const ticketLightbox = ticketGallery;
     const ticketWallet = document.getElementById('ticketWallet');
     const ticketGalleryHint = document.getElementById('ticketGalleryHint');
+    const ticketStrip = document.getElementById('ticketStrip');
+    const ticketStripScroller = document.getElementById('ticketStripScroller');
+    const ticketStripProgress = document.getElementById('ticketStripProgress');
+    const ticketStripHint = document.getElementById('ticketStripHint');
+    const ticketMetaPanel = document.getElementById('ticketMetaPanel');
     const ticketLightboxLoading = document.getElementById('ticketGalleryLoading');
     const ticketLightboxError = document.getElementById('ticketGalleryError');
     const ticketLightboxTitle = document.getElementById('ticketGalleryTitle');
+    const ticketLightboxEnglish = document.getElementById('ticketGalleryEnglish');
     const ticketLightboxSubtitle = document.getElementById('ticketGallerySubtitle');
     const ticketLightboxDetails = document.getElementById('ticketGalleryDetails');
     const ticketLightboxDescription = document.getElementById('ticketGalleryDescription');
@@ -2744,6 +2752,10 @@
     let wheelLocked = false;   // 滚轮切换节流
     let walletTouchX = null;   // 触摸滑动起点
     let walletSwiped = false;  // 滑动后抑制随后的 click，避免一次滑动触发两次切换
+    let stripScrollTimer = null;   // 横向长串滚轮停稳后的吸附计时
+    let stripDrag = null;          // 横向长串拖拽状态
+    // 后台“票根切换样式”：fan = 票夹叠放；strip = 横向长串浏览
+    const ticketStripMode = !!(footprintCfg && footprintCfg.ticketGalleryStyle === 'strip');
 
     function ticketEscape(value) {
         return String(value || '').replace(/[&<>"']/g, char => ({
@@ -2777,10 +2789,11 @@
 
     function ticketMeta(fp) {
         return {
-            title: fp.ticketTitle || fp.name || '未命名足迹',
-            subtitle: fp.ticketSubtitle || fp.city || fp.province || '',
+            title: fp.name || fp.ticketTitle || '未命名足迹',
+            subtitle: '',
             date: ticketDate(fp.ticketDate || fp.createTime),
-            route: fp.ticketRoute || fp.address || '',
+            route: fp.city || '',
+            province: fp.province || '',
             no: fp.ticketNo || '',
             type: fp.ticketType || fp.footprintType || '',
             description: fp.description || ''
@@ -2819,53 +2832,101 @@
                     : Math.max(0, Math.min(targetIndex, ticketItems.length - 1));
                 buildTicketWallet();
                 renderTicketWallet();
+                if (ticketStripMode) {
+                    requestAnimationFrame(() => {
+                        centerStripItem(ticketIndex, false);
+                        positionStripArchive();
+                    });
+                }
                 ticketGalleryClose.focus();
             } else {
+                ticketWallet.hidden = true;
+                ticketStrip.hidden = true;
+                ticketStripHint.hidden = true;
+                document.body.classList.remove('ticket-strip-active');
                 ticketGalleryClose.focus();
             }
         } else {
             ticketGallery.classList.remove('show');
             ticketGallery.setAttribute('aria-hidden', 'true');
             document.body.classList.remove('ticket-gallery-open');
+            document.body.classList.remove('ticket-strip-active');
+            ticketStripHint.hidden = true;
             // 关闭后还原地址，避免刷新又回到票根页
             if (isTicketsView()) history.replaceState({}, '', window.location.pathname);
             if (ticketTrigger) ticketTrigger.focus();
         }
     }
 
-    // 票夹：把每张票根叠成一层，第一张完整展示，后面的从边缘露出一条边。
+    // 创建一张票根图片；两种展示样式共用加载/失败处理
+    function createTicketImage(fp, i, className) {
+        const img = document.createElement('img');
+        img.className = className;
+        img.alt = fp.ticketTitle || fp.name || '';
+        img.referrerPolicy = 'no-referrer';
+        img.decoding = 'async';
+        img.dataset.index = String(i);
+        const originalUrl = ticketImageUrl(fp.ticketImage);
+        let triedHttps = false;
+        img.onload = () => {
+            img.classList.add('is-loaded');
+            if (i === ticketIndex) {
+                ticketLightboxLoading.hidden = true;
+                ticketLightboxError.hidden = true;
+            }
+            // 长串样式：图片实际尺寸就绪后再补左右留白并让当前票根保持居中
+            if (ticketStripMode) {
+                updateStripPadding();
+                requestAnimationFrame(() => {
+                    centerStripItem(ticketIndex, false);
+                    positionStripArchive();
+                });
+            }
+        };
+        img.onerror = () => {
+            // HTTPS 页面会拦截 HTTP 图片；同一域名通常可直接升级为 HTTPS。
+            if (!triedHttps && window.location.protocol === 'https:' && /^http:\/\//i.test(originalUrl)) {
+                triedHttps = true;
+                img.src = originalUrl.replace(/^http:\/\//i, 'https://');
+                return;
+            }
+            img.classList.add('is-error');
+            if (i === ticketIndex) {
+                ticketLightboxLoading.hidden = true;
+                ticketLightboxError.hidden = false;
+            }
+        };
+        img.src = originalUrl;
+        return img;
+    }
+
+    // 按后台配置构建票夹或横向长串
     function buildTicketWallet() {
+        walletItems.forEach(item => item.img && item.img.removeAttribute('src'));
+        walletItems = [];
+        ticketGalleryHint.hidden = true;
+        ticketStripProgress.hidden = true;
+        ticketStripHint.hidden = true;
+        document.body.classList.remove('ticket-strip-active');
+        if (ticketStripMode) {
+            ticketWallet.hidden = true;
+            ticketStrip.hidden = false;
+            ticketStripProgress.hidden = ticketItems.length < 2;
+            ticketStripHint.hidden = ticketItems.length < 2;
+            if (ticketItems.length) document.body.classList.add('ticket-strip-active');
+            buildTicketStrip();
+        } else {
+            ticketWallet.hidden = false;
+            ticketStrip.hidden = true;
+            buildFanWallet();
+        }
+    }
+
+    // 票夹：把每张票根叠成一层，第一张完整展示，后面的从边缘露出一条边。
+    function buildFanWallet() {
         ticketWallet.innerHTML = '';
         walletItems = ticketItems.map((fp, i) => {
-            const img = document.createElement('img');
-            img.className = 'ticket-wallet-item';
-            img.alt = fp.ticketTitle || fp.name || '';
-            img.referrerPolicy = 'no-referrer';
-            img.decoding = 'async';
-            img.dataset.index = String(i);
-            const originalUrl = ticketImageUrl(fp.ticketImage);
-            let triedHttps = false;
-            img.onload = () => {
-                img.classList.add('is-loaded');
-                if (i === ticketIndex) {
-                    ticketLightboxLoading.hidden = true;
-                    ticketLightboxError.hidden = true;
-                }
-            };
-            img.onerror = () => {
-                // HTTPS 页面会拦截 HTTP 图片；同一域名通常可直接升级为 HTTPS。
-                if (!triedHttps && window.location.protocol === 'https:' && /^http:\/\//i.test(originalUrl)) {
-                    triedHttps = true;
-                    img.src = originalUrl.replace(/^http:\/\//i, 'https://');
-                    return;
-                }
-                img.classList.add('is-error');
-                if (i === ticketIndex) {
-                    ticketLightboxLoading.hidden = true;
-                    ticketLightboxError.hidden = false;
-                }
-            };
-            img.src = originalUrl;
+            const img = createTicketImage(fp, i, 'ticket-wallet-item');
             ticketWallet.appendChild(img);
             return { fp, img };
         });
@@ -2874,20 +2935,50 @@
         ticketGalleryHint.hidden = ticketItems.length < 2;
     }
 
+    // 横向长串：所有票根排成一行，通过滚动/拖拽切换
+    function buildTicketStrip() {
+        ticketStripScroller.innerHTML = '';
+        ticketStripScroller.scrollLeft = 0;
+        walletItems = ticketItems.map((fp, i) => {
+            const img = createTicketImage(fp, i, 'ticket-strip-item');
+            ticketStripScroller.appendChild(img);
+            return { fp, img };
+        });
+        updateStripPadding();
+    }
+
+    function renderTicketMeta(fp) {
+        const meta = ticketMeta(fp);
+        const titleText = ticketLightboxTitle.querySelector('.ticket-meta-title-text');
+        if (titleText) titleText.textContent = meta.title;
+        else ticketLightboxTitle.textContent = meta.title;
+        ticketLightboxEnglish.textContent = fp.ticketEnglish || fp.ticketTitle || '';
+        ticketLightboxEnglish.hidden = !ticketLightboxEnglish.textContent;
+        ticketLightboxSubtitle.textContent = '';
+        ticketLightboxSubtitle.hidden = true;
+        ticketLightboxDescription.textContent = meta.description || '风吹洱海，云落苍山，生活在别处，也在此刻。';
+        ticketLightboxDescription.hidden = false;
+        ticketLightboxDetails.innerHTML = [
+            ['城市', meta.route, 'route', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6-5.5 6-11a6 6 0 1 0-12 0c0 5.5 6 11 6 11Z"/><circle cx="12" cy="10" r="2"/></svg>'],
+            ['省份', meta.province, 'province', ''],
+            ['日期', meta.date, 'date', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="15" rx="2"/><path d="M7.5 3.5v4M16.5 3.5v4M3.5 10h17"/></svg>'],
+            ['票号', meta.no, 'no', '']
+        ].filter(item => item[1]).map(item => '<div class="ticket-meta-field ticket-meta-field-' + item[2] + '">' + item[3] + '<dt>' + ticketEscape(item[0]) + '</dt><dd>' + ticketEscape(item[1]) + '</dd></div>').join('');
+        ticketLightboxCount.textContent = (ticketIndex + 1) + ' / ' + ticketItems.length;
+    }
+
     function renderTicketWallet() {
         const fp = ticketItems[ticketIndex];
         if (!fp) return;
-        const meta = ticketMeta(fp);
-        ticketLightboxTitle.textContent = meta.title;
-        ticketLightboxSubtitle.textContent = meta.subtitle;
-        ticketLightboxSubtitle.hidden = !meta.subtitle;
-        ticketLightboxDescription.textContent = meta.description;
-        ticketLightboxDescription.hidden = !meta.description;
-        ticketLightboxDetails.innerHTML = [
-            ['日期', meta.date], ['目的地', meta.route], ['类型', meta.type], ['票号', meta.no]
-        ].filter(item => item[1]).map(item => '<div><dt>' + ticketEscape(item[0]) + '</dt><dd>' + ticketEscape(item[1]) + '</dd></div>').join('');
-        ticketLightboxCount.textContent = (ticketIndex + 1) + ' / ' + ticketItems.length;
+        renderTicketMeta(fp);
+        if (ticketStripMode) {
+            renderStripWallet();
+        } else {
+            renderFanWallet();
+        }
+    }
 
+    function renderFanWallet() {
         walletItems.forEach((item, i) => {
             const img = item.img;
             const active = i === ticketIndex;
@@ -2917,12 +3008,50 @@
         });
     }
 
+    function renderStripWallet() {
+        walletItems.forEach((item, i) => {
+            const img = item.img;
+            const active = i === ticketIndex;
+            img.classList.toggle('is-active', active);
+            img.setAttribute('aria-label', (i + 1) + ' / ' + walletItems.length + ' ' + (item.fp.ticketTitle || item.fp.name || '票根'));
+            img.tabIndex = active ? -1 : 0;
+        });
+        const current = walletItems[ticketIndex] && walletItems[ticketIndex].img;
+        ticketLightboxLoading.hidden = !current || current.classList.contains('is-loaded') || current.classList.contains('is-error');
+        ticketLightboxError.hidden = !current || !current.classList.contains('is-error');
+        renderStripProgress();
+    }
+
+    // 字幕下方的极简指示线：亮点在线上随当前票根位置移动，其余部分保持低透明度
+    function renderStripProgress() {
+        if (!ticketStripMode || !ticketStripProgress) return;
+        const rail = ticketStripProgress.querySelector('.ticket-progress-rail');
+        if (!rail) return;
+        const total = ticketItems.length;
+        rail.innerHTML = '';
+        for (let i = 0; i < total; i++) {
+            const segment = document.createElement('button');
+            segment.type = 'button';
+            segment.className = 'ticket-progress-segment' + (i === ticketIndex ? ' is-current' : '');
+            segment.dataset.index = String(i);
+            segment.setAttribute('aria-label', '查看第 ' + (i + 1) + ' 张票根');
+            segment.setAttribute('aria-current', i === ticketIndex ? 'true' : 'false');
+            rail.appendChild(segment);
+        }
+    }
+
     function openTicketLightbox(index, trigger) {
         ticketItems = ticketItemsFromFootprints();
         ticketIndex = Math.max(0, Math.min(index, ticketItems.length - 1));
         ticketTrigger = trigger || null;
         buildTicketWallet();
         renderTicketWallet();
+        if (ticketStripMode) {
+            requestAnimationFrame(() => {
+                centerStripItem(ticketIndex, false);
+                positionStripArchive();
+            });
+        }
         ticketGalleryClose.focus();
     }
 
@@ -2939,6 +3068,80 @@
         if (ticketItems.length < 2) return;
         ticketIndex = (ticketIndex + delta + ticketItems.length) % ticketItems.length;
         renderTicketWallet();
+        if (ticketStripMode) centerStripItem(ticketIndex, true);
+    }
+
+    // ================= 横向长串：定位 / 吸附 / 拖拽 =================
+    function stripViewportCenter() {
+        const rect = ticketStripScroller.getBoundingClientRect();
+        return rect.left + ticketStripScroller.clientWidth / 2;
+    }
+
+    function stripItemCenter(el) {
+        const rect = el.getBoundingClientRect();
+        return rect.left + rect.width / 2;
+    }
+
+    // 给首尾两张留出“能滚到居中”的左右留白：
+    // 视口过宽时若不补白，中间票根的左右邻图永远无法滚到正中央，吸附会弹回中间。
+    function updateStripPadding() {
+        if (!ticketStripScroller.clientWidth || !ticketStripScroller.firstElementChild) return;
+        const itemWidth = ticketStripScroller.firstElementChild.offsetWidth;
+        if (!itemWidth) return;
+        const pad = Math.max(0, Math.floor((ticketStripScroller.clientWidth - itemWidth) / 2));
+        ticketStripScroller.style.paddingLeft = pad + 'px';
+        ticketStripScroller.style.paddingRight = pad + 'px';
+    }
+
+    function nearestStripIndex() {
+        const viewportCenter = stripViewportCenter();
+        let best = 0;
+        let bestDist = Infinity;
+        walletItems.forEach((item, i) => {
+            const el = item.img;
+            if (!el || !el.offsetWidth) return;
+            const dist = Math.abs(stripItemCenter(el) - viewportCenter);
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = i;
+            }
+        });
+        return best;
+    }
+
+    function centerStripItem(index, smooth) {
+        const item = walletItems[index];
+        if (!item || !item.img || !ticketStripScroller.clientWidth) return;
+        const el = item.img;
+        const delta = stripItemCenter(el) - stripViewportCenter();
+        const target = Math.max(0, ticketStripScroller.scrollLeft + delta);
+        ticketStripScroller.scrollTo({
+            left: target,
+            behavior: smooth ? 'smooth' : 'auto'
+        });
+    }
+
+    function snapStrip() {
+        if (!ticketStripMode || ticketItems.length < 2) return;
+        const idx = nearestStripIndex();
+        if (idx === ticketIndex) return;
+        // 只在真正切换到另一张票根时，把新票根平滑吸附到视口正中央
+        ticketIndex = idx;
+        renderTicketWallet();
+        centerStripItem(idx, true);
+    }
+
+    // 方案 1：票据档案页垫在当前票根下，只从票根下缘露出一截
+    let stripArchiveRaf = null;
+    function positionStripArchive() {
+        if (!ticketStripMode || !ticketGallery.classList.contains('show')) return;
+        // 字幕式元信息使用正常文档流，始终排在当前票根下方。
+        ticketMetaPanel.style.position = '';
+        ticketMetaPanel.style.left = '';
+        ticketMetaPanel.style.top = '';
+        ticketMetaPanel.style.zIndex = '';
+        ticketStripScroller.style.marginBottom = '';
+        ticketStripScroller.style.zIndex = '';
     }
 
     function reloadTicket(index) {
@@ -2957,6 +3160,16 @@
     ticketGalleryBack.addEventListener('click', () => setTicketView(false));
     ticketGalleryClose.addEventListener('click', () => setTicketView(false));
     ticketLightboxRetry.addEventListener('click', () => reloadTicket(ticketIndex));
+    ticketStripProgress.querySelector('.ticket-progress-rail').addEventListener('click', event => {
+        const segment = event.target.closest('.ticket-progress-segment');
+        if (!segment) return;
+        const index = Number(segment.dataset.index);
+        if (Number.isInteger(index)) {
+            ticketIndex = index;
+            renderTicketWallet();
+            centerStripItem(ticketIndex, true);
+        }
+    });
     // 点露出的边缘 → 翻到前面；点当前票根 → 转到下一张
     ticketWallet.addEventListener('click', event => {
         if (walletSwiped) {
@@ -2995,6 +3208,66 @@
             setTimeout(() => { walletSwiped = false; }, 400);
         }
     }, { passive: true });
+
+    // 横向长串：鼠标滚轮（纵向滚动映射为横向）、拖拽滑动、停稳后吸附居中
+    ticketStripScroller.addEventListener('wheel', event => {
+        if (!ticketStripMode || ticketItems.length < 2) return;
+        event.preventDefault();
+        const delta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+        ticketStripScroller.scrollLeft += delta;
+        clearTimeout(stripScrollTimer);
+        stripScrollTimer = setTimeout(snapStrip, 160);
+    }, { passive: false });
+
+    ticketStripScroller.addEventListener('pointerdown', event => {
+        if (!ticketStripMode || ticketItems.length < 2) return;
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        stripDrag = {
+            id: event.pointerId,
+            startX: event.clientX,
+            startLeft: ticketStripScroller.scrollLeft,
+            moved: false
+        };
+        ticketStripScroller.classList.add('dragging');
+        try {
+            ticketStripScroller.setPointerCapture(event.pointerId);
+        } catch (e) {
+            /* 忽略捕获失败 */
+        }
+    });
+    ticketStripScroller.addEventListener('pointermove', event => {
+        if (!stripDrag || stripDrag.id !== event.pointerId) return;
+        const dx = event.clientX - stripDrag.startX;
+        if (Math.abs(dx) > 5) stripDrag.moved = true;
+        ticketStripScroller.scrollLeft = stripDrag.startLeft - dx;
+    });
+    function endStripDrag(event) {
+        if (!stripDrag || stripDrag.id !== event.pointerId) return;
+        const wasMoved = stripDrag.moved;
+        stripDrag = null;
+        ticketStripScroller.classList.remove('dragging');
+        if (wasMoved) snapStrip();
+    }
+    ticketStripScroller.addEventListener('pointerup', endStripDrag);
+    ticketStripScroller.addEventListener('pointercancel', endStripDrag);
+    // 横条滚动时让档案页跟随当前主票根移动
+    ticketStripScroller.addEventListener('scroll', () => {
+        if (!ticketStripMode || !ticketGallery.classList.contains('show')) return;
+        if (stripArchiveRaf) return;
+        stripArchiveRaf = requestAnimationFrame(() => {
+            stripArchiveRaf = null;
+            positionStripArchive();
+        });
+    }, { passive: true });
+    window.addEventListener('resize', () => {
+        if (!ticketStripMode || !ticketGallery.classList.contains('show') || ticketItems.length < 2) return;
+        updateStripPadding();
+        requestAnimationFrame(() => {
+            centerStripItem(ticketIndex, false);
+            positionStripArchive();
+        });
+    });
+
     ticketLightbox.addEventListener('click', event => {
         if (event.target === ticketLightbox) closeTicketLightbox();
     });
@@ -3016,6 +3289,12 @@
             ticketIndex = 0;
             buildTicketWallet();
             renderTicketWallet();
+            if (ticketStripMode) {
+                requestAnimationFrame(() => {
+                    centerStripItem(ticketIndex, false);
+                    positionStripArchive();
+                });
+            }
         }
     });
     // 浏览器前进/后退：按 ?view=tickets 参数在票根页与地球页之间切换
