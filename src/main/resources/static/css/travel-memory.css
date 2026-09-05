@@ -906,34 +906,52 @@
         .marker-card-actions {
             display: flex;
             align-items: center;
-            justify-content: flex-end;
-            gap: 10px;
+            justify-content: flex-start;
             flex-wrap: wrap;
+            gap: 18px;
             margin-top: 18px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(247, 245, 241, 0.12);
         }
         .marker-card-actions[hidden] { display: none; }
         #markerCardTicket,
         #markerCardGallery {
             appearance: none;
-            border: 1px solid rgba(247, 245, 241, 0.35);
-            border-radius: 999px;
-            background: rgba(247, 245, 241, 0.08);
-            color: rgba(247, 245, 241, 0.92);
-            font: 12.5px/1 "PingFang SC", "Microsoft YaHei", sans-serif;
-            letter-spacing: 0.08em;
-            padding: 8px 18px;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            color: rgba(247, 245, 241, 0.62);
+            font: 12px/1 "PingFang SC", "Microsoft YaHei", sans-serif;
+            letter-spacing: 0.14em;
+            padding: 8px 0;
             cursor: pointer;
-            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+            transition: color 0.2s ease, opacity 0.2s ease;
+        }
+        #markerCardTicket[hidden],
+        #markerCardGallery[hidden] {
+            display: none !important;
+        }
+        #markerCardGallery svg {
+            width: 13px;
+            height: 13px;
+            flex: none;
+            opacity: 0.62;
+            transition: opacity 0.2s ease;
         }
         #markerCardTicket:hover,
         #markerCardGallery:hover {
-            background: #f7f5f1;
-            border-color: #f7f5f1;
-            color: #0b0e14;
+            background: transparent;
+            color: #f7f5f1;
+        }
+        #markerCardGallery:hover svg {
+            opacity: 1;
         }
         #markerCardTicket:focus-visible,
         #markerCardGallery:focus-visible {
-            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline: 1px solid rgba(247, 245, 241, 0.5);
             outline-offset: 2px;
         }
 
@@ -974,28 +992,29 @@
         }
         #markerCardClose {
             position: absolute;
-            top: 10px;
-            right: 10px;
+            top: 8px;
+            right: 12px;
             width: 30px;
             height: 30px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border: 1px solid rgba(255, 255, 255, 0.22);
-            border-radius: 50%;
-            background: rgba(5, 7, 12, 0.55);
-            color: rgba(247, 245, 241, 0.9);
-            font-size: 16px;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            color: rgba(247, 245, 241, 0.55);
+            font-size: 21px;
+            font-weight: 300;
             line-height: 1;
             cursor: pointer;
-            transition: background 0.2s ease, color 0.2s ease;
+            transition: color 0.2s ease;
         }
         #markerCardClose:hover {
-            background: #f7f5f1;
-            color: #0b0e14;
+            background: transparent;
+            color: #f7f5f1;
         }
         #markerCardClose:focus-visible {
-            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline: 1px solid rgba(247, 245, 241, 0.5);
             outline-offset: 2px;
         }
         @media (prefers-reduced-motion: reduce) {
@@ -1100,54 +1119,74 @@
         }
         .city-card-actions {
             display: flex;
-            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 18px;
             margin-top: 18px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(247, 245, 241, 0.12);
         }
         #cityCardGallery,
         #cityCardLocate {
-            min-height: 36px;
-            padding: 8px 15px;
-            border-radius: 999px;
-            font: 12.5px/1 "PingFang SC", "Microsoft YaHei", sans-serif;
-            letter-spacing: 0.06em;
+            appearance: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 0;
+            padding: 8px 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            color: rgba(247, 245, 241, 0.62);
+            font: 12px/1 "PingFang SC", "Microsoft YaHei", sans-serif;
+            letter-spacing: 0.14em;
             cursor: pointer;
-            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+            transition: color 0.2s ease, opacity 0.2s ease;
         }
         #cityCardGallery {
-            border: 1px solid #f7f5f1;
-            background: #f7f5f1;
-            color: #0b0e14;
+            color: rgba(247, 245, 241, 0.92);
         }
-        #cityCardGallery:hover { background: #ffffff; border-color: #ffffff; }
-        #cityCardLocate {
-            border: 1px solid rgba(247, 245, 241, 0.35);
+        #cityCardGallery svg {
+            width: 13px;
+            height: 13px;
+            flex: none;
+            opacity: 0.62;
+            transition: opacity 0.2s ease;
+        }
+        #cityCardGallery:hover,
+        #cityCardLocate:hover {
             background: transparent;
-            color: rgba(247, 245, 241, 0.88);
+            color: #f7f5f1;
         }
-        #cityCardLocate:hover { background: #f7f5f1; border-color: #f7f5f1; color: #0b0e14; }
+        #cityCardGallery:hover svg {
+            opacity: 1;
+        }
         #cityCardGallery:focus-visible,
         #cityCardLocate:focus-visible {
-            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline: 1px solid rgba(247, 245, 241, 0.5);
             outline-offset: 2px;
         }
         #cityCardClose {
             position: absolute;
-            top: 10px;
-            right: 10px;
+            top: 8px;
+            right: 12px;
             width: 30px;
             height: 30px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border: 1px solid rgba(255, 255, 255, 0.22);
-            border-radius: 50%;
-            background: rgba(5, 7, 12, 0.55);
-            color: rgba(247, 245, 241, 0.9);
-            font-size: 16px;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            color: rgba(247, 245, 241, 0.55);
+            font-size: 21px;
+            font-weight: 300;
+            line-height: 1;
             cursor: pointer;
+            transition: color 0.2s ease;
         }
-        #cityCardClose:hover { background: #f7f5f1; color: #0b0e14; }
-        #cityCardClose:focus-visible { outline: 2px solid rgba(247, 245, 241, 0.65); outline-offset: 2px; }
+        #cityCardClose:hover { background: transparent; color: #f7f5f1; }
+        #cityCardClose:focus-visible { outline: 1px solid rgba(247, 245, 241, 0.5); outline-offset: 2px; }
         @media (prefers-reduced-motion: reduce) {
             #cityCard { transition: none; }
         }
@@ -3113,7 +3152,6 @@
             text-shadow: 0 1px 10px rgba(0, 0, 0, 0.6);
         }
         #ticketGalleryBack,
-        #ticketGalleryClose,
         #ticketLightboxClose,
         #ticketLightboxPrev,
         #ticketLightboxNext {
@@ -3137,25 +3175,7 @@
             letter-spacing: 0.08em;
         }
         #ticketGalleryBack svg { width: 17px; height: 17px; }
-        .ticket-gallery-actions {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 16px;
-            color: rgba(244, 239, 230, 0.55);
-            font: 11px ui-monospace, SFMono-Regular, Consolas, monospace;
-            letter-spacing: 0.08em;
-        }
-        #ticketGalleryClose {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            font-size: 25px;
-            font-weight: 300;
-            line-height: 1;
-        }
         #ticketGalleryBack:hover,
-        #ticketGalleryClose:hover,
         #ticketLightboxClose:hover,
         #ticketLightboxPrev:hover,
         #ticketLightboxNext:hover {
@@ -3163,7 +3183,6 @@
             background: rgba(255, 255, 255, 0.1);
         }
         #ticketGalleryBack:focus-visible,
-        #ticketGalleryClose:focus-visible,
         #ticketLightboxClose:focus-visible,
         #ticketLightboxPrev:focus-visible,
         #ticketLightboxNext:focus-visible,
@@ -3351,10 +3370,9 @@
             #ticketLightbox { padding-right: 7vw; padding-left: 7vw; }
         }
         @media (max-width: 700px) {
-            .ticket-gallery-top { grid-template-columns: 1fr auto; gap: 12px; padding-right: 16px; padding-left: 16px; }
-            .ticket-gallery-heading { grid-column: 1 / -1; grid-row: 1; }
-            #ticketGalleryBack { grid-column: 1; grid-row: 2; }
-            .ticket-gallery-actions { grid-column: 2; grid-row: 2; }
+            .ticket-gallery-top { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 6px 12px; padding-right: 16px; padding-left: 16px; }
+            .ticket-gallery-heading { grid-column: 1; grid-row: 1; }
+            #ticketGalleryBack { grid-column: 1; grid-row: 2; justify-self: center; }
             .ticket-gallery-content { width: min(100% - 28px, 560px); padding-top: 24px; }
             .ticket-gallery-grid { columns: 1; }
             .ticket-card { transform: none; }
@@ -3559,7 +3577,6 @@
                 max-height: calc(100% + 2px);   /* 顶部留出旋转余量，避免角部戳出 */
                 object-fit: cover;
             }
-            #ticketGalleryClose { display: none; }   /* 移动端只保留“返回地球” */
             /* 加载/失败提示浮在票根区中央，不参与布局，避免信息区上下跳动 */
             .ticket-gallery-loading,
             .ticket-gallery-error {
@@ -3614,7 +3631,6 @@
         }
         @media (prefers-reduced-motion: reduce) {
             #ticketGalleryBack,
-            #ticketGalleryClose,
             #ticketLightboxClose,
             #ticketLightboxPrev,
             #ticketLightboxNext,
@@ -4165,4 +4181,170 @@
             .ticket-strip-item {
                 transition: none;
             }
+        }
+
+        /* —— 城市图片墙：顶部城市下拉列表（与图片墙同套杂志目录风格） —— */
+        .city-view-title-head {
+            margin: 6px 0 0;
+            font: inherit;
+            line-height: inherit;
+            text-align: center;
+        }
+        #cityViewTitle {
+            appearance: none;
+            -webkit-appearance: none;
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 2px 26px 2px 8px;
+            border: 0;
+            background: transparent;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        #cityViewTitle::after {
+            content: '';
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            margin-top: -3px;
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 6px solid currentColor;
+            opacity: 0.5;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+        #cityViewTitle[aria-expanded="true"]::after {
+            transform: rotate(180deg);
+            opacity: 0.9;
+        }
+        #cityViewTitle:focus-visible {
+            outline: 2px solid rgba(247, 245, 241, 0.55);
+            outline-offset: 4px;
+        }
+        .city-view-head {
+            position: relative;
+        }
+        #cityViewCityList {
+            position: absolute;
+            left: 50%;
+            top: calc(100% + 12px);
+            transform: translateX(-50%);
+            z-index: 30;
+            box-sizing: border-box;
+            width: min(310px, 80vw);
+            max-height: min(400px, 48vh);
+            overflow-y: auto;
+            counter-reset: cityOption;
+            padding: 6px 6px 10px;
+            border: 1px solid var(--city-line, rgba(244, 239, 230, 0.14));
+            border-radius: 8px;
+            background: rgba(12, 15, 21, 0.92);
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+            color: var(--city-ink, #f4efe6);
+            text-align: left;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(244, 239, 230, 0.18) transparent;
+            -webkit-backdrop-filter: blur(22px) saturate(1.1);
+            backdrop-filter: blur(22px) saturate(1.1);
+        }
+        #cityViewCityList[hidden] {
+            display: none;
+        }
+        #cityViewCityList::before {
+            content: '选择城市 · CITIES';
+            display: block;
+            margin: 4px 14px 10px;
+            color: var(--city-accent, #d9a86c);
+            font-size: 10px;
+            letter-spacing: 0.28em;
+            text-indent: 0.28em;
+        }
+        .city-view-city-option {
+            appearance: none;
+            counter-increment: cityOption;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-sizing: border-box;
+            padding: 9px 10px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: var(--city-muted, rgba(244, 239, 230, 0.6));
+            font: 12.5px/1.4 "PingFang SC", "Microsoft YaHei", sans-serif;
+            letter-spacing: 0.04em;
+            text-align: left;
+            cursor: pointer;
+            transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+        }
+        .city-view-city-option::before {
+            content: counter(cityOption, decimal-leading-zero);
+            flex: none;
+            width: 22px;
+            color: var(--city-faint, rgba(244, 239, 230, 0.34));
+            font: 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+            letter-spacing: 0.08em;
+            opacity: 0.75;
+        }
+        .city-view-city-option:hover,
+        .city-view-city-option:focus-visible {
+            outline: none;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--city-ink, #f4efe6);
+        }
+        .city-view-city-option.is-current {
+            background: rgba(217, 168, 108, 0.1);
+            box-shadow: inset 2px 0 0 var(--city-accent, #d9a86c);
+            color: var(--city-ink, #f4efe6);
+        }
+        .city-view-city-option.is-current::before {
+            color: var(--city-accent, #d9a86c);
+            opacity: 1;
+        }
+        .city-view-city-option-name {
+            flex: 1 1 auto;
+            min-width: 0;
+            font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+            font-size: 15px;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .city-view-city-option-count {
+            flex: none;
+            font-size: 10.5px;
+            letter-spacing: 0.05em;
+            color: var(--city-faint, rgba(244, 239, 230, 0.4));
+            white-space: nowrap;
+        }
+
+        /* 手账照片墙：滚动到底自动加载的哨兵提示 */
+        .city-journal-more-auto {
+            display: block;
+            width: 100%;
+            margin: 4px auto 0;
+            padding: 12px 8px;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            color: rgba(244, 239, 230, 0.5);
+            font: 11.5px/1.6 "Noto Serif SC", "Songti SC", "STSong", serif;
+            letter-spacing: 0.08em;
+            text-align: center;
+            cursor: default;
+            pointer-events: none;
+        }
+        .city-journal-more-auto:hover,
+        .city-journal-more-auto:focus-visible {
+            background: transparent;
+            color: rgba(244, 239, 230, 0.5);
+            transform: none;
+            outline: none;
         }

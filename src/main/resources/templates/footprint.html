@@ -20,7 +20,7 @@
     <script src="/plugins/footprint/assets/static/cesium/Cesium.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/pako.min.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/tdtplug.umd.min.js"></script>
-    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v44" rel="stylesheet">
+    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v55" rel="stylesheet">
 
 
 <!--    <link rel="stylesheet" href="../static/css/footprint.css" type="text/css">-->
@@ -150,13 +150,16 @@
             </button>
             <div class="city-view-head">
                 <p class="city-view-eyebrow">Footprints · 足迹</p>
-                <h2 id="cityViewTitle" class="city-title-options" aria-label="城市名称">城市</h2>
+                <h2 class="city-view-title-head" aria-label="城市名称">
+                    <button type="button" id="cityViewTitle" class="city-title-options"
+                            aria-haspopup="listbox" aria-expanded="false" aria-label="切换城市">城市</button>
+                </h2>
                 <p id="cityViewStats"></p>
+                <div id="cityViewCityList" class="city-view-city-list" role="listbox" aria-label="城市列表" hidden></div>
             </div>
             <div class="city-view-nav">
                 <button id="cityViewPrevCity" type="button" aria-label="上一个城市">‹</button>
                 <button id="cityViewNextCity" type="button" aria-label="下一个城市">›</button>
-                <button id="cityViewClose" type="button" aria-label="关闭城市足迹">×</button>
             </div>
         </div>
         <div class="city-view-body" id="cityViewBody">
@@ -177,10 +180,6 @@
                 <p class="ticket-gallery-eyebrow">TRAVEL TICKET ARCHIVE</p>
                 <h2>旅途票根</h2>
                 <p id="ticketGalleryStats">收集每一次出发的凭证</p>
-            </div>
-            <div class="ticket-gallery-actions">
-                <span id="ticketGalleryCount" aria-live="polite"></span>
-                <button id="ticketGalleryClose" type="button" aria-label="关闭票根墙">×</button>
             </div>
         </div>
         <div class="ticket-gallery-content">
@@ -292,7 +291,15 @@
             <p class="marker-card-addr" id="markerCardAddr"></p>
             <p class="marker-card-desc" id="markerCardDesc"></p>
             <div class="marker-card-actions">
-                <button id="markerCardGallery" type="button" hidden>打开图片墙</button>
+                <button id="markerCardGallery" type="button" hidden>
+                    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true">
+                        <rect x="2.2" y="2.2" width="5" height="5" rx="1"/>
+                        <rect x="8.8" y="2.2" width="5" height="5" rx="1"/>
+                        <rect x="2.2" y="8.8" width="5" height="5" rx="1"/>
+                        <rect x="8.8" y="8.8" width="5" height="5" rx="1"/>
+                    </svg>
+                    <span>打开图片墙</span>
+                </button>
                 <button id="markerCardTicket" type="button" hidden>打开票根</button>
             </div>
         </div>
@@ -308,7 +315,15 @@
             <p class="city-card-meta" id="cityCardMeta"></p>
             <p class="city-card-desc" id="cityCardDesc"></p>
             <div class="city-card-actions">
-                <button id="cityCardGallery" type="button">打开图片墙</button>
+                <button id="cityCardGallery" type="button">
+                    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true">
+                        <rect x="2.2" y="2.2" width="5" height="5" rx="1"/>
+                        <rect x="8.8" y="2.2" width="5" height="5" rx="1"/>
+                        <rect x="2.2" y="8.8" width="5" height="5" rx="1"/>
+                        <rect x="8.8" y="8.8" width="5" height="5" rx="1"/>
+                    </svg>
+                    <span>打开图片墙</span>
+                </button>
                 <button id="cityCardLocate" type="button">重新定位</button>
             </div>
         </div>
@@ -445,7 +460,7 @@
 </div>
 </div>
 
-<script src="/plugins/footprint/assets/static/data/district-pinyin.js?v=footprint-reveal-v44"></script>
-<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v44"></script>
+<script src="/plugins/footprint/assets/static/data/district-pinyin.js?v=footprint-reveal-v55"></script>
+<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v55"></script>
 </body>
 </html>

@@ -326,6 +326,7 @@
             topNav.classList.remove('visible');
             document.body.classList.remove('nav-zoom');
             navTools.classList.remove('open');
+            topNav.classList.remove('tools-open');
             navMoreBtn.setAttribute('aria-expanded', 'false');
             backGlobeBtn.classList.remove('show');
             cityFillFloatBtn.classList.remove('show');
@@ -357,6 +358,7 @@
                 pageIntro.classList.add('visible');
                 // 回到整球视图时复位“工具”溢出菜单，避免残留展开态
                 navTools.classList.remove('open');
+                topNav.classList.remove('tools-open');
                 navMoreBtn.setAttribute('aria-expanded', 'false');
                 if (markerCardReady && markerCard.classList.contains('visible')) {
                     hideMarkerCard();   // 回到整球视图时自动关闭详情卡
@@ -1083,6 +1085,7 @@
     // “工具”溢出菜单（紧凑模式/窄屏）：主入口常驻，探索类工具收进菜单
     function setNavToolsOpen(open) {
         navTools.classList.toggle('open', open);
+        topNav.classList.toggle('tools-open', open);
         navMoreBtn.setAttribute('aria-expanded', String(open));
         if (!open && !layerPanel.hidden) {
             layerPanel.hidden = true;
@@ -1104,6 +1107,7 @@
     function syncNavToolsState() {
         if (!navMobileMql.matches) {
             navTools.classList.remove('open');
+            topNav.classList.remove('tools-open');
             navMoreBtn.setAttribute('aria-expanded', 'false');
         }
     }
@@ -2090,13 +2094,14 @@
     // ================= 城市足迹全屏视图（左侧足迹 Tab 卡片 + 右侧详情） =================
     const cityView = document.getElementById('cityView');
     const cityViewBack = document.getElementById('cityViewBack');
-    const cityViewClose = document.getElementById('cityViewClose');
     const cityViewTitle = document.getElementById('cityViewTitle');
+    const cityViewCityList = document.getElementById('cityViewCityList');
     const cityViewStats = document.getElementById('cityViewStats');
     const cityViewPrevCity = document.getElementById('cityViewPrevCity');
     const cityViewNextCity = document.getElementById('cityViewNextCity');
     const cityTabs = document.getElementById('cityTabs');
     const cityStage = document.getElementById('cityStage');
+    let cityStageObserver = null;   // 手账照片墙滚动到底自动加载的观察器
     let cityViewCityIndex = -1;      // 当前城市（cityList 下标）
     let cityViewTabIndex = 0;        // 当前选中的足迹 Tab
     let cityViewTriggerBtn = null;   // 键盘触发时的返回焦点按钮
@@ -2131,7 +2136,15 @@
         return match[4] ? date + ' ' + String(match[4]).padStart(2, '0') + ':' + match[5] : date;
     }
 
+    function cleanupCityStageAutoLoad() {
+        if (cityStageObserver) {
+            cityStageObserver.disconnect();
+            cityStageObserver = null;
+        }
+    }
+
     function renderCityStage(fp, photoLimit = 8, preserveScroll = false) {
+        cleanupCityStageAutoLoad();
         const imgs = cityWallImages(fp);
         const prevScrollTop = preserveScroll ? cityStage.scrollTop : 0;
         const content = document.createElement('div');
@@ -2340,23 +2353,38 @@
         journal.appendChild(journalGrid);
 
         if (imgs.length > visibleImages.length) {
-            const loadMore = document.createElement('button');
-            loadMore.type = 'button';
-            loadMore.className = 'city-journal-more';
-            loadMore.textContent = '加载更多照片  ' + visibleImages.length + ' / ' + imgs.length;
-            loadMore.addEventListener('click', () => {
-                renderCityStage(fp, Math.min(visibleImages.length + 8, imgs.length), true);
-            });
-            journal.appendChild(loadMore);
+            // 滚动到此处附近时自动加载下一批，不再需要手动点击
+            const sentinel = document.createElement('div');
+            sentinel.className = 'city-journal-more city-journal-more-auto';
+            sentinel.setAttribute('role', 'status');
+            sentinel.textContent = '已加载 ' + visibleImages.length + ' / ' + imgs.length + ' 张 · 继续向下自动加载';
+            journal.appendChild(sentinel);
         }
         content.appendChild(journal);
 
         cityStage.innerHTML = '';
         cityStage.appendChild(content);
         cityStage.scrollTop = preserveScroll ? prevScrollTop : 0;
-        if (preserveScroll) {
-            const nextMore = cityStage.querySelector('.city-journal-more');
-            if (nextMore) nextMore.focus({ preventScroll: true });
+
+        // 观察加载哨兵：靠近底部时再渲染下一批。
+        // 延迟到下一帧再开始观察，避免刚设置 scrollTop=0 时误判为已到达底部。
+        if (imgs.length > visibleImages.length && 'IntersectionObserver' in window) {
+            const nextLimit = Math.min(visibleImages.length + 8, imgs.length);
+            requestAnimationFrame(() => {
+                const sentinel = cityStage.querySelector('.city-journal-more-auto');
+                if (!sentinel || !sentinel.isConnected) return;
+                cityStageObserver = new IntersectionObserver(entries => {
+                    if (entries.some(entry => entry.isIntersecting)) {
+                        cleanupCityStageAutoLoad();
+                        renderCityStage(fp, nextLimit, true);
+                    }
+                }, {
+                    root: cityStage,
+                    rootMargin: '0px 0px 180px 0px',
+                    threshold: 0.01
+                });
+                cityStageObserver.observe(sentinel);
+            });
         }
     }
 
@@ -2450,6 +2478,69 @@
         renderCityView();
     }
 
+    // —— 顶部城市列表（下拉选择器）——
+    function cityListMeta(ci) {
+        const city = cityList[ci];
+        if (!city) return { count: 0, photos: 0 };
+        const photos = city.indices.reduce(
+            (n, fi) => n + cityWallImages(FOOTPRINTS[fi]).length, 0
+        );
+        return { count: city.indices.length, photos };
+    }
+
+    function goToCityViewCity(ci) {
+        if (!cityList[ci] || ci === cityViewCityIndex) return;
+        cityViewCityIndex = ci;
+        cityViewTabIndex = 0;
+        renderCityView();
+    }
+
+    function renderCitySwitcher() {
+        if (!cityViewCityList) return;
+        cityViewCityList.innerHTML = '';
+        cityList.forEach((city, ci) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'city-view-city-option' + (ci === cityViewCityIndex ? ' is-current' : '');
+            btn.setAttribute('role', 'option');
+            btn.setAttribute('aria-selected', String(ci === cityViewCityIndex));
+            const meta = cityListMeta(ci);
+            const nameEl = document.createElement('span');
+            nameEl.className = 'city-view-city-option-name';
+            nameEl.textContent = city.city;
+            const countEl = document.createElement('span');
+            countEl.className = 'city-view-city-option-count';
+            countEl.textContent = meta.count + ' 个足迹 · ' + meta.photos + ' 张照片';
+            btn.append(nameEl, countEl);
+            btn.addEventListener('click', () => {
+                goToCityViewCity(ci);
+                closeCitySwitcher();
+            });
+            cityViewCityList.appendChild(btn);
+        });
+    }
+
+    function openCitySwitcher() {
+        if (!cityViewCityList) return;
+        renderCitySwitcher();
+        cityViewCityList.hidden = false;
+        cityViewTitle.setAttribute('aria-expanded', 'true');
+        const current = cityViewCityList.querySelector('.is-current') || cityViewCityList.firstElementChild;
+        if (current) current.focus();
+    }
+
+    function closeCitySwitcher(returnFocus = false) {
+        if (!cityViewCityList || cityViewCityList.hidden) return;
+        cityViewCityList.hidden = true;
+        cityViewTitle.setAttribute('aria-expanded', 'false');
+        if (returnFocus) cityViewTitle.focus();
+    }
+
+    function toggleCitySwitcher() {
+        if (cityViewCityList && cityViewCityList.hidden) openCitySwitcher();
+        else closeCitySwitcher(true);
+    }
+
     // 关闭全屏视图，飞到该足迹在地球上的位置（不打开详情卡）
     function flyToCityFootprint(fp) {
         const idx = FOOTPRINTS.indexOf(fp);
@@ -2478,13 +2569,17 @@
         renderCityView();
         cityView.classList.add('show');
         cityView.setAttribute('aria-hidden', 'false');
-        cityViewClose.focus();
+        // 触屏不自动回焦，避免“返回地球”出现焦点描边
+        if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window)) {
+            cityViewBack.focus();
+        }
     }
 
     function closeCityView(returnFocus = true) {
         if (lightbox.classList.contains('show')) closeLightbox(false);
         cityView.classList.remove('show');
         cityView.setAttribute('aria-hidden', 'true');
+        closeCitySwitcher();
         const restore = cityViewRestoreCard;
         cityViewRestoreCard = null;
         if (returnFocus) {
@@ -2508,12 +2603,31 @@
     }
 
     cityViewBack.addEventListener('click', () => closeCityView());
-    cityViewClose.addEventListener('click', () => closeCityView());
     cityViewPrevCity.addEventListener('click', () => switchCityViewCity(-1));
     cityViewNextCity.addEventListener('click', () => switchCityViewCity(1));
     cityView.addEventListener('click', (e) => {
         if (e.target === cityView) closeCityView();
     });
+    // 城市名可点击：展开城市下拉列表
+    cityViewTitle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleCitySwitcher();
+    });
+    cityViewCityList.addEventListener('click', (e) => e.stopPropagation());
+    document.addEventListener('click', (e) => {
+        if (cityView.classList.contains('show') &&
+            cityViewCityList && !cityViewCityList.hidden &&
+            !e.target.closest('.city-view-head')) {
+            closeCitySwitcher();
+        }
+    });
+    document.addEventListener('keydown', (e) => {
+        if (cityViewCityList && !cityViewCityList.hidden && e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            closeCitySwitcher(true);
+        }
+    }, true);
     // Tab 列表内用 ↑ / ↓ 切换足迹
     cityTabs.addEventListener('keydown', (e) => {
         if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -2671,10 +2785,8 @@
     const ticketGallery = document.getElementById('ticketGallery');
     const ticketGalleryBtn = document.getElementById('ticketGalleryBtn');
     const ticketGalleryBack = document.getElementById('ticketGalleryBack');
-    const ticketGalleryClose = document.getElementById('ticketGalleryClose');
     const ticketGalleryEmpty = document.getElementById('ticketGalleryEmpty');
     const ticketGalleryStats = document.getElementById('ticketGalleryStats');
-    const ticketGalleryCount = document.getElementById('ticketGalleryCount');
     const ticketLightbox = ticketGallery;
     const ticketWallet = document.getElementById('ticketWallet');
     const ticketGalleryHint = document.getElementById('ticketGalleryHint');
@@ -2761,6 +2873,15 @@
     function isTicketsView() {
         return new URLSearchParams(window.location.search).get('view') === 'tickets';
     }
+    // 触屏设备上自动聚焦会触发 :focus-visible 描边，让“返回地球”看起来多了一圈边框；
+    // 因此只在非触屏（键盘/鼠标）环境自动回焦，触屏交给用户自然操作。
+    function focusTicketGalleryControl() {
+        if (window.matchMedia('(hover: none)').matches || 'ontouchstart' in window) return;
+        // 刷新后直接进入票根页时还没有用户交互（userActivation），
+        // 此时自动聚焦会让“返回地球”带出 :focus-visible 描边，因此跳过。
+        if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
+        if (ticketGalleryBack) ticketGalleryBack.focus();
+    }
     function setTicketView(open, targetIndex, startRotation) {
         if (!ticketGallery) return;
         if (open) {
@@ -2769,7 +2890,6 @@
             if (cityCard && cityCard.classList.contains('visible')) hideCityCard(false);
             ticketItems = ticketItemsFromFootprints();
             ticketGalleryEmpty.hidden = ticketItems.length > 0;
-            ticketGalleryCount.textContent = ticketItems.length ? ticketItems.length + ' 张票根' : '';
             const cities = new Set(ticketItems.map(fp => fp.city).filter(Boolean));
             const latest = ticketItems.map(fp => ticketDate(fp.ticketDate || fp.createTime)).filter(Boolean)[0] || '';
             ticketGalleryStats.textContent = ticketItems.length
@@ -2794,13 +2914,13 @@
                         positionStripArchive();
                     });
                 }
-                ticketGalleryClose.focus();
+                focusTicketGalleryControl();
             } else {
                 ticketWallet.hidden = true;
                 ticketStrip.hidden = true;
                 ticketStripHint.hidden = true;
                 document.body.classList.remove('ticket-strip-active');
-                ticketGalleryClose.focus();
+                focusTicketGalleryControl();
             }
         } else {
             ticketGallery.classList.remove('show');
@@ -3027,7 +3147,7 @@
                 positionStripArchive();
             });
         }
-        ticketGalleryClose.focus();
+        focusTicketGalleryControl();
     }
 
     function closeTicketLightbox(returnFocus = true) {
@@ -3133,7 +3253,6 @@
 
     ticketGalleryBtn.addEventListener('click', () => setTicketView(true));
     ticketGalleryBack.addEventListener('click', () => setTicketView(false));
-    ticketGalleryClose.addEventListener('click', () => setTicketView(false));
     ticketLightboxRetry.addEventListener('click', () => reloadTicket(ticketIndex));
     ticketStripProgress.querySelector('.ticket-progress-rail').addEventListener('click', event => {
         const segment = event.target.closest('.ticket-progress-segment');
