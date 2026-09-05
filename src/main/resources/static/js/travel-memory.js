@@ -312,13 +312,11 @@
             cityFillFloatBtn.classList.remove('show');
             return;
         }
-        // 全屏覆盖层（城市足迹 / 相册）打开时隐藏顶部导航栏与标题卡，避免遮挡；
+        // 全屏覆盖层（城市足迹 / 票根）打开时隐藏顶部导航栏与标题卡，避免遮挡；
         // 这里用 getElementById 动态判断，避免引用后置声明的变量（TDZ）。
         const cityViewEl = document.getElementById('cityView');
-        const albumOverlayEl = document.getElementById('albumOverlay');
         const ticketGalleryEl = document.getElementById('ticketGallery');
         const overlayOpen = !!(cityViewEl && cityViewEl.classList.contains('show')) ||
-            !!(albumOverlayEl && albumOverlayEl.classList.contains('show')) ||
             !!(ticketGalleryEl && ticketGalleryEl.classList.contains('show'));
         if (overlayOpen) {
             if (introVisible) {
@@ -502,7 +500,7 @@
 
     // 切换前收起地球侧可能打开的覆盖层，避免返回 3D 时残留
     function closeGlobeOverlays() {
-        ['markerCard', 'lightbox', 'albumOverlay', 'cityView', 'markerTip'].forEach(id => {
+        ['markerCard', 'lightbox', 'cityView', 'markerTip'].forEach(id => {
             const el = document.getElementById(id);
             if (el) {
                 el.classList.remove('visible');
@@ -1140,10 +1138,6 @@
             closeCityView();
             return;
         }
-        if (albumOverlay.classList.contains('show')) {
-            closeAlbum();
-            return;
-        }
         if (markerCard.classList.contains('visible')) {
             hideMarkerCard();
             return;
@@ -1707,7 +1701,6 @@
         if (autoRotate) setAutoRotate(false);   // 打开城市聚合卡后停止地球自动旋转
         if (markerCard.classList.contains('visible')) hideMarkerCard();
         if (cityView.classList.contains('show')) closeCityView(false);
-        if (albumOverlay.classList.contains('show')) closeAlbum(false);
         hideMarkerTip();
 
         activeCityIndex = ci;
@@ -1937,109 +1930,6 @@
     }
     // 初始按钮由 applyMarkerMode(true) 在标记构建后生成
 
-    // ================= 全屏相册（城市 → 足迹 → 图片组） =================
-    const albumOverlay = document.getElementById('albumOverlay');
-    const albumBody = document.getElementById('albumBody');
-    const albumEyebrow = document.getElementById('albumEyebrow');
-    const albumTitle = document.getElementById('albumTitle');
-    const albumBtn = document.getElementById('albumBtn');
-    const albumClose = document.getElementById('albumClose');
-
-    // 按城市聚合足迹（保持数据顺序）
-    function groupFootprintsByCity() {
-        const order = [];
-        const map = new Map();
-        FOOTPRINTS.forEach(fp => {
-            const city = fp.city || '未分类';
-            if (!map.has(city)) {
-                map.set(city, []);
-                order.push(city);
-            }
-            map.get(city).push(fp);
-        });
-        return order.map(city => ({ city, footprints: map.get(city) }));
-    }
-
-    function renderAlbum() {
-        albumBody.innerHTML = '';
-        let tileIndex = 0;
-        groupFootprintsByCity().forEach(group => {
-            const section = document.createElement('section');
-            section.className = 'album-city';
-
-            const head = document.createElement('div');
-            head.className = 'album-city-head';
-            const cityName = document.createElement('span');
-            cityName.className = 'album-city-name';
-            cityName.textContent = group.city;
-            const cityCount = document.createElement('span');
-            cityCount.className = 'album-city-count';
-            const totalImgs = group.footprints.reduce(
-                (n, fp) => n + cityWallImages(fp).length, 0
-            );
-            cityCount.textContent = group.footprints.length + ' 个足迹 · ' + totalImgs + ' 张照片';
-            head.append(cityName, cityCount);
-            section.appendChild(head);
-
-            group.footprints.forEach(fp => {
-                const block = document.createElement('div');
-                block.className = 'album-footprint';
-
-                const fpH = document.createElement('div');
-                fpH.className = 'album-fp-head';
-                const nameEl = document.createElement('span');
-                nameEl.className = 'album-fp-name';
-                nameEl.textContent = fp.name;
-                const dateEl = document.createElement('span');
-                dateEl.className = 'album-fp-date';
-                dateEl.textContent = formatCityDate(fp.createTime);
-                fpH.append(nameEl, dateEl);
-                block.appendChild(fpH);
-
-                const grid = document.createElement('div');
-                grid.className = 'album-grid';
-                const imgs = cityWallImages(fp);
-                if (imgs.length) {
-                    imgs.forEach((img, idx) => {
-                        const btn = document.createElement('button');
-                        btn.type = 'button';
-                        btn.className = 'album-tile';
-                        btn.style.setProperty('--tile-i', tileIndex++);
-                        btn.setAttribute('aria-label', fp.name + ' · 第 ' + (idx + 1) + ' 张');
-                        const photo = document.createElement('img');
-                        photo.loading = 'lazy';
-                        photo.src = img.url;
-                        photo.alt = img.caption || fp.name;
-                        btn.appendChild(photo);
-                        btn.addEventListener('click', () => openLightbox(fp, idx, btn));
-                        grid.appendChild(btn);
-                    });
-                } else {
-                    const empty = document.createElement('div');
-                    empty.className = 'album-empty';
-                    empty.textContent = '暂无照片';
-                    grid.appendChild(empty);
-                }
-                block.appendChild(grid);
-                section.appendChild(block);
-            });
-            albumBody.appendChild(section);
-        });
-    }
-
-    function openAlbum() {
-        if (cityView.classList.contains('show')) closeCityView(false);
-        if (markerCard.classList.contains('visible')) hideMarkerCard();
-        if (cityCard.classList.contains('visible')) hideCityCard(false);
-        hideMarkerTip();
-        albumEyebrow.textContent = 'Travel Memory';
-        albumTitle.textContent = '相册';
-        renderAlbum();
-        albumOverlay.classList.add('show');
-        albumOverlay.setAttribute('aria-hidden', 'false');
-        albumClose.focus();
-    }
-
     // 从足迹详情卡进入“城市图片墙”：直接使用城市卡打开的那套全屏视图，
     // 并自动选中当前足迹；关闭后还原到原来的足迹详情卡。
     function openFootprintAlbum(fp, triggerEl) {
@@ -2061,23 +1951,10 @@
         selectCityViewTab(tabIndex);
     }
 
-    function closeAlbum(returnFocus = true) {
-        if (lightbox.classList.contains('show')) closeLightbox();
-        albumOverlay.classList.remove('show');
-        albumOverlay.setAttribute('aria-hidden', 'true');
-        if (returnFocus && albumBtn) albumBtn.focus();
-    }
-
-    if (albumBtn) albumBtn.addEventListener('click', openAlbum);
     markerCardGallery.addEventListener('click', () => {
         if (activeFootprintIndex < 0) return;
         const fp = FOOTPRINTS[activeFootprintIndex];
         if (fp) openFootprintAlbum(fp, markerCardGallery);
-    });
-    albumClose.addEventListener('click', () => closeAlbum());
-    // 点击覆盖层空白处（内容区之外的左右留白）关闭
-    albumOverlay.addEventListener('click', (e) => {
-        if (e.target === albumOverlay) closeAlbum();
     });
 
     // ================= 图片灯箱 =================
@@ -2189,11 +2066,10 @@
         lightboxTouchX = null;
     }, { passive: true });
 
-    // 在地图上查看：关闭相册与灯箱 → 飞到标记 → 打开详情卡
+    // 在地图上查看：关闭灯箱 → 飞到标记 → 打开详情卡
     lightboxMap.addEventListener('click', (e) => {
         const fp = lightboxFp;
         closeLightbox(false);
-        closeAlbum(false);
         if (!fp) return;
         const idx = FOOTPRINTS.indexOf(fp);
         if (idx < 0) return;
@@ -2595,7 +2471,6 @@
         if (!cityList[ci]) return;
         if (markerCard.classList.contains('visible')) hideMarkerCard();
         if (cityCard.classList.contains('visible')) hideCityCard(false);
-        if (albumOverlay.classList.contains('show')) closeAlbum(false);
         hideMarkerTip();
         cityViewCityIndex = ci;
         cityViewTabIndex = 0;
