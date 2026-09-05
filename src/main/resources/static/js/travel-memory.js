@@ -810,49 +810,10 @@
     };
     let currentBaseKey = null;   // 当前底图，供“重试”重新加载
 
-    // 足迹标记数据（内置兜底，优先从 test.json 加载后替换）
+    // 足迹标记数据：完全由后端注入的 FOOTPRINT_CONFIG.footprints 提供，不内置任何兜底样例；
+    // 没有数据时保持空数组，页面不构建任何标记。
     // coordType: 'gcj02' 表示坐标来自高德（火星坐标），'wgs84' 表示标准经纬度（天地图 CGCS2000 直接可用）
-    let FOOTPRINTS = [
-        {
-            name: '北京',
-            description: '从这里出发',
-            address: '北京市',
-            lng: 116.3914,
-            lat: 39.9075,
-            coordType: 'wgs84',
-            city: '北京',
-            provinceAdcode: '110000',
-            cityAdcode: '110000',
-            zoomLevel: 10,
-            galleryImages: [
-                { url: 'https://picsum.photos/seed/beijing-red-wall/800/800', caption: '红墙下的光影' },
-                { url: 'https://picsum.photos/seed/beijing-night/800/800', caption: '长安街夜色' },
-                { url: 'https://picsum.photos/seed/beijing-park/800/800', caption: '公园一角' }
-            ]
-        },
-        {
-            name: '稻城亚丁',
-            description: '看蔚蓝的天，看白色的雪山，看金黄的草地，看一场秋天的童话',
-            address: '甘孜藏族自治州稻城县稻城亚丁风景区',
-            lng: 100.286793,   // 高德“甘孜稻城亚丁景区”POI 坐标
-            lat: 28.458898,
-            coordType: 'gcj02',   // 高德来源坐标（GCJ-02）
-            city: '甘孜藏族自治州',
-            provinceAdcode: '510000',
-            cityAdcode: '513300',
-            footprintType: '旅游',
-            createTime: '2025-10-06',
-            article: 'http://pyq.yunduan019.com/memo/20',
-            zoomLevel: 12,
-            image: 'http://tc.yunduan019.com/2025/10/09/IMG_7790.jpg!w100',
-            galleryImages: [
-                { url: 'http://tc.yunduan019.com/2025/10/09/IMG_7790.jpg!w100', caption: '看一场秋天的童话' },
-                { url: 'https://picsum.photos/seed/yading-snow/800/800', caption: '雪山之下' },
-                { url: 'https://picsum.photos/seed/yading-lake/800/800', caption: '高原海子' },
-                { url: 'https://picsum.photos/seed/yading-meadow/800/800', caption: '金色草甸' }
-            ]
-        }
-    ];
+    let FOOTPRINTS = [];
 
     // ================= 足迹数据加载（FOOTPRINT_CONFIG） =================
     // window.FOOTPRINT_CONFIG.footprints 为 Footprint CRD 数组（模板注入），坐标均为高德（GCJ-02）来源。
@@ -898,24 +859,23 @@
         return iso ? iso[1] + '-' + iso[2] + '-' + iso[3] : str;
     }
 
-    // 足迹数据源：优先使用模板注入的 window.FOOTPRINT_CONFIG.footprints（与原高德页面同源），
-    // 失败时返回 null，由调用方回退到内置兜底数据。
+    // 足迹数据源：只读取模板注入的 window.FOOTPRINT_CONFIG.footprints；
+    // 配置为空/无效时返回空数组，页面保持无足迹状态，不再回退样例数据。
     async function loadFootprintsFromJson() {
         try {
             const cfg = window.FOOTPRINT_CONFIG || {};
             const list = Array.isArray(cfg.footprints) ? cfg.footprints : [];
             const mapped = list.map(mapTestJsonEntry).filter(Boolean);
-            if (!mapped.length) throw new Error('FOOTPRINT_CONFIG 中没有有效足迹');
             return mapped;
         } catch (e) {
-            console.warn('足迹配置加载失败，使用内置数据：', e);
-            return null;
+            console.warn('足迹配置解析失败：', e);
+            return [];
         }
     }
 
-    // 用加载到的数据替换内置数组（保持数组引用不变，各处引用自动生效）
+    // 用加载到的数据替换足迹数组（保持数组引用不变，各处引用自动生效）
     function applyFootprints(loaded) {
-        if (!loaded || !loaded.length) return false;
+        if (!Array.isArray(loaded)) return false;
         FOOTPRINTS.length = 0;
         FOOTPRINTS.push(...loaded);
         return true;
