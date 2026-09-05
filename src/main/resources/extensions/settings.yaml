@@ -181,7 +181,7 @@ spec:
           name: ticketGalleryStyle
           value: fan
           options:
-            - label: 票夹切换（当前样式）
+            - label: 票夹切换
               value: fan
             - label: 横向长串浏览
               value: strip

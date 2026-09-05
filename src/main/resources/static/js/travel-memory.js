@@ -2739,6 +2739,7 @@
     const ticketLightboxLoading = document.getElementById('ticketGalleryLoading');
     const ticketLightboxError = document.getElementById('ticketGalleryError');
     const ticketLightboxTitle = document.getElementById('ticketGalleryTitle');
+    const ticketLightboxPinyin = document.getElementById('ticketGalleryPinyin');
     const ticketLightboxEnglish = document.getElementById('ticketGalleryEnglish');
     const ticketLightboxSubtitle = document.getElementById('ticketGallerySubtitle');
     const ticketLightboxDetails = document.getElementById('ticketGalleryDetails');
@@ -2798,6 +2799,14 @@
             type: fp.ticketType || fp.footprintType || '',
             description: fp.description || ''
         };
+    }
+
+    // 后台按行政区划代码记录城市/省份；前端据此补上不带声调的拼音。
+    // 映射表由 district-pinyin.js 注入到 window.FOOTPRINT_PINYIN。
+    function ticketPinyin(adcode) {
+        if (!adcode || !window.FOOTPRINT_PINYIN) return '';
+        const key = String(adcode || '').replace(/\.0+$/, '').padStart(6, '0');
+        return window.FOOTPRINT_PINYIN[key] || '';
     }
 
     // 通过 /footprints?view=tickets 查询参数可直接进入票根页；
@@ -2909,11 +2918,21 @@
         ticketStripHint.hidden = true;
         document.body.classList.remove('ticket-strip-active');
         if (ticketStripMode) {
+            const isTouch = window.matchMedia('(hover: none)').matches || 'ontouchstart' in window;
             ticketWallet.hidden = true;
             ticketStrip.hidden = false;
             ticketStripProgress.hidden = ticketItems.length < 2;
             ticketStripHint.hidden = ticketItems.length < 2;
-            if (ticketItems.length) document.body.classList.add('ticket-strip-active');
+            if (ticketItems.length) {
+                document.body.classList.add('ticket-strip-active');
+                // 移动端没有鼠标，改用滑动提示；桌面端隐藏顶部提示
+                ticketGalleryHint.textContent = isTouch
+                    ? '左右滑动切换票根'
+                    : '滚动鼠标或拖动查看票根';
+                ticketGalleryHint.hidden = !isTouch || ticketItems.length < 2;
+            } else {
+                ticketGalleryHint.hidden = true;
+            }
             buildTicketStrip();
         } else {
             ticketWallet.hidden = false;
@@ -2954,6 +2973,15 @@
         else ticketLightboxTitle.textContent = meta.title;
         ticketLightboxEnglish.textContent = fp.ticketEnglish || fp.ticketTitle || '';
         ticketLightboxEnglish.hidden = !ticketLightboxEnglish.textContent;
+        if (ticketLightboxPinyin) {
+            const cityPinyin = ticketPinyin(fp.cityAdcode);
+            const provincePinyin = ticketPinyin(fp.provinceAdcode);
+            const pinyinText = cityPinyin && provincePinyin && cityPinyin !== provincePinyin
+                ? cityPinyin + ', ' + provincePinyin
+                : (cityPinyin || provincePinyin || '');
+            ticketLightboxPinyin.textContent = pinyinText;
+            ticketLightboxPinyin.hidden = !pinyinText;
+        }
         ticketLightboxSubtitle.textContent = '';
         ticketLightboxSubtitle.hidden = true;
         ticketLightboxDescription.textContent = meta.description || '风吹洱海，云落苍山，生活在别处，也在此刻。';
@@ -3221,6 +3249,8 @@
 
     ticketStripScroller.addEventListener('pointerdown', event => {
         if (!ticketStripMode || ticketItems.length < 2) return;
+        // 触屏交给浏览器原生滚动 + scroll-snap，手感更顺滑；手动拖拽只用于鼠标
+        if (event.pointerType !== 'mouse') return;
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         stripDrag = {
             id: event.pointerId,
@@ -3253,6 +3283,8 @@
     // 横条滚动时让档案页跟随当前主票根移动
     ticketStripScroller.addEventListener('scroll', () => {
         if (!ticketStripMode || !ticketGallery.classList.contains('show')) return;
+        clearTimeout(stripScrollTimer);
+        stripScrollTimer = setTimeout(snapStrip, 180);
         if (stripArchiveRaf) return;
         stripArchiveRaf = requestAnimationFrame(() => {
             stripArchiveRaf = null;
