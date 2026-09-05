@@ -796,6 +796,7 @@
             transform: translateY(-50%) translateX(0);
         }
         .marker-card-media {
+            position: relative;
             height: auto;
             aspect-ratio: 3 / 2;   /* 主图比例：比 16:9 更饱满，不再扁长 */
             border-radius: 0;      /* 由卡片容器统一裁切圆角 */
@@ -831,6 +832,38 @@
         .marker-card-retry:hover {
             background: #f7f5f1;
             color: #0b0e14;
+        }
+        .marker-card-media-gallery {
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
+            z-index: 3;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 30px;
+            padding: 0 12px;
+            border: 1px solid rgba(247, 245, 241, 0.28);
+            border-radius: 999px;
+            background: rgba(5, 7, 12, 0.52);
+            color: rgba(247, 245, 241, 0.94);
+            font: 11px/1 "PingFang SC", "Microsoft YaHei", sans-serif;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+        .marker-card-media-gallery:hover {
+            background: rgba(247, 245, 241, 0.92);
+            border-color: rgba(247, 245, 241, 0.92);
+            color: #0b0e14;
+            text-shadow: none;
+        }
+        .marker-card-media-gallery:focus-visible {
+            outline: 2px solid rgba(247, 245, 241, 0.65);
+            outline-offset: 2px;
         }
         .marker-card-body {
             padding: 16px 18px 18px;
@@ -874,10 +907,13 @@
             display: flex;
             align-items: center;
             justify-content: flex-end;
+            gap: 10px;
+            flex-wrap: wrap;
             margin-top: 18px;
         }
         .marker-card-actions[hidden] { display: none; }
-        #markerCardTicket {
+        #markerCardTicket,
+        #markerCardGallery {
             appearance: none;
             border: 1px solid rgba(247, 245, 241, 0.35);
             border-radius: 999px;
@@ -889,12 +925,14 @@
             cursor: pointer;
             transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
         }
-        #markerCardTicket:hover {
+        #markerCardTicket:hover,
+        #markerCardGallery:hover {
             background: #f7f5f1;
             border-color: #f7f5f1;
             color: #0b0e14;
         }
-        #markerCardTicket:focus-visible {
+        #markerCardTicket:focus-visible,
+        #markerCardGallery:focus-visible {
             outline: 2px solid rgba(247, 245, 241, 0.65);
             outline-offset: 2px;
         }

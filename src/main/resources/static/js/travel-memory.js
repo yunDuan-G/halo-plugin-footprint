@@ -215,7 +215,7 @@
     // 1.120 中设置 zoomFactor 不会生效（滚轮逻辑读取的是私有字段 _zoomFactor）。
     // 这里做特性检测：新版本用公开属性，1.120 用私有字段回退。
     const cameraController = viewer.scene.screenSpaceCameraController;
-    const WHEEL_ZOOM_FACTOR = 2.5;   // 滚轮灵敏度系数（默认 5，越小滚一格缩放越精细）
+    const WHEEL_ZOOM_FACTOR = 3.5;   // 滚轮灵敏度系数（默认 5，越小滚一格缩放越精细）
     if ('zoomFactor' in cameraController) {
         cameraController.zoomFactor = WHEEL_ZOOM_FACTOR;
     } else {
@@ -1394,6 +1394,7 @@
     const markerCardDesc = document.getElementById('markerCardDesc');
     const markerCardActions = markerCard.querySelector('.marker-card-actions');
     const markerCardTicket = document.getElementById('markerCardTicket');
+    const markerCardGallery = document.getElementById('markerCardGallery');
     const cityCard = document.getElementById('cityCard');
     const cityCardMedia = document.getElementById('cityCardMedia');
     const cityCardTitle = document.getElementById('cityCardTitle');
@@ -1478,12 +1479,32 @@
     // ================= 详情卡主图：加载成功显示图片，失败回退首字占位 + 重试 =================
     let cardImgLoadId = 0;   // 防止快速切换卡片时旧请求覆盖新图
 
+    // 主图右下角的“共 N 张”入口角标：图片加载状态变化后重新挂载
+    function refreshCardMediaGallery(fp) {
+        const old = document.getElementById('markerCardMediaGallery');
+        if (old) old.remove();
+        const imgs = fp ? cityWallImages(fp) : [];
+        if (!imgs.length) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = 'markerCardMediaGallery';
+        btn.className = 'marker-card-media-gallery';
+        btn.textContent = '共 ' + imgs.length + ' 张';
+        btn.setAttribute('aria-label', '查看' + (fp.name || '足迹') + '的全部照片');
+        btn.addEventListener('click', () => {
+            const idx = FOOTPRINTS.indexOf(fp);
+            if (idx >= 0) openFootprintAlbum(fp, btn);
+        });
+        markerCardMedia.appendChild(btn);
+    }
+
     function showCardMonogram(fp, showRetry) {
         markerCardMedia.classList.add('no-image');
         markerCardMedia.style.backgroundImage = 'none';
         markerCardMedia.innerHTML =
             '<span class="marker-card-monogram">' + (fp.name ? fp.name.charAt(0) : '?') + '</span>' +
             (showRetry ? '<button class="marker-card-retry" type="button">重试</button>' : '');
+        refreshCardMediaGallery(fp);
         if (showRetry) {
             markerCardMedia.querySelector('.marker-card-retry').addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1499,12 +1520,14 @@
         markerCardMedia.style.backgroundImage = 'none';
         markerCardMedia.innerHTML =
             '<span class="marker-card-monogram">' + (fp.name ? fp.name.charAt(0) : '?') + '</span>';
+        refreshCardMediaGallery(fp);
         const img = new Image();
         img.onload = () => {
             if (myId !== cardImgLoadId) return;   // 已被更新的卡片取代
             markerCardMedia.classList.remove('no-image');
             markerCardMedia.style.backgroundImage = 'url("' + fp.image + '")';
             markerCardMedia.innerHTML = '';
+            refreshCardMediaGallery(fp);
         };
         img.onerror = () => {
             if (myId !== cardImgLoadId) return;
@@ -1530,8 +1553,10 @@
 
         // 足迹详情卡动作：只有配置了票根的足迹才提供“打开票根”，无票根时整行隐藏。
         const hasTicket = !!ticketImageUrl(fp.ticketImage);
+        const hasGallery = cityWallImages(fp).length > 0;
+        markerCardGallery.hidden = !hasGallery;
         markerCardTicket.hidden = !hasTicket;
-        markerCardActions.hidden = !hasTicket;
+        markerCardActions.hidden = !hasGallery && !hasTicket;
 
         if (fp.image) {
             loadCardImage(fp);
@@ -1915,6 +1940,8 @@
     // ================= 全屏相册（城市 → 足迹 → 图片组） =================
     const albumOverlay = document.getElementById('albumOverlay');
     const albumBody = document.getElementById('albumBody');
+    const albumEyebrow = document.getElementById('albumEyebrow');
+    const albumTitle = document.getElementById('albumTitle');
     const albumBtn = document.getElementById('albumBtn');
     const albumClose = document.getElementById('albumClose');
 
@@ -2005,10 +2032,33 @@
         if (markerCard.classList.contains('visible')) hideMarkerCard();
         if (cityCard.classList.contains('visible')) hideCityCard(false);
         hideMarkerTip();
+        albumEyebrow.textContent = 'Travel Memory';
+        albumTitle.textContent = '相册';
         renderAlbum();
         albumOverlay.classList.add('show');
         albumOverlay.setAttribute('aria-hidden', 'false');
         albumClose.focus();
+    }
+
+    // 从足迹详情卡进入“城市图片墙”：直接使用城市卡打开的那套全屏视图，
+    // 并自动选中当前足迹；关闭后还原到原来的足迹详情卡。
+    function openFootprintAlbum(fp, triggerEl) {
+        if (!fp) return;
+        const fpIndex = FOOTPRINTS.indexOf(fp);
+        if (fpIndex < 0) return;
+        const cityIndex = cityList.findIndex(city => city.indices.includes(fpIndex));
+        if (cityIndex < 0) return;
+        const tabIndex = cityList[cityIndex].indices.indexOf(fpIndex);
+        if (tabIndex < 0) return;
+
+        // 记录关闭后要还原的足迹卡
+        cityViewRestoreCard = {
+            fpIndex,
+            trigger: triggerEl || null
+        };
+        openCityView(cityIndex, null);
+        cityViewTabIndex = tabIndex;
+        selectCityViewTab(tabIndex);
     }
 
     function closeAlbum(returnFocus = true) {
@@ -2019,6 +2069,11 @@
     }
 
     if (albumBtn) albumBtn.addEventListener('click', openAlbum);
+    markerCardGallery.addEventListener('click', () => {
+        if (activeFootprintIndex < 0) return;
+        const fp = FOOTPRINTS[activeFootprintIndex];
+        if (fp) openFootprintAlbum(fp, markerCardGallery);
+    });
     albumClose.addEventListener('click', () => closeAlbum());
     // 点击覆盖层空白处（内容区之外的左右留白）关闭
     albumOverlay.addEventListener('click', (e) => {
@@ -2169,6 +2224,7 @@
     let cityViewCityIndex = -1;      // 当前城市（cityList 下标）
     let cityViewTabIndex = 0;        // 当前选中的足迹 Tab
     let cityViewTriggerBtn = null;   // 键盘触发时的返回焦点按钮
+    let cityViewRestoreCard = null;  // 从足迹卡进入城市图片墙时，关闭后要还原的足迹卡
 
     function cityViewFootprints() {
         const city = cityList[cityViewCityIndex];
@@ -2554,9 +2610,25 @@
         if (lightbox.classList.contains('show')) closeLightbox(false);
         cityView.classList.remove('show');
         cityView.setAttribute('aria-hidden', 'true');
-        if (returnFocus && cityViewTriggerBtn) {
-            cityViewTriggerBtn.focus();
-            cityViewTriggerBtn = null;
+        const restore = cityViewRestoreCard;
+        cityViewRestoreCard = null;
+        if (returnFocus) {
+            if (restore) {
+                const fp = FOOTPRINTS[restore.fpIndex];
+                if (fp) {
+                    showMarkerCard(fp, restore.fpIndex);
+                    const target = restore.trigger && restore.trigger.isConnected
+                        ? restore.trigger
+                        : markerCardGallery;
+                    if (target) {
+                        // 等卡片可见过渡结束后再回焦，避免焦点落在仍不可见的容器里
+                        setTimeout(() => { if (target.isConnected) target.focus(); }, 480);
+                    }
+                }
+            } else if (cityViewTriggerBtn) {
+                cityViewTriggerBtn.focus();
+                cityViewTriggerBtn = null;
+            }
         }
     }
 

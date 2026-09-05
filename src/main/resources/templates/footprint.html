@@ -20,7 +20,7 @@
     <script src="/plugins/footprint/assets/static/cesium/Cesium.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/pako.min.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/tdtplug.umd.min.js"></script>
-    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v37" rel="stylesheet">
+    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v43" rel="stylesheet">
 
 
 <!--    <link rel="stylesheet" href="../static/css/footprint.css" type="text/css">-->
@@ -141,8 +141,8 @@
     <div id="albumOverlay" role="dialog" aria-modal="true" aria-label="相册" aria-hidden="true">
         <div class="album-top">
             <div>
-                <p class="album-eyebrow">Travel Memory</p>
-                <h2 class="album-title">相册</h2>
+                <p class="album-eyebrow" id="albumEyebrow">Travel Memory</p>
+                <h2 class="album-title" id="albumTitle">相册</h2>
             </div>
             <button id="albumClose" type="button" aria-label="关闭相册">×</button>
         </div>
@@ -304,6 +304,7 @@
             <p class="marker-card-addr" id="markerCardAddr"></p>
             <p class="marker-card-desc" id="markerCardDesc"></p>
             <div class="marker-card-actions">
+                <button id="markerCardGallery" type="button" hidden>打开图片墙</button>
                 <button id="markerCardTicket" type="button" hidden>打开票根</button>
             </div>
         </div>
@@ -456,7 +457,7 @@
 </div>
 </div>
 
-<script src="/plugins/footprint/assets/static/data/district-pinyin.js?v=footprint-reveal-v37"></script>
-<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v37"></script>
+<script src="/plugins/footprint/assets/static/data/district-pinyin.js?v=footprint-reveal-v43"></script>
+<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v43"></script>
 </body>
 </html>
