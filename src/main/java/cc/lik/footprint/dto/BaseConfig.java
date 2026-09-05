@@ -27,4 +27,10 @@ public class BaseConfig {
     private Boolean enableTerrainDefault;
     private String ticketGalleryStyle;
     private String ticketGalleryInfoStyle;
+    private String markerImageFrom;
+    private String markerImageTo;
+    private String markerImageSuffix;
+    private String timelineImageFrom;
+    private String timelineImageTo;
+    private String timelineImageSuffix;
 }

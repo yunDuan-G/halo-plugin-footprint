@@ -186,3 +186,43 @@ spec:
             - label: 横向长串浏览
               value: strip
           help: "选择票根页的切换样式：票夹叠放式，或横向长串滚动浏览式（主图居中，支持滚轮与拖拽切换）"
+    - group: imageProcess
+      label: 图片处理配置
+      help: "如果你的图床需要给同一张原图生成不同质量的缩略图，可在此按用途配置 URL 规则；三项都留空时，界面将直接使用足迹中保存的图片 URL（通用做法）。"
+      formSchema:
+        - $formkit: text
+          label: 标记点图片：要替换的片段
+          name: markerImageFrom
+          value: ''
+          placeholder: "例如：!w100"
+          help: "地图标记点小图：把足迹图片 URL 中的哪一段替换掉，例如阿里云处理后缀 !w100。不需要时留空，标记点直接使用原 URL。"
+        - $formkit: text
+          label: 标记点图片：替换为
+          name: markerImageTo
+          value: ''
+          placeholder: "例如：!A100"
+          help: "把上一项命中的片段替换成什么，例如更低质量的 !A100。留空表示只删除上一项片段。"
+        - $formkit: text
+          label: 标记点图片：追加后缀
+          name: markerImageSuffix
+          value: ''
+          placeholder: "例如：/fw/200"
+          help: "替换完成后，在 URL 末尾额外追加的图床压缩/裁剪参数。不同图床写法不同，例如阿里云 /fw/200、七牛 ?imageView2/1/w/200。留空不追加。"
+        - $formkit: text
+          label: 时间线/详情图片：要替换的片段
+          name: timelineImageFrom
+          value: ''
+          placeholder: "例如：!w100"
+          help: "2D 时间线抽屉与足迹详情窗口使用的图片 URL 替换片段。可与标记点不同，例如时间线用较高画质 !A100。"
+        - $formkit: text
+          label: 时间线/详情图片：替换为
+          name: timelineImageTo
+          value: ''
+          placeholder: "例如：!A100"
+          help: "时间线/详情图片的替换目标片段。"
+        - $formkit: text
+          label: 时间线/详情图片：追加后缀
+          name: timelineImageSuffix
+          value: ''
+          placeholder: "例如：/fw/500"
+          help: "时间线/详情图片替换完成后追加的 URL 后缀。"

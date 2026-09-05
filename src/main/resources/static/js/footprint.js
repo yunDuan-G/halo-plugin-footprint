@@ -820,6 +820,37 @@ const restoreMapOrientation = (map) => {
 // 添加图片预加载和缓存
 const imageCache = new Map();
 
+// 无图片时的中性占位图（本地 SVG，不依赖任何第三方图床域名）
+const FOOTPRINT_IMAGE_PLACEHOLDER = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">' +
+    '<rect width="120" height="120" rx="10" fill="#e9e4da"/>' +
+    '<circle cx="52" cy="46" r="12" fill="none" stroke="#b9ae9d" stroke-width="4"/>' +
+    '<path d="M24 88 46 66l16 16 12-12 22 18" fill="none" stroke="#b9ae9d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '</svg>'
+);
+
+// 从后台配置读取某类图片的 URL 处理规则
+// scope = 'marker'（地图标记点）| 'timeline'（时间线/详情展示）
+function footprintImageRule(scope) {
+    const cfg = window.FOOTPRINT_CONFIG || {};
+    return {
+        from: String(cfg[scope + 'ImageFrom'] || ''),
+        to: String(cfg[scope + 'ImageTo'] || ''),
+        suffix: String(cfg[scope + 'ImageSuffix'] || '')
+    };
+}
+
+// 按规则生成展示用图片 URL：替换片段 → 追加图床后缀；未配置时原样返回
+function processFootprintImageUrl(url, scope) {
+    const raw = String(url || '').trim();
+    if (!raw) return FOOTPRINT_IMAGE_PLACEHOLDER;
+    const rule = footprintImageRule(scope);
+    let out = raw;
+    if (rule.from) out = out.split(rule.from).join(rule.to);
+    if (rule.suffix && !out.endsWith(rule.suffix)) out += rule.suffix;
+    return out;
+}
+
 //保存上一次悬停卡片的坐标
 let lastPositions = [];
 
@@ -841,8 +872,8 @@ const populateTimeline = async (map) => {
     const timelineContent = document.getElementById('timelineContent');
 
     footprints.forEach((item, index) => {
-        const image = item.spec.image.replace("!w100", "!A100");
-        const cachedImage = image + "/fw/500" ? getCachedImage(escapeHtml(image)) : 'https://www.lik.cc/upload/loading8.gif';
+        const processed = processFootprintImageUrl(item.spec.image, 'timeline');
+        const cachedImage = getCachedImage(processed);
 
         const timelineItem = document.createElement('div');
         timelineItem.className = 'timeline-item';
@@ -1548,10 +1579,8 @@ const createMarker = (spec) => {
     const markerContent = document.createElement('div');
     markerContent.className = 'custom-marker';
 
-    const image = spec.image ? spec.image.replace("!w100", "!A100") : '';
-
-    // 使用图片压缩服务
-    const compressedImageUrl = spec.image ? image + "/fw/200" : 'https://www.lik.cc/upload/loading8.gif';
+    // 标记点图片：按后台“标记点”规则压缩，未配置时使用原 URL
+    const compressedImageUrl = processFootprintImageUrl(spec.image, 'marker');
 
     markerContent.innerHTML = `
         <div class="marker-label">${spec.name || ''}</div>
@@ -1713,7 +1742,8 @@ function createInfoWindow(spec) {
     // 构建图片HTML
     // 优化图片内容生成逻辑
     const imageContent = (() => {
-        const cachedImage = image ? getCachedImage(escapeHtml(image)) : getCachedImage('https://www.lik.cc/upload/loading8.gif');
+        const processed = processFootprintImageUrl(image, 'timeline');
+        const cachedImage = getCachedImage(processed);
         return `<img src="${cachedImage}" alt="${escapeHtml(name)}" loading="lazy" decoding="async" style="position: absolute; width: 100%; height: 100%; object-fit: cover;">`;
     })();
 
@@ -1758,7 +1788,7 @@ const normalizeGalleryImages = (images) => {
 };
 
 const getPhotoWallImageUrl = (url, width = 500) => {
-    return String(url || '') || 'https://www.lik.cc/upload/loading8.gif';
+    return String(url || '').trim() || FOOTPRINT_IMAGE_PLACEHOLDER;
 };
 
 const getPhotoWallStyle = () => {

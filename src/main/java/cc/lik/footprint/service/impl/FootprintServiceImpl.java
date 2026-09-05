@@ -38,11 +38,14 @@ public class FootprintServiceImpl implements FootprintService {
                 fetchSetting("base")
                     .switchIfEmpty(Mono.error(new RuntimeException("配置不存在"))),
                 fetchSetting("globe3d")
+                    .defaultIfEmpty(objectMapper.createObjectNode()),
+                fetchSetting("imageProcess")
                     .defaultIfEmpty(objectMapper.createObjectNode())
             )
             .map(tuple -> {
                 JsonNode item = tuple.getT1();
                 JsonNode globe = tuple.getT2();
+                JsonNode image = tuple.getT3();
                 return Mono.zip(
                     getSecretValue(item.path("gaoDeKeySecretName").asText()),
                     getSecretValue(item.path("gaoDeWebKeySecretName").asText())
@@ -65,7 +68,13 @@ public class FootprintServiceImpl implements FootprintService {
                     globe.path("tiandituKey").asText(""),
                     globe.path("enableTerrainDefault").asBoolean(false),
                     globe.path("ticketGalleryStyle").asText("fan"),
-                    globe.path("ticketGalleryInfoStyle").asText("card")
+                    globe.path("ticketGalleryInfoStyle").asText("card"),
+                    image.path("markerImageFrom").asText(""),
+                    image.path("markerImageTo").asText(""),
+                    image.path("markerImageSuffix").asText(""),
+                    image.path("timelineImageFrom").asText(""),
+                    image.path("timelineImageTo").asText(""),
+                    image.path("timelineImageSuffix").asText("")
                 ));
             })
             .flatMap(config -> config);
