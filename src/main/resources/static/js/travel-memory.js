@@ -814,6 +814,7 @@
     // 没有数据时保持空数组，页面不构建任何标记。
     // coordType: 'gcj02' 表示坐标来自高德（火星坐标），'wgs84' 表示标准经纬度（天地图 CGCS2000 直接可用）
     let FOOTPRINTS = [];
+    let footprintsDataReady = false;   // 首次足迹数据加载是否已完成（含“确实为空”）
 
     // ================= 足迹数据加载（FOOTPRINT_CONFIG） =================
     // window.FOOTPRINT_CONFIG.footprints 为 Footprint CRD 数组（模板注入），坐标均为高德（GCJ-02）来源。
@@ -822,6 +823,7 @@
         const s = entry && entry.spec;
         if (!s || !s.name) return null;
         return {
+            key: (entry.metadata && entry.metadata.name) || '',
             name: s.name,
             description: s.description || '',
             address: s.address || '',
@@ -1210,8 +1212,79 @@
     // ================= 初始视角与开场动画 =================
     // 首次加载：地球从另一侧（太平洋方向）旋转入场，飞到“中国朝向”的整球视图，
     // 动画结束再开启自动旋转；尊重系统减弱动效，2D 模式恢复时不播动画。
+    const ENTRANCE_SEEN_KEY = 'footprint-entrance-seen-v1';
+    function entranceSeen() {
+        try { return localStorage.getItem(ENTRANCE_SEEN_KEY) === '1'; } catch (_) { return false; }
+    }
+    function markEntranceSeen() {
+        try { localStorage.setItem(ENTRANCE_SEEN_KEY, '1'); } catch (_) { /* 隐私模式忽略 */ }
+    }
+
+    function globeFirstPaintReady() {
+        const globe = viewer.scene && viewer.scene.globe;
+        return !!globe && globe.tilesLoaded === true;
+    }
+
+    // 等首屏底图瓦片加载完成再播入场动画；网络慢时最多等固定时长，
+    // 超时后仍继续播放，避免页面一直停留在等待状态。
+    function scheduleEntranceAnimation() {
+        const settleAtChina = () => {
+            markEntranceSeen();
+            viewer.camera.setView({
+                destination: Cesium.Cartesian3.fromDegrees(104.0, 35.0, 21000000)
+            });
+        };
+
+        // 已看过一次入场（首次进入/历史访问）：刷新后直接停在中国整球视图，
+        // 不再跨太平洋重播动画，也不自动开启旋转，减少重复加载带来的卡顿。
+        if (entranceSeen()) {
+            settleAtChina();
+            return;
+        }
+
+        const DATA_TIMEOUT_MS = 4000;
+        const TILE_TIMEOUT_MS = 3500;
+        const startAt = performance.now();
+        // 先把相机放在入场动画的起点（太平洋方向），让这一段底图优先开始加载，
+        // 避免“动画开始后才现加载瓦片”导致空转。
+        viewer.camera.setView({
+            destination: Cesium.Cartesian3.fromDegrees(-60, 30, 25000000)
+        });
+
+        function step(now) {
+            const elapsed = now - startAt;
+            // 足迹数据还没就绪：等数据回来（可能是“空数据”），避免对空地球播入场
+            if (!footprintsDataReady) {
+                if (elapsed < DATA_TIMEOUT_MS) {
+                    requestAnimationFrame(step);
+                    return;
+                }
+                settleAtChina();
+                return;
+            }
+            // 没有足迹数据：不播入场，直接停在中国整球视图
+            if (!FOOTPRINTS.length) {
+                settleAtChina();
+                return;
+            }
+            // 首屏瓦片就绪才开始动画；等待超时则直接停在中国，避免在空白上硬播
+            if (globeFirstPaintReady()) {
+                playEntranceAnimation();
+                return;
+            }
+            if (elapsed >= TILE_TIMEOUT_MS) {
+                settleAtChina();
+                return;
+            }
+            requestAnimationFrame(step);
+        }
+
+        requestAnimationFrame(step);
+    }
+
     function playEntranceAnimation() {
         entranceActive = true;
+        markEntranceSeen();
         const startLng = -60, startLat = 30, startH = 25000000;   // 从太平洋一侧开始
         const endLng = 104.0, endLat = 35.0, endH = 21000000;     // 中国大致中心，整球可见
         const duration = 2.6;   // 秒
@@ -1250,11 +1323,12 @@
     }
 
     if (reduceMotion || getSavedViewMode() === '2d') {
+        markEntranceSeen();
         viewer.camera.setView({
             destination: Cesium.Cartesian3.fromDegrees(104.0, 35.0, 21000000) // 中国大致中心，整球可见
         });
     } else {
-        playEntranceAnimation();
+        scheduleEntranceAnimation();
     }
 
     // ================= 足迹标记点 =================
@@ -1536,7 +1610,9 @@
         const fp = FOOTPRINTS[activeFootprintIndex];
         if (!fp || !ticketImageUrl(fp.ticketImage)) return;
         const items = ticketItemsFromFootprints();
-        const ticketIndex = items.indexOf(fp);
+        // 优先按足迹唯一 key 定位，避免对象替换/顺序变化时错配到其他票根
+        let ticketIndex = fp.key ? items.findIndex(item => item.key === fp.key) : -1;
+        if (ticketIndex < 0) ticketIndex = items.indexOf(fp);
         if (ticketIndex < 0) return;
         hideMarkerCard();
         setTicketView(true, ticketIndex, false);   // 从足迹卡进入票根时不自动开启地球旋转
@@ -2615,6 +2691,7 @@
             applyMarkerMode(h > CITY_COLLAPSE_HEIGHT);
             if (cityFillEnabled) buildCityFills();   // 城市高亮开关开启时才随新数据重建
         }
+        footprintsDataReady = true;
         updateIntroStats();
         document.dispatchEvent(new CustomEvent('footprints:loaded'));
     });
@@ -2694,9 +2771,9 @@
                 const data = basemapIsGcj ? geojson : cityBoundaryToWgs84(geojson);
                 return Cesium.GeoJsonDataSource.load(data, {
                     clampToGround: true,   // 贴合地形，避免被地形盖住
-                    fill: Cesium.Color.fromCssColorString(fillColor.fill),
-                    stroke: Cesium.Color.WHITE.withAlpha(0.4),
-                    strokeWidth: 1
+                    fill: Cesium.Color.fromCssColorString(fillColor.fill)
+                    // 轮廓用独立的贴合地面折线绘制，不交给 GeoJsonDataSource，
+                    // 避免 Cesium 对 terrain 上的 outline 报“不支持”的警告
                 });
             }).then(ds => {
                 if (!ds) return;
@@ -2769,6 +2846,7 @@
     let ticketIndex = 0;
     let ticketTrigger = null;
     let walletItems = [];      // 票夹中的票根元素 [{ fp, img }]
+    const ticketImagePool = new Map();   // 已成功加载的票根图 → img，重复打开直接复用，避免重复请求
     let wheelLocked = false;   // 滚轮切换节流
     let walletTouchX = null;   // 触摸滑动起点
     let walletSwiped = false;  // 滑动后抑制随后的 click，避免一次滑动触发两次切换
@@ -2883,6 +2961,11 @@
                 focusTicketGalleryControl();
             }
         } else {
+            // 先把焦点移出票根容器，再标记 aria-hidden，避免无障碍警告
+            if (ticketGallery.contains(document.activeElement)) {
+                document.activeElement.blur();
+            }
+            const pendingFocus = ticketTrigger || document.getElementById('ticketGalleryBtn');
             ticketGallery.classList.remove('show');
             ticketGallery.setAttribute('aria-hidden', 'true');
             document.body.classList.remove('ticket-gallery-open');
@@ -2890,22 +2973,44 @@
             ticketStripHint.hidden = true;
             // 关闭后还原地址，避免刷新又回到票根页
             if (isTicketsView()) history.replaceState({}, '', window.location.pathname);
-            if (ticketTrigger) ticketTrigger.focus();
+            if (pendingFocus) {
+                // 等导航栏恢复可见后再回焦，避免焦点落在隐藏元素上
+                setTimeout(() => {
+                    if (pendingFocus && pendingFocus.isConnected &&
+                        getComputedStyle(pendingFocus).visibility !== 'hidden') {
+                        pendingFocus.focus({ preventScroll: true });
+                    }
+                }, 80);
+            }
         }
     }
 
     // 创建一张票根图片；两种展示样式共用加载/失败处理
     function createTicketImage(fp, i, className) {
+        const originalUrl = ticketImageUrl(fp.ticketImage);
+        // 同一张票根已成功加载过：直接复用原 img 元素，避免再次发起图片请求
+        const pooled = originalUrl ? ticketImagePool.get(originalUrl) : null;
+        if (pooled) {
+            pooled.className = className;
+            pooled.alt = fp.ticketTitle || fp.name || '';
+            pooled.dataset.index = String(i);
+            pooled.referrerPolicy = 'no-referrer';
+            pooled.decoding = 'async';
+            pooled.classList.add('is-loaded');
+            pooled.classList.remove('is-error');
+            return pooled;
+        }
+
         const img = document.createElement('img');
         img.className = className;
         img.alt = fp.ticketTitle || fp.name || '';
         img.referrerPolicy = 'no-referrer';
         img.decoding = 'async';
         img.dataset.index = String(i);
-        const originalUrl = ticketImageUrl(fp.ticketImage);
         let triedHttps = false;
         img.onload = () => {
             img.classList.add('is-loaded');
+            if (originalUrl) ticketImagePool.set(originalUrl, img);
             if (i === ticketIndex) {
                 ticketLightboxLoading.hidden = true;
                 ticketLightboxError.hidden = true;
@@ -2938,7 +3043,7 @@
 
     // 按后台配置构建票夹或横向长串
     function buildTicketWallet() {
-        walletItems.forEach(item => item.img && item.img.removeAttribute('src'));
+        // 保留已加载图片：下次打开时直接从 ticketImagePool 复用，不重新发请求
         walletItems = [];
         ticketGalleryHint.hidden = true;
         ticketStripProgress.hidden = true;
@@ -3112,7 +3217,7 @@
 
     function closeTicketLightbox(returnFocus = true) {
         if (!ticketLightbox) return;
-        walletItems.forEach(item => item.img.removeAttribute('src'));
+        // 保留已加载图片供下次复用，避免每次打开票根都重新请求
         walletItems = [];
         setTicketView(false);
         if (returnFocus && ticketTrigger) ticketTrigger.focus();
@@ -3369,9 +3474,7 @@
     const chinaDataSource = Cesium.GeoJsonDataSource.load(
         '/plugins/footprint/assets/static/data/china-full.json',
         {
-            stroke: Cesium.Color.WHITE,          // 边界线颜色
-            fill: Cesium.Color.PALETURQUOISE.withAlpha(0), // 填充颜色（设为透明）
-            strokeWidth: 0.5                      // 边界线宽度
+            fill: Cesium.Color.PALETURQUOISE.withAlpha(0) // 填充颜色（设为透明）
         }
     );
 
