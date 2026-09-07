@@ -69,6 +69,7 @@ public class FootprintServiceImpl implements FootprintService {
                     globe.path("enableTerrainDefault").asBoolean(false),
                     globe.path("ticketGalleryStyle").asText("fan"),
                     globe.path("ticketGalleryInfoStyle").asText("card"),
+                    globe.path("mobileCityWallColumns").asInt(2),
                     image.path("markerImageFrom").asText(""),
                     image.path("markerImageTo").asText(""),
                     image.path("markerImageSuffix").asText(""),

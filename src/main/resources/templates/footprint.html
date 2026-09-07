@@ -20,7 +20,7 @@
     <script src="/plugins/footprint/assets/static/cesium/Cesium.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/pako.min.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/tdtplug.umd.min.js"></script>
-    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v61" rel="stylesheet">
+    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v76" rel="stylesheet">
 
 
 <!--    <link rel="stylesheet" href="../static/css/footprint.css" type="text/css">-->
@@ -48,6 +48,7 @@
             tiandituKey: /*[[${settings.tiandituKey}]]*/ '',
             enableTerrainDefault: /*[[${settings.enableTerrainDefault}]]*/ false,
             ticketGalleryStyle: /*[[${settings.ticketGalleryStyle}]]*/ 'fan',
+            mobileCityWallColumns: /*[[${settings.mobileCityWallColumns}]]*/ 2,
             markerImageFrom: /*[[${settings.markerImageFrom}]]*/ '',
             markerImageTo: /*[[${settings.markerImageTo}]]*/ '',
             markerImageSuffix: /*[[${settings.markerImageSuffix}]]*/ '',
@@ -69,6 +70,8 @@
     <div class="nav-actions">
         <div class="nav-group nav-group-primary">
             <button id="sceneModeBtn" type="button" title="切换到 2D 平面地图">2D 地图</button>
+            <span class="nav-sep"></span>
+            <button id="cityWallBtn" type="button" title="查看城市卡片墙">城市</button>
             <span class="nav-sep"></span>
             <button id="ticketGalleryBtn" type="button" title="查看票根墙">票根</button>
             <span class="nav-sep nav-sep-back"></span>
@@ -152,7 +155,7 @@
                     <ellipse cx="12" cy="12" rx="4" ry="9"/>
                     <path d="M3.4 12h17.2"/>
                 </svg>
-                <span>返回地球</span>
+                <span id="cityViewBackLabel">返回地球</span>
             </button>
             <div class="city-view-head">
                 <p class="city-view-eyebrow">Footprints · 足迹</p>
@@ -171,6 +174,32 @@
         <div class="city-view-body" id="cityViewBody">
             <aside class="city-tabs" id="cityTabs" role="tablist" aria-label="城市足迹列表"></aside>
             <section class="city-stage" id="cityStage" aria-live="polite"></section>
+        </div>
+    </div>
+    <!-- 城市卡片墙：全部已到访城市的总览目录，点击卡片进入对应城市图片墙 -->
+    <div id="cityWall" role="dialog" aria-modal="true" aria-label="城市卡片墙" aria-hidden="true">
+        <div class="city-wall-top">
+            <button id="cityWallBack" type="button" aria-label="返回地球">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"/>
+                    <ellipse cx="12" cy="12" rx="4" ry="9"/>
+                    <path d="M3.4 12h17.2"/>
+                </svg>
+                <span>返回地球</span>
+            </button>
+            <div class="city-wall-head">
+                <p class="city-wall-eyebrow">CITY COLLECTION · 城市目录</p>
+                <h2 id="cityWallTitle">城市卡片墙</h2>
+                <p id="cityWallStats"></p>
+            </div>
+            <p class="city-wall-hint">点击卡片进入城市相册</p>
+        </div>
+        <div class="city-wall-body">
+            <div class="city-wall-grid" id="cityWallGrid" aria-live="polite"></div>
+            <div id="cityWallEmpty" class="city-wall-empty-view" hidden>
+                <p>还没有收录城市足迹</p>
+                <span>回到地球，继续记录下一段旅程。</span>
+            </div>
         </div>
     </div>
     <!-- 票根墙：仅展示配置了 ticketImage 的足迹 -->
@@ -265,7 +294,6 @@
         <div class="lightbox-meta">
             <span id="lightboxCount"></span>
             <span id="lightboxCaption"></span>
-            <button id="lightboxMap" type="button">在地图上查看</button>
         </div>
     </div>
 
@@ -467,6 +495,6 @@
 </div>
 
 <script src="/plugins/footprint/assets/static/data/district-pinyin.js?v=footprint-reveal-v61"></script>
-<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v61"></script>
+<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v76"></script>
 </body>
 </html>

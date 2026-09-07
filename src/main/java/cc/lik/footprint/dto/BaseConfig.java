@@ -27,6 +27,7 @@ public class BaseConfig {
     private Boolean enableTerrainDefault;
     private String ticketGalleryStyle;
     private String ticketGalleryInfoStyle;
+    private Integer mobileCityWallColumns;
     private String markerImageFrom;
     private String markerImageTo;
     private String markerImageSuffix;

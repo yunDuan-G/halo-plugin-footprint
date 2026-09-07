@@ -312,11 +312,13 @@
             cityFillFloatBtn.classList.remove('show');
             return;
         }
-        // 全屏覆盖层（城市足迹 / 票根）打开时隐藏顶部导航栏与标题卡，避免遮挡；
+        // 全屏覆盖层（城市卡片墙 / 城市足迹 / 票根）打开时隐藏顶部导航栏与标题卡，避免遮挡；
         // 这里用 getElementById 动态判断，避免引用后置声明的变量（TDZ）。
         const cityViewEl = document.getElementById('cityView');
+        const cityWallEl = document.getElementById('cityWall');
         const ticketGalleryEl = document.getElementById('ticketGallery');
         const overlayOpen = !!(cityViewEl && cityViewEl.classList.contains('show')) ||
+            !!(cityWallEl && cityWallEl.classList.contains('show')) ||
             !!(ticketGalleryEl && ticketGalleryEl.classList.contains('show'));
         if (overlayOpen) {
             if (introVisible) {
@@ -1102,6 +1104,10 @@
         }
         if (cityView.classList.contains('show')) {
             closeCityView();
+            return;
+        }
+        if (cityWall.classList.contains('show')) {
+            closeCityWall();
             return;
         }
         if (markerCard.classList.contains('visible')) {
@@ -2008,7 +2014,6 @@
     const lightboxSkeleton = document.getElementById('lightboxSkeleton');
     const lightboxError = document.getElementById('lightboxError');
     const lightboxRetry = document.getElementById('lightboxRetry');
-    const lightboxMap = document.getElementById('lightboxMap');
     let lightboxFp = null;
     let lightboxIndex = 0;
     let lightboxTriggerBtn = null;
@@ -2106,30 +2111,10 @@
         lightboxTouchX = null;
     }, { passive: true });
 
-    // 在地图上查看：关闭灯箱 → 飞到标记 → 打开详情卡
-    lightboxMap.addEventListener('click', (e) => {
-        const fp = lightboxFp;
-        closeLightbox(false);
-        if (!fp) return;
-        const idx = FOOTPRINTS.indexOf(fp);
-        if (idx < 0) return;
-        showMarkerCard(fp, idx);
-        if (e.detail === 0) document.getElementById('markerCardClose').focus();   // 键盘激活时焦点进入详情卡
-        const pos = currentPositions[idx];
-        if (pos) {
-            const height = fp.zoomLevel
-                ? (156543.03392 * Math.cos(Cesium.Math.toRadians(pos.lat))) / Math.pow(2, fp.zoomLevel) * 1000
-                : 120000;
-            viewer.camera.flyTo({
-                destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, height),
-                duration: 2.2
-            });
-        }
-    });
-
     // ================= 城市足迹全屏视图（左侧足迹 Tab 卡片 + 右侧详情） =================
     const cityView = document.getElementById('cityView');
     const cityViewBack = document.getElementById('cityViewBack');
+    const cityViewBackLabel = document.getElementById('cityViewBackLabel');
     const cityViewTitle = document.getElementById('cityViewTitle');
     const cityViewCityList = document.getElementById('cityViewCityList');
     const cityViewStats = document.getElementById('cityViewStats');
@@ -2142,6 +2127,7 @@
     let cityViewTabIndex = 0;        // 当前选中的足迹 Tab
     let cityViewTriggerBtn = null;   // 键盘触发时的返回焦点按钮
     let cityViewRestoreCard = null;  // 从足迹卡进入城市图片墙时，关闭后要还原的足迹卡
+    let cityViewFromWall = false;    // 当前图片墙是否从城市卡片墙展开（返回时回到卡片墙）
 
     function cityViewFootprints() {
         const city = cityList[cityViewCityIndex];
@@ -2596,6 +2582,18 @@
 
     function openCityView(ci, triggerBtn) {
         if (!cityList[ci]) return;
+        // 两级浏览：从卡片墙进入时保持卡片墙在下一层，返回按钮文案切换为“返回城市墙”
+        const fromWall = !!(cityWall && cityWall.classList.contains('show'));
+        cityViewFromWall = fromWall;
+        if (fromWall) {
+            if (cityViewBackLabel) cityViewBackLabel.textContent = '返回城市墙';
+            cityViewBack.setAttribute('aria-label', '返回城市墙');
+        } else {
+            if (cityViewBackLabel) cityViewBackLabel.textContent = '返回地球';
+            cityViewBack.setAttribute('aria-label', '返回地球');
+        }
+        // 城市图片墙为不透明全屏层，先暂停地球渲染循环，释放主线程/合成带宽
+        setGlobeRenderLoop(false);
         if (markerCard.classList.contains('visible')) hideMarkerCard();
         if (cityCard.classList.contains('visible')) hideCityCard(false);
         hideMarkerTip();
@@ -2605,6 +2603,8 @@
         renderCityView();
         cityView.classList.add('show');
         cityView.setAttribute('aria-hidden', 'false');
+        // 城市图片墙打开时直接隐藏顶部导航，不依赖相机事件（渲染循环暂停时相机事件不会触发）
+        document.body.classList.add('city-view-open');
         // 触屏不自动回焦，避免“返回地球”出现焦点描边
         if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window)) {
             cityViewBack.focus();
@@ -2612,13 +2612,30 @@
     }
 
     function closeCityView(returnFocus = true) {
+        const fromWall = cityViewFromWall;
+        cityViewFromWall = false;
         if (lightbox.classList.contains('show')) closeLightbox(false);
         cityView.classList.remove('show');
         cityView.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('city-view-open');
+        // 回到卡片墙时地球仍暂停；只有真正回到地球才恢复渲染
+        if (!fromWall || !(cityWall && cityWall.classList.contains('show'))) {
+            setGlobeRenderLoop(true);
+        }
         closeCitySwitcher();
         const restore = cityViewRestoreCard;
         cityViewRestoreCard = null;
         if (returnFocus) {
+            if (fromWall && cityWall && cityWall.classList.contains('show')) {
+                // 等图片墙淡出后把焦点还给卡片墙的返回按钮
+                setTimeout(() => {
+                    if (cityWallBack && cityWallBack.isConnected &&
+                        cityWall.classList.contains('show')) {
+                        cityWallBack.focus();
+                    }
+                }, 280);
+                return;
+            }
             if (restore) {
                 const fp = FOOTPRINTS[restore.fpIndex];
                 if (fp) {
@@ -2675,6 +2692,287 @@
         const tabs = [...cityTabs.querySelectorAll('.city-tab')];
         if (tabs[cityViewTabIndex]) tabs[cityViewTabIndex].focus();
     });
+
+    // ================= 城市卡片墙（城市总览目录） =================
+    // 与城市图片墙共用 FOOTPRINTS / cityList：卡片点击后直接进入现有 openCityView，
+    // 不做重复的城市详情实现。卡片按“最近去过时间”倒序排列。
+    const cityWall = document.getElementById('cityWall');
+    const cityWallBtn = document.getElementById('cityWallBtn');
+    const cityWallBack = document.getElementById('cityWallBack');
+    const cityWallTitle = document.getElementById('cityWallTitle');
+    const cityWallStats = document.getElementById('cityWallStats');
+    const cityWallGrid = document.getElementById('cityWallGrid');
+    const cityWallEmpty = document.getElementById('cityWallEmpty');
+    const cityWallBody = document.getElementById('cityWallBody');
+
+    // 移动端城市卡片墙每排数量：由后台 3D 地球设置注入，前端按 1-3 兜底
+    const CITY_WALL_MOBILE_MIN = 1;
+    const CITY_WALL_MOBILE_MAX = 3;
+    function resolveMobileCityWallColumns() {
+        const raw = Number(footprintCfg && footprintCfg.mobileCityWallColumns);
+        if (!Number.isFinite(raw)) return 2;
+        return Math.min(CITY_WALL_MOBILE_MAX, Math.max(CITY_WALL_MOBILE_MIN, Math.round(raw)));
+    }
+
+    // 地球渲染循环：票根墙需要透明背景透出地球，保持渲染；不透明全屏层打开时暂停
+    function setGlobeRenderLoop(running) {
+        if (!viewer) return;
+        try {
+            if (running && !viewer.useDefaultRenderLoop) {
+                viewer.useDefaultRenderLoop = true;
+            } else if (!running && viewer.useDefaultRenderLoop) {
+                viewer.useDefaultRenderLoop = false;
+            }
+        } catch (e) { /* 暂停/恢复失败不影响页面功能 */ }
+    }
+
+    // 封面图限量解码队列：滚动时一次只解码少数图片，避免栅格线程被批量解码占满
+    const CITY_WALL_COVER_CONCURRENCY = 3;   // 同时解码/加载的封面数
+    const CITY_WALL_COVER_MARGIN = 700;      // 提前加载的距离（px）
+    const cityWallCoverQueue = [];
+    let cityWallCoverLoading = 0;
+    let cityWallCoverObserver = null;
+    let cityWallCoverDrainScheduled = false;
+
+    function drainCityWallCoverQueue() {
+        cityWallCoverDrainScheduled = false;
+        while (cityWallCoverLoading < CITY_WALL_COVER_CONCURRENCY && cityWallCoverQueue.length) {
+            const media = cityWallCoverQueue.shift();
+            if (!media || !media.isConnected) continue;
+            const img = media.querySelector('img.city-wall-card-cover');
+            if (!img || !img.dataset.src) continue;
+            cityWallCoverLoading++;
+            img.src = img.dataset.src;
+        }
+    }
+
+    function scheduleCityWallCoverDrain() {
+        if (cityWallCoverDrainScheduled) return;
+        cityWallCoverDrainScheduled = true;
+        requestAnimationFrame(drainCityWallCoverQueue);
+    }
+
+    function cityWallCoverFinished() {
+        cityWallCoverLoading = Math.max(0, cityWallCoverLoading - 1);
+        scheduleCityWallCoverDrain();
+    }
+
+    function stopCityWallCoverLoader() {
+        if (cityWallCoverObserver) {
+            cityWallCoverObserver.disconnect();
+            cityWallCoverObserver = null;
+        }
+        cityWallCoverQueue.length = 0;
+        cityWallCoverLoading = 0;
+        cityWallCoverDrainScheduled = false;
+    }
+
+    function startCityWallCoverLoader() {
+        stopCityWallCoverLoader();
+        const pending = cityWallGrid.querySelectorAll('.city-wall-card-media.is-loading');
+        if (!pending.length) return;
+        // 不支持 IntersectionObserver 时回退为立即加载（与原生 lazy 行为相近）
+        if (!('IntersectionObserver' in window) || !cityWallBody) {
+            pending.forEach(media => {
+                const img = media.querySelector('img.city-wall-card-cover');
+                if (img && img.dataset.src) img.src = img.dataset.src;
+            });
+            return;
+        }
+        cityWallCoverObserver = new IntersectionObserver(entries => {
+            let enqueued = false;
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                const media = entry.target;
+                if (media.dataset.coverQueued) return;
+                media.dataset.coverQueued = '1';
+                cityWallCoverQueue.push(media);
+                enqueued = true;
+            });
+            if (enqueued) scheduleCityWallCoverDrain();
+        }, {
+            root: cityWallBody,
+            rootMargin: '0px 0px ' + CITY_WALL_COVER_MARGIN + 'px 0px',
+            threshold: 0.01
+        });
+        pending.forEach(media => cityWallCoverObserver.observe(media));
+    }
+
+    function cityWallCardData(ci) {
+        const fps = cityViewItems(ci);
+        const photos = fps.reduce((n, fp) => n + cityWallImages(fp).length, 0);
+        const tickets = fps.reduce((n, fp) => n + (ticketImageUrl(fp.ticketImage) ? 1 : 0), 0);
+        const latest = fps.map(fp => fp.createTime).filter(Boolean).sort().pop() || '';
+        // 封面优先取“最近去过且有图片”的足迹主相册首图；都没有图片时卡片显示首字占位
+        let cover = '';
+        const latestFirst = fps.slice().sort((a, b) =>
+            String(b.createTime || '').localeCompare(String(a.createTime || '')));
+        for (const fp of latestFirst) {
+            const imgs = cityWallImages(fp);
+            if (imgs.length) {
+                cover = imgs[0].url;
+                break;
+            }
+        }
+        const province = fps.map(fp => fp.province).find(Boolean) || '';
+        return { count: fps.length, photos, tickets, latest, cover, province };
+    }
+
+    function cityWallCards() {
+        const cards = cityList.map((city, ci) => ({
+            ci,
+            name: city.city,
+            ...cityWallCardData(ci)
+        }));
+        // 最近去过的城市排前面，无日期时按名称兜底，保持顺序稳定
+        cards.sort((a, b) => {
+            const byDate = String(b.latest || '').localeCompare(String(a.latest || ''));
+            if (byDate) return byDate;
+            return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN');
+        });
+        return cards;
+    }
+
+    function renderCityWall() {
+        if (!cityWall) return;
+        stopCityWallCoverLoader();
+        const mobileColumns = resolveMobileCityWallColumns();
+        cityWall.style.setProperty('--city-wall-mobile-columns', String(mobileColumns));
+        // 多列（每排 2-3 个）时切换紧凑照片卡样式：图片放大、次要文字隐藏
+        cityWall.classList.toggle('city-wall-multi', mobileColumns > 1);
+        const cards = cityWallCards();
+        const cityCount = cards.length;
+        const footprintTotal = cards.reduce((n, c) => n + c.count, 0);
+        const photoTotal = cards.reduce((n, c) => n + c.photos, 0);
+        const ticketTotal = cards.reduce((n, c) => n + c.tickets, 0);
+        cityWallTitle.textContent = '城市卡片墙';
+        cityWallStats.textContent = cityCount
+            ? cityCount + ' 座城市 · ' + footprintTotal + ' 个足迹 · ' + photoTotal + ' 张照片' +
+              (ticketTotal ? ' · ' + ticketTotal + ' 张票根' : '')
+            : '每一座城市，都值得一张卡片';
+        cityWallGrid.innerHTML = '';
+        if (cityWallEmpty) cityWallEmpty.hidden = cityCount > 0;
+
+        cards.forEach(card => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'city-wall-card' + (card.cover ? '' : ' no-cover');
+            btn.dataset.cityIndex = String(card.ci);
+            btn.setAttribute('aria-label',
+                card.name + (card.province ? '，' + card.province : '') + '，' +
+                card.count + ' 个足迹' +
+                (card.tickets ? '，' + card.tickets + ' 张票根' : '') + '，打开城市图片墙');
+
+            const media = document.createElement('span');
+            media.className = 'city-wall-card-media' + (card.cover ? ' is-loading' : '');
+            // 首字占位常驻：封面未加载/加载失败时显示，加载完成后被封面淡入盖住
+            const monogram = document.createElement('span');
+            monogram.className = 'city-wall-card-monogram';
+            monogram.textContent = card.name ? card.name.charAt(0) : '?';
+            media.appendChild(monogram);
+            if (card.cover) {
+                const cover = document.createElement('img');
+                cover.className = 'city-wall-card-cover';
+                cover.decoding = 'async';
+                cover.alt = '';
+                cover.dataset.src = card.cover;
+                cover.addEventListener('load', () => {
+                    if (!cover.isConnected) return;   // 卡片墙已关闭时忽略迟到的解码结果
+                    media.classList.remove('is-loading');
+                    media.classList.add('is-loaded');
+                    cityWallCoverFinished();
+                });
+                cover.addEventListener('error', () => {
+                    if (!cover.isConnected) return;
+                    media.classList.remove('is-loading');
+                    media.classList.add('is-error');
+                    cityWallCoverFinished();
+                });
+                media.appendChild(cover);
+            }
+            if (card.tickets) {
+                const ticketBadge = document.createElement('span');
+                ticketBadge.className = 'city-wall-card-tickets';
+                ticketBadge.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h13A1.5 1.5 0 0 1 20 8.5v2a2.5 2.5 0 0 0 0 5v2a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-2a2.5 2.5 0 0 0 0-5z"/><path d="M13.5 7v2.8M13.5 14.2V17"/></svg>';
+                ticketBadge.appendChild(document.createTextNode(card.tickets + ' 张票根'));
+                media.appendChild(ticketBadge);
+            }
+
+            const body = document.createElement('span');
+            body.className = 'city-wall-card-body';
+            const eyebrow = document.createElement('span');
+            eyebrow.className = 'city-wall-card-eyebrow';
+            eyebrow.textContent = card.province || 'TRAVELED';
+            const name = document.createElement('strong');
+            name.className = 'city-wall-card-name';
+            name.textContent = card.name;
+            const meta = document.createElement('span');
+            meta.className = 'city-wall-card-meta';
+            meta.textContent = mobileColumns > 1
+                ? (card.photos ? card.photos + ' 张照片' : card.count + ' 个足迹')
+                : card.count + ' 个足迹 · ' + card.photos + ' 张照片';
+            body.append(eyebrow, name, meta);
+            if (card.latest) {
+                const recent = document.createElement('span');
+                recent.className = 'city-wall-card-recent';
+                recent.textContent = '最近 ' + formatCityDate(card.latest);
+                body.appendChild(recent);
+            }
+
+            btn.append(media, body);
+            btn.addEventListener('click', () => {
+                const ci = Number(btn.dataset.cityIndex);
+                if (!cityList[ci]) return;
+                // 卡片墙保留在下一层，图片墙从上面展开，返回时回到卡片墙并保留滚动位置
+                openCityView(ci, null);
+            });
+            cityWallGrid.appendChild(btn);
+        });
+        startCityWallCoverLoader();
+    }
+
+    function openCityWall() {
+        if (!cityWall || cityWall.classList.contains('show')) return;
+        // 卡片墙背景不透明，暂停地球渲染，避免其满帧率渲染抢走滚动所需资源
+        setGlobeRenderLoop(false);
+        if (lightbox.classList.contains('show')) closeLightbox(false);
+        if (markerCard.classList.contains('visible')) hideMarkerCard();
+        if (cityCard.classList.contains('visible')) hideCityCard(false);
+        renderCityWall();
+        cityWall.classList.add('show');
+        cityWall.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('city-wall-open');
+        // 与城市图片墙一致：触屏不自动聚焦，避免“返回地球”出现焦点描边
+        if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window)) {
+            cityWallBack.focus();
+        }
+    }
+
+    function closeCityWall(returnFocus = true) {
+        if (!cityWall || !cityWall.classList.contains('show')) return;
+        cityWall.classList.remove('show');
+        cityWall.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('city-wall-open');
+        stopCityWallCoverLoader();
+        setGlobeRenderLoop(true);
+        if (returnFocus) {
+            const trigger = cityWallBtn;
+            setTimeout(() => {
+                if (trigger && trigger.isConnected &&
+                    getComputedStyle(trigger).visibility !== 'hidden') {
+                    trigger.focus();
+                }
+            }, 0);
+        }
+    }
+
+    cityWallBtn.addEventListener('click', openCityWall);
+    cityWallBack.addEventListener('click', () => closeCityWall());
+    // 数据重新加载（如刷新直达）后，若卡片墙正处于打开状态则重建
+    document.addEventListener('footprints:loaded', () => {
+        if (cityWall && cityWall.classList.contains('show')) renderCityWall();
+    });
+
     // ================= 加载足迹数据并重建标记 =================
     loadFootprintsFromJson().then(loaded => {
         if (applyFootprints(loaded)) {
