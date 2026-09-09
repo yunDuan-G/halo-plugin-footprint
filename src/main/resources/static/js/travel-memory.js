@@ -2725,16 +2725,26 @@
         return value !== false;
     }
 
-    // 城市卡片封面缩略：复用后台“图片处理配置”的 from→to 规则（不追加 marker 的 H200 后缀）。
-    // 例如 !w100 → !A100，能把 3000px 级原图缩到约 450px，显著降低解码/栅格开销。
+    // 城市卡片封面缩略：独立使用后台“城市卡片墙图片”的 from→to→suffix 规则；
+    // 三项都留空时回退到“标记点图片”的 from→to 规则，保持升级前的行为不变。
     function cityCardImageUrl(url) {
         if (!url || !footprintCfg) return url;
-        const from = footprintCfg.markerImageFrom;
-        const to = footprintCfg.markerImageTo;
-        if (from && to && String(url).includes(from)) {
-            return String(url).split(from).join(to);
+        const cityFrom = footprintCfg.cityWallImageFrom;
+        const cityTo = footprintCfg.cityWallImageTo;
+        const citySuffix = footprintCfg.cityWallImageSuffix;
+        if (!cityFrom && !cityTo && !citySuffix) {
+            // 独立规则未配置：完全沿用旧版的标记点 from→to 替换逻辑
+            const from = footprintCfg.markerImageFrom;
+            const to = footprintCfg.markerImageTo;
+            if (from && to && String(url).includes(from)) {
+                return String(url).split(from).join(to);
+            }
+            return url;
         }
-        return url;
+        let out = String(url);
+        if (cityFrom) out = out.split(cityFrom).join(cityTo || '');
+        if (citySuffix && !out.endsWith(citySuffix)) out += citySuffix;
+        return out;
     }
 
     // 移动端城市卡片墙每排数量：由后台 3D 地球设置注入，前端按 1-3 兜底

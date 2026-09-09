@@ -255,3 +255,21 @@ spec:
           value: ''
           placeholder: "例如：/fw/500"
           help: "时间线/详情图片替换完成后追加的 URL 后缀。"
+        - $formkit: text
+          label: 城市卡片墙图片：要替换的片段
+          name: cityWallImageFrom
+          value: ''
+          placeholder: "例如：!w100"
+          help: "3D 地球城市卡片墙封面与轮播预览图使用的 URL 替换片段，与地图标记点独立。三项都留空时沿用「标记点图片」的 from→to 替换规则（不追加标记点后缀），保持旧版行为。"
+        - $formkit: text
+          label: 城市卡片墙图片：替换为
+          name: cityWallImageTo
+          value: ''
+          placeholder: "例如：!A100"
+          help: "城市卡片墙图片的替换目标片段。留空表示只删除上一项片段。"
+        - $formkit: text
+          label: 城市卡片墙图片：追加后缀
+          name: cityWallImageSuffix
+          value: ''
+          placeholder: "例如：/fw/300"
+          help: "城市卡片墙图片替换完成后在 URL 末尾追加的图床压缩/裁剪参数；留空不追加。旧版复用标记点规则时同样不会追加后缀。"

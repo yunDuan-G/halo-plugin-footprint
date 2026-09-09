@@ -79,7 +79,10 @@ public class FootprintServiceImpl implements FootprintService {
                     image.path("markerImageSuffix").asText(""),
                     image.path("timelineImageFrom").asText(""),
                     image.path("timelineImageTo").asText(""),
-                    image.path("timelineImageSuffix").asText("")
+                    image.path("timelineImageSuffix").asText(""),
+                    image.path("cityWallImageFrom").asText(""),
+                    image.path("cityWallImageTo").asText(""),
+                    image.path("cityWallImageSuffix").asText("")
                 ));
             })
             .flatMap(config -> config);

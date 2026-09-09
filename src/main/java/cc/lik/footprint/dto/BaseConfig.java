@@ -38,4 +38,7 @@ public class BaseConfig {
     private String timelineImageFrom;
     private String timelineImageTo;
     private String timelineImageSuffix;
+    private String cityWallImageFrom;
+    private String cityWallImageTo;
+    private String cityWallImageSuffix;
 }
