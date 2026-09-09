@@ -1102,6 +1102,18 @@
             closeLightbox();
             return;
         }
+        if (postcardPreview.classList.contains('show')) {
+            closePostcard();
+            return;
+        }
+        if (timeCapsule.classList.contains('show')) {
+            closeTimeCapsule();
+            return;
+        }
+        if (insightView.classList.contains('show')) {
+            closeInsight();
+            return;
+        }
         if (cityView.classList.contains('show')) {
             closeCityView();
             return;
@@ -2704,6 +2716,26 @@
     const cityWallGrid = document.getElementById('cityWallGrid');
     const cityWallEmpty = document.getElementById('cityWallEmpty');
     const cityWallBody = document.getElementById('cityWallBody');
+    const cityWallTimeCapsuleBtn = document.getElementById('cityWallTimeCapsuleBtn');
+    const cityWallInsightBtn = document.getElementById('cityWallInsightBtn');
+
+    // 4 个创意功能的开关统一从后台 globe3d 设置读取（默认开启）
+    function featureEnabled(key) {
+        const value = footprintCfg && footprintCfg[key];
+        return value !== false;
+    }
+
+    // 城市卡片封面缩略：复用后台“图片处理配置”的 from→to 规则（不追加 marker 的 H200 后缀）。
+    // 例如 !w100 → !A100，能把 3000px 级原图缩到约 450px，显著降低解码/栅格开销。
+    function cityCardImageUrl(url) {
+        if (!url || !footprintCfg) return url;
+        const from = footprintCfg.markerImageFrom;
+        const to = footprintCfg.markerImageTo;
+        if (from && to && String(url).includes(from)) {
+            return String(url).split(from).join(to);
+        }
+        return url;
+    }
 
     // 移动端城市卡片墙每排数量：由后台 3D 地球设置注入，前端按 1-3 兜底
     const CITY_WALL_MOBILE_MIN = 1;
@@ -2740,7 +2772,7 @@
             const media = cityWallCoverQueue.shift();
             if (!media || !media.isConnected) continue;
             const img = media.querySelector('img.city-wall-card-cover');
-            if (!img || !img.dataset.src) continue;
+            if (!img || !img.dataset.src || img.getAttribute('src')) continue;
             cityWallCoverLoading++;
             img.src = img.dataset.src;
         }
@@ -2798,24 +2830,166 @@
         pending.forEach(media => cityWallCoverObserver.observe(media));
     }
 
+    // ============ 卡片墙图片空闲预热 ============
+    // 刷新后磁盘缓存里的图片仍要重新解码；滚动时再解码就会造成帧断。
+    // 打开卡片墙后以低并发在后台把封面与轮播图全部解码，滚动时不再等待。
+    const CITY_WALL_WARM_CONCURRENCY = 2;
+    const CITY_WALL_WARM_MAX_IMAGES = 60;   // 防止超大城市列表过度预热
+    const cityWallWarmQueue = [];
+    let cityWallWarmLoading = 0;
+    let cityWallWarmTimer = null;
+
+    function drainCityWallWarmQueue() {
+        cityWallWarmTimer = null;
+        while (cityWallWarmLoading < CITY_WALL_WARM_CONCURRENCY && cityWallWarmQueue.length) {
+            const img = cityWallWarmQueue.shift();
+            if (!img || !img.isConnected || img.getAttribute('src')) continue;
+            cityWallWarmLoading++;
+            const done = () => {
+                cityWallWarmLoading = Math.max(0, cityWallWarmLoading - 1);
+                if (!cityWallWarmTimer) {
+                    cityWallWarmTimer = setTimeout(drainCityWallWarmQueue, 0);
+                }
+            };
+            img.addEventListener('load', done, { once: true });
+            img.addEventListener('error', done, { once: true });
+            img.src = img.dataset.src;
+        }
+    }
+
+    function stopCityWallWarmQueue() {
+        if (cityWallWarmTimer) {
+            clearTimeout(cityWallWarmTimer);
+            cityWallWarmTimer = null;
+        }
+        cityWallWarmQueue.length = 0;
+        cityWallWarmLoading = 0;
+    }
+
+    function startCityWallWarmQueue() {
+        stopCityWallWarmQueue();
+        const imgs = [...cityWallGrid.querySelectorAll(
+            'img.city-wall-card-cover, img.city-wall-card-preview')]
+            .filter(img => img.dataset.src && !img.getAttribute('src'));
+        if (!imgs.length || imgs.length > CITY_WALL_WARM_MAX_IMAGES) return;
+        cityWallWarmQueue.push(...imgs);
+        drainCityWallWarmQueue();
+    }
+
+    // ============ PC 城市卡片悬停轮播（最多 3 张） ============
+    const CITY_CARD_CAROUSEL_DELAY = 600;      // 悬停后多久开始
+    const CITY_CARD_CAROUSEL_INTERVAL = 1800;  // 每张停留时长
+    let cityCardCarouselCard = null;
+    let cityCardCarouselTimer = null;
+    let cityCardCarouselIndex = 0;
+    let cityCardCarouselPauseUntil = 0;
+
+    function loadCityCardPreview(img) {
+        if (!img || !img.dataset.src || img.src) return;
+        const probe = new Image();
+        probe.onload = () => {
+            if (!img.isConnected) return;
+            img.src = img.dataset.src;
+            img.classList.add('is-ready');
+        };
+        probe.onerror = () => {
+            if (!img.isConnected) return;
+            img.classList.add('is-error');
+        };
+        probe.src = img.dataset.src;
+    }
+
+    function stopCityCardCarousel() {
+        if (cityCardCarouselTimer) {
+            clearTimeout(cityCardCarouselTimer);
+            cityCardCarouselTimer = null;
+        }
+        if (cityCardCarouselCard) {
+            cityCardCarouselCard.classList.remove('is-carouseling');
+            cityCardCarouselCard.querySelectorAll('.city-wall-card-preview').forEach(img => {
+                img.classList.remove('is-active');
+            });
+        }
+        cityCardCarouselCard = null;
+        cityCardCarouselIndex = 0;
+    }
+
+    function stepCityCardCarousel() {
+        if (Date.now() < cityCardCarouselPauseUntil) return;
+        const card = cityCardCarouselCard;
+        if (!card || !card.isConnected) {
+            stopCityCardCarousel();
+            return;
+        }
+        const imgs = [...card.querySelectorAll('.city-wall-card-cover, .city-wall-card-preview')]
+            .filter(img => img.getAttribute('src') && !img.classList.contains('is-error'));
+        if (imgs.length < 2) return;
+        cityCardCarouselIndex = (cityCardCarouselIndex + 1) % imgs.length;
+        imgs.forEach((img, i) => img.classList.toggle('is-active', i === cityCardCarouselIndex));
+    }
+
+    function startCityCardCarousel(card) {
+        if (!featureEnabled('cityCardHoverCarousel')) return;
+        if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        if (cityCardCarouselCard === card && cityCardCarouselTimer) return;
+        stopCityCardCarousel();
+        cityCardCarouselCard = card;
+        const boot = () => {
+            if (!card.isConnected) {
+                stopCityCardCarousel();
+                return;
+            }
+            if (Date.now() < cityCardCarouselPauseUntil) {
+                cityCardCarouselTimer = setTimeout(boot, 150);
+                return;
+            }
+            // 真正开始轮播时才加载后续图片，一次只加载本卡 2 张
+            card.querySelectorAll('.city-wall-card-preview').forEach(img => {
+                if (!img.src && img.dataset.src) loadCityCardPreview(img);
+            });
+            card.classList.add('is-carouseling');
+            const ready = [...card.querySelectorAll('.city-wall-card-cover, .city-wall-card-preview')]
+                .filter(img => img.getAttribute('src') && !img.classList.contains('is-error'));
+            if (ready.length) {
+                ready.forEach((img, i) => img.classList.toggle('is-active', i === 0));
+            }
+            cityCardCarouselIndex = 0;
+            cityCardCarouselTimer = setInterval(stepCityCardCarousel, CITY_CARD_CAROUSEL_INTERVAL);
+        };
+        cityCardCarouselTimer = setTimeout(boot, CITY_CARD_CAROUSEL_DELAY);
+    }
+
+    // 滚动时暂停轮播，避免与滚动卡顿叠加
+    document.addEventListener('wheel', () => {
+        cityCardCarouselPauseUntil = Date.now() + 350;
+    }, { passive: true });
+    document.addEventListener('touchmove', () => {
+        cityCardCarouselPauseUntil = Date.now() + 350;
+    }, { passive: true });
+
     function cityWallCardData(ci) {
         const fps = cityViewItems(ci);
         const photos = fps.reduce((n, fp) => n + cityWallImages(fp).length, 0);
         const tickets = fps.reduce((n, fp) => n + (ticketImageUrl(fp.ticketImage) ? 1 : 0), 0);
         const latest = fps.map(fp => fp.createTime).filter(Boolean).sort().pop() || '';
-        // 封面优先取“最近去过且有图片”的足迹主相册首图；都没有图片时卡片显示首字占位
-        let cover = '';
+        // 封面/轮播预览：按最近足迹顺序，从足迹相册中取最多 3 张不重复照片；
+        // 单足迹但相册有很多照片的城市也能获得轮播效果；都没有图片时卡片显示首字占位
+        const previews = [];
         const latestFirst = fps.slice().sort((a, b) =>
             String(b.createTime || '').localeCompare(String(a.createTime || '')));
         for (const fp of latestFirst) {
             const imgs = cityWallImages(fp);
-            if (imgs.length) {
-                cover = imgs[0].url;
-                break;
+            for (const img of imgs) {
+                const url = cityCardImageUrl(img.url);
+                if (!previews.includes(url)) previews.push(url);
+                if (previews.length >= 3) break;
             }
+            if (previews.length >= 3) break;
         }
+        const cover = previews[0] || '';
         const province = fps.map(fp => fp.province).find(Boolean) || '';
-        return { count: fps.length, photos, tickets, latest, cover, province };
+        return { count: fps.length, photos, tickets, latest, cover, province, previews };
     }
 
     function cityWallCards() {
@@ -2836,10 +3010,13 @@
     function renderCityWall() {
         if (!cityWall) return;
         stopCityWallCoverLoader();
+        stopCityWallWarmQueue();
+        stopCityCardCarousel();
         const mobileColumns = resolveMobileCityWallColumns();
+        const mobileView = window.matchMedia('(max-width: 820px)').matches;
         cityWall.style.setProperty('--city-wall-mobile-columns', String(mobileColumns));
-        // 多列（每排 2-3 个）时切换紧凑照片卡样式：图片放大、次要文字隐藏
-        cityWall.classList.toggle('city-wall-multi', mobileColumns > 1);
+        // 仅手机端多列（每排 2-3 个）时切换紧凑照片卡样式：图片放大、次要文字隐藏
+        cityWall.classList.toggle('city-wall-multi', mobileView && mobileColumns > 1);
         const cards = cityWallCards();
         const cityCount = cards.length;
         const footprintTotal = cards.reduce((n, c) => n + c.count, 0);
@@ -2854,6 +3031,8 @@
         if (cityWallEmpty) cityWallEmpty.hidden = cityCount > 0;
 
         cards.forEach(card => {
+            const wrap = document.createElement('div');
+            wrap.className = 'city-wall-card-wrap';
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'city-wall-card' + (card.cover ? '' : ' no-cover');
@@ -2890,6 +3069,18 @@
                 });
                 media.appendChild(cover);
             }
+            // 轮播后续图：不参与首图限量队列，hover 时再按需加载（最多共 3 张）
+            if (card.previews.length > 1 && featureEnabled('cityCardHoverCarousel')) {
+                card.previews.slice(1).forEach(url => {
+                    const extra = document.createElement('img');
+                    extra.className = 'city-wall-card-preview';
+                    extra.decoding = 'async';
+                    extra.alt = '';
+                    extra.setAttribute('aria-hidden', 'true');
+                    extra.dataset.src = url;
+                    media.appendChild(extra);
+                });
+            }
             if (card.tickets) {
                 const ticketBadge = document.createElement('span');
                 ticketBadge.className = 'city-wall-card-tickets';
@@ -2908,8 +3099,9 @@
             name.textContent = card.name;
             const meta = document.createElement('span');
             meta.className = 'city-wall-card-meta';
-            meta.textContent = mobileColumns > 1
-                ? (card.photos ? card.photos + ' 张照片' : card.count + ' 个足迹')
+            // 桌面完整展示足迹数量；手机端不展示足迹数量（紧凑卡只显示照片数）
+            meta.textContent = mobileView
+                ? (card.photos ? card.photos + ' 张照片' : '暂无照片')
                 : card.count + ' 个足迹 · ' + card.photos + ' 张照片';
             body.append(eyebrow, name, meta);
             if (card.latest) {
@@ -2926,9 +3118,30 @@
                 // 卡片墙保留在下一层，图片墙从上面展开，返回时回到卡片墙并保留滚动位置
                 openCityView(ci, null);
             });
-            cityWallGrid.appendChild(btn);
+            // PC 悬停/键盘聚焦轮播
+            btn.addEventListener('mouseenter', () => startCityCardCarousel(btn));
+            btn.addEventListener('mouseleave', stopCityCardCarousel);
+            btn.addEventListener('focusin', () => startCityCardCarousel(btn));
+            btn.addEventListener('focusout', stopCityCardCarousel);
+            wrap.appendChild(btn);
+            // 明信片入口（独立按钮，避免按钮嵌套）
+            if (featureEnabled('enablePostcard')) {
+                const postcardBtn = document.createElement('button');
+                postcardBtn.type = 'button';
+                postcardBtn.className = 'city-wall-card-postcard';
+                postcardBtn.textContent = '明信片';
+                postcardBtn.setAttribute('aria-label', '为 ' + card.name + ' 生成旅行明信片');
+                postcardBtn.addEventListener('click', () => {
+                    const ci = Number(btn.dataset.cityIndex);
+                    if (cityList[ci]) openPostcard(ci, postcardBtn);
+                });
+                wrap.appendChild(postcardBtn);
+            }
+            cityWallGrid.appendChild(wrap);
         });
+        refreshCityWallFeatureActions();
         startCityWallCoverLoader();
+        startCityWallWarmQueue();
     }
 
     function openCityWall() {
@@ -2950,10 +3163,12 @@
 
     function closeCityWall(returnFocus = true) {
         if (!cityWall || !cityWall.classList.contains('show')) return;
+        stopCityCardCarousel();
         cityWall.classList.remove('show');
         cityWall.setAttribute('aria-hidden', 'true');
         document.body.classList.remove('city-wall-open');
         stopCityWallCoverLoader();
+        stopCityWallWarmQueue();
         setGlobeRenderLoop(true);
         if (returnFocus) {
             const trigger = cityWallBtn;
@@ -2965,6 +3180,520 @@
             }, 0);
         }
     }
+
+    // ================= 创意功能入口与覆盖层 =================
+    // 时间胶囊 / 足迹洞察 / 明信片预览都从城市卡片墙之上打开；
+    // 城市卡片墙保持在下一层，关闭新层后回到卡片墙原滚动位置。
+
+    function refreshCityWallFeatureActions() {
+        if (cityWallTimeCapsuleBtn) {
+            cityWallTimeCapsuleBtn.hidden =
+                !featureEnabled('enableTimeCapsule') || timeCapsuleItems().length === 0;
+        }
+        if (cityWallInsightBtn) {
+            cityWallInsightBtn.hidden = !featureEnabled('enableInsight');
+        }
+    }
+
+    function focusCityWallTop() {
+        setTimeout(() => {
+            if (cityWallBack && cityWallBack.isConnected &&
+                cityWall.classList.contains('show')) {
+                cityWallBack.focus();
+            }
+        }, 260);
+    }
+
+    // ---------------- 去年今天 ----------------
+    const timeCapsule = document.getElementById('timeCapsule');
+    const timeCapsuleBack = document.getElementById('timeCapsuleBack');
+    const timeCapsulePrev = document.getElementById('timeCapsulePrev');
+    const timeCapsuleNext = document.getElementById('timeCapsuleNext');
+    const timeCapsuleStats = document.getElementById('timeCapsuleStats');
+    const timeCapsuleBody = document.getElementById('timeCapsuleBody');
+    let timeCapsuleItemsCache = [];
+    let timeCapsuleIndex = 0;
+
+    function timeCapsuleItems() {
+        const now = new Date();
+        const today = String(now.getMonth() + 1).padStart(2, '0') + '-' +
+            String(now.getDate()).padStart(2, '0');
+        return FOOTPRINTS
+            .filter(fp => {
+                const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(fp.createTime || '');
+                if (!m) return false;
+                const year = Number(m[1]);
+                const md = m[2] + '-' + m[3];
+                return year < now.getFullYear() && md === today;
+            })
+            .sort((a, b) => String(b.createTime).localeCompare(String(a.createTime)));
+    }
+
+    function timeCapsuleTicketIndex(fp) {
+        const items = ticketItemsFromFootprints();
+        const byKey = fp.key ? items.findIndex(item => item.key === fp.key) : -1;
+        return byKey >= 0 ? byKey : items.indexOf(fp);
+    }
+
+    function renderTimeCapsule() {
+        const fp = timeCapsuleItemsCache[timeCapsuleIndex];
+        timeCapsuleBody.innerHTML = '';
+        timeCapsuleStats.textContent = timeCapsuleItemsCache.length
+            ? timeCapsuleItemsCache.length + ' 条历史记录 · 第 ' + (timeCapsuleIndex + 1) + ' 条'
+            : '';
+        timeCapsulePrev.hidden = timeCapsuleItemsCache.length < 2;
+        timeCapsuleNext.hidden = timeCapsuleItemsCache.length < 2;
+        if (!fp) {
+            timeCapsuleBody.textContent = '今天还没有属于过去的故事';
+            return;
+        }
+
+        const article = document.createElement('article');
+        article.className = 'capsule-card';
+        const shot = document.createElement('div');
+        shot.className = 'capsule-shot';
+        const imgs = cityWallImages(fp);
+        if (imgs.length) {
+            const img = document.createElement('img');
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.src = imgs[0].url;
+            img.alt = fp.name;
+            shot.appendChild(img);
+        } else {
+            shot.classList.add('no-image');
+            shot.textContent = fp.name ? fp.name.charAt(0) : '?';
+        }
+        article.appendChild(shot);
+
+        const info = document.createElement('div');
+        info.className = 'capsule-info';
+        const eyebrow = document.createElement('p');
+        eyebrow.className = 'capsule-eyebrow';
+        eyebrow.textContent = 'FOOTPRINT · ' + (fp.footprintType || '旅行');
+        const name = document.createElement('h3');
+        name.textContent = fp.name;
+        const meta = document.createElement('p');
+        meta.className = 'capsule-meta';
+        meta.textContent = [fp.city, fp.province, formatCityDate(fp.createTime), fp.address]
+            .filter(Boolean).join(' · ');
+        const desc = document.createElement('p');
+        desc.className = 'capsule-desc';
+        desc.textContent = fp.description || '那一天的旅途，被留在了这里。';
+        const actions = document.createElement('div');
+        actions.className = 'capsule-actions';
+        const galleryBtn = document.createElement('button');
+        galleryBtn.type = 'button';
+        galleryBtn.textContent = '打开图片墙';
+        galleryBtn.addEventListener('click', () => {
+            const fpIndex = FOOTPRINTS.indexOf(fp);
+            const ci = fpIndex >= 0 ? cityList.findIndex(city => city.indices.includes(fpIndex)) : -1;
+            closeTimeCapsule(false);
+            if (ci >= 0) openCityView(ci, null);
+        });
+        actions.appendChild(galleryBtn);
+        if (ticketImageUrl(fp.ticketImage)) {
+            const ticketBtn = document.createElement('button');
+            ticketBtn.type = 'button';
+            ticketBtn.className = 'is-ticket';
+            ticketBtn.textContent = '查看票根';
+            ticketBtn.addEventListener('click', () => {
+                const idx = timeCapsuleTicketIndex(fp);
+                closeTimeCapsule(false);
+                closeCityWall(false);
+                if (idx >= 0) setTicketView(true, idx, false);
+            });
+            actions.appendChild(ticketBtn);
+        }
+        info.append(eyebrow, name, meta, desc, actions);
+        article.appendChild(info);
+        timeCapsuleBody.appendChild(article);
+    }
+
+    function openTimeCapsule() {
+        if (!featureEnabled('enableTimeCapsule') || !timeCapsule) return;
+        timeCapsuleItemsCache = timeCapsuleItems();
+        if (!timeCapsuleItemsCache.length) return;
+        timeCapsuleIndex = 0;
+        renderTimeCapsule();
+        timeCapsule.classList.add('show');
+        timeCapsule.setAttribute('aria-hidden', 'false');
+        if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window)) {
+            timeCapsuleBack.focus();
+        }
+    }
+
+    function closeTimeCapsule(returnFocus = true) {
+        if (!timeCapsule || !timeCapsule.classList.contains('show')) return;
+        timeCapsule.classList.remove('show');
+        timeCapsule.setAttribute('aria-hidden', 'true');
+        if (returnFocus) focusCityWallTop();
+    }
+
+    // ---------------- 足迹洞察 ----------------
+    const insightView = document.getElementById('insightView');
+    const insightBack = document.getElementById('insightBack');
+    const insightSentenceEl = document.getElementById('insightSentence');
+    const insightMetricsEl = document.getElementById('insightMetrics');
+    const insightAgain = document.getElementById('insightAgain');
+    let insightVariant = 0;
+
+    function haversineKm(a, b) {
+        const R = 6371;
+        const rad = d => d * Math.PI / 180;
+        const dLat = rad(b.lat - a.lat);
+        const dLng = rad(b.lng - a.lng);
+        const s = Math.sin(dLat / 2) ** 2 +
+            Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+        return 2 * R * Math.asin(Math.sqrt(s));
+    }
+
+    function insightMetrics() {
+        const fps = FOOTPRINTS.filter(fp => fp.lat && fp.lng);
+        const sorted = fps.slice().sort((a, b) =>
+            String(a.createTime || '').localeCompare(String(b.createTime || '')));
+        const distance = sorted.slice(1).reduce((sum, fp, i) =>
+            sum + haversineKm(sorted[i], fp), 0);
+        const months = fps.map(fp => Number(String(fp.createTime || '').slice(5, 7))).filter(Boolean);
+        const seasonCount = { 春: 0, 夏: 0, 秋: 0, 冬: 0 };
+        months.forEach(m => {
+            if (m >= 3 && m <= 5) seasonCount['春']++;
+            else if (m >= 6 && m <= 8) seasonCount['夏']++;
+            else if (m >= 9 && m <= 11) seasonCount['秋']++;
+            else seasonCount['冬']++;
+        });
+        const topSeason = Object.entries(seasonCount).sort((a, b) => b[1] - a[1])[0];
+        const typeCount = {};
+        fps.forEach(fp => {
+            const t = fp.footprintType || '旅行';
+            typeCount[t] = (typeCount[t] || 0) + 1;
+        });
+        const topType = Object.entries(typeCount).sort((a, b) => b[1] - a[1])[0];
+        const byLat = [...fps].sort((a, b) => a.lat - b.lat);
+        const byLng = [...fps].sort((a, b) => a.lng - b.lng);
+        return {
+            footprintCount: FOOTPRINTS.length,
+            cityCount: cityList.length,
+            ticketCount: ticketItemsFromFootprints().length,
+            distanceKm: Math.round(distance),
+            topSeason: topSeason && topSeason[1] ? topSeason[0] : '',
+            topSeasonCount: topSeason ? topSeason[1] : 0,
+            topType: topType && topType[1] ? topType[0] : '',
+            topTypeCount: topType ? topType[1] : 0,
+            south: byLat[0], north: byLat[byLat.length - 1],
+            west: byLng[0], east: byLng[byLng.length - 1]
+        };
+    }
+
+    function insightSentences(m) {
+        const dist = m.distanceKm ? '约 ' + m.distanceKm.toLocaleString('zh-CN') + ' 公里' : '许多公里';
+        return [
+            '你的足迹点亮了 ' + m.cityCount + ' 座城市，走过 ' + m.footprintCount + ' 段旅程，累计' + dist + '。',
+            (m.topSeason ? '你似乎最爱在' + m.topSeason + '天出发，' : '你总在合适的时间出发，') +
+                (m.topType ? '尤其偏爱「' + m.topType + '」类型的记录。' : '每一程都值得被记住。'),
+            '从 ' + (m.south && m.south.city || '南') + ' 到 ' + (m.north && m.north.city || '北') +
+                '、从 ' + (m.west && m.west.city || '西') + ' 到 ' + (m.east && m.east.city || '东') +
+                '，世界在地图上被慢慢点亮。',
+            m.ticketCount
+                ? m.footprintCount + ' 段旅程里，你收集了 ' + m.ticketCount + ' 张票根，每次出发都有凭证。'
+                : '你走过了 ' + m.cityCount + ' 座城市，用照片记下了 ' + m.footprintCount + ' 段旅程。',
+            '你的足迹里，' + (m.topType || '旅行') + ' 出现了 ' + m.topTypeCount + ' 次，是最常被记录的主题。',
+            '约 ' + m.footprintCount + ' 次出发、' + m.cityCount + ' 座城市，地图上的每一处坐标都是一个故事。'
+        ];
+    }
+
+    function renderInsight() {
+        if (!FOOTPRINTS.length) {
+            insightSentenceEl.textContent = '还没有足迹数据，出发后回来看看你的旅行洞察。';
+            insightMetricsEl.innerHTML = '';
+            return;
+        }
+        const m = insightMetrics();
+        const sentences = insightSentences(m);
+        insightVariant = insightVariant % sentences.length;
+        insightSentenceEl.textContent = sentences[insightVariant];
+        insightMetricsEl.innerHTML = '';
+        const items = [
+            ['足迹', m.footprintCount + ' 次'],
+            ['城市', m.cityCount + ' 座'],
+            ['票根', m.ticketCount + ' 张'],
+            ['估算里程', m.distanceKm ? m.distanceKm.toLocaleString('zh-CN') + ' km' : '—'],
+            ['出发季节', m.topSeason ? m.topSeason + '（' + m.topSeasonCount + ' 次）' : '—'],
+            ['最爱类型', m.topType ? m.topType + '（' + m.topTypeCount + ' 次）' : '—']
+        ];
+        items.forEach(([label, value]) => {
+            const row = document.createElement('div');
+            const dt = document.createElement('dt');
+            dt.textContent = label;
+            const dd = document.createElement('dd');
+            dd.textContent = value;
+            row.append(dt, dd);
+            insightMetricsEl.appendChild(row);
+        });
+    }
+
+    function openInsight() {
+        if (!featureEnabled('enableInsight') || !insightView) return;
+        insightVariant = 0;
+        renderInsight();
+        insightView.classList.add('show');
+        insightView.setAttribute('aria-hidden', 'false');
+        if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window)) {
+            insightBack.focus();
+        }
+    }
+
+    function closeInsight(returnFocus = true) {
+        if (!insightView || !insightView.classList.contains('show')) return;
+        insightView.classList.remove('show');
+        insightView.setAttribute('aria-hidden', 'true');
+        if (returnFocus) focusCityWallTop();
+    }
+
+    // ---------------- 旅行明信片 ----------------
+    const postcardPreview = document.getElementById('postcardPreview');
+    const postcardBack = document.getElementById('postcardBack');
+    const postcardTitle = document.getElementById('postcardTitle');
+    const postcardPreviewImg = document.getElementById('postcardPreviewImg');
+    const postcardDownload = document.getElementById('postcardDownload');
+    const postcardShare = document.getElementById('postcardShare');
+    let postcardCi = -1;
+    let postcardBlobUrl = '';
+    let postcardFileName = '旅行明信片.png';
+
+    if (typeof CanvasRenderingContext2D !== 'undefined' &&
+        !CanvasRenderingContext2D.prototype.roundRect) {
+        CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+            r = Math.min(r || 0, w / 2, h / 2);
+            this.moveTo(x + r, y);
+            this.arcTo(x + w, y, x + w, y + h, r);
+            this.arcTo(x + w, y + h, x, y + h, r);
+            this.arcTo(x, y + h, x, y, r);
+            this.arcTo(x, y, x + w, y, r);
+            this.closePath();
+        };
+    }
+
+    function cityPostcardData(ci) {
+        const city = cityList[ci];
+        return {
+            city: city ? city.city : '未知城市',
+            province: '',
+            ...cityWallCardData(ci)
+        };
+    }
+
+    function loadPostcardImage(url) {
+        return new Promise(resolve => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = url;
+        });
+    }
+
+    function postcardCanvas(data, image) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1080;
+        canvas.height = 1440;
+        const ctx = canvas.getContext('2d');
+        const ink = '#35423d';
+        const muted = '#8b7865';
+        const accent = '#9b704e';
+        const cream = '#f3eee2';
+        const white = '#fffdf7';
+
+        const bg = ctx.createLinearGradient(0, 0, 0, 1440);
+        bg.addColorStop(0, '#e8e0d2');
+        bg.addColorStop(1, '#d9cfbd');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, 1080, 1440);
+        ctx.strokeStyle = 'rgba(118,92,61,0.32)';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(28, 28, 1024, 1384);
+
+        ctx.fillStyle = accent;
+        ctx.font = '600 34px ui-monospace, Consolas, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('CITY POSTCARD · 旅行明信片', 540, 120);
+
+        const photoTop = 190;
+        const photoHeight = 560;
+        if (image) {
+            const boxW = 950;
+            const sx = Math.min(1, boxW / image.width);
+            const sy = Math.min(1, photoHeight / image.height);
+            const scale = Math.max(sx, sy);
+            const dw = image.width * scale;
+            const dh = image.height * scale;
+            const dx = (1080 - dw) / 2;
+            const dy = photoTop + (photoHeight - dh) / 2;
+            ctx.fillStyle = cream;
+            ctx.fillRect(65, photoTop, 950, photoHeight);
+            ctx.drawImage(image, dx, dy, dw, dh);
+        } else {
+            ctx.fillStyle = cream;
+            ctx.fillRect(65, photoTop, 950, photoHeight);
+            const g = ctx.createLinearGradient(65, photoTop, 1015, photoTop + photoHeight);
+            g.addColorStop(0, '#cdbfa6');
+            g.addColorStop(1, '#b09a7d');
+            ctx.fillStyle = g;
+            ctx.fillRect(65, photoTop, 950, photoHeight);
+            ctx.fillStyle = 'rgba(255,253,247,0.9)';
+            ctx.font = '400 220px "Noto Serif SC", "Songti SC", serif';
+            ctx.fillText((data.city || '?').charAt(0), 540, photoTop + photoHeight * 0.62);
+        }
+
+        ctx.fillStyle = ink;
+        ctx.font = '400 92px "PingFang SC", "Microsoft YaHei", "Noto Serif SC", serif';
+        const cityName = data.city || '';
+        ctx.font = cityName.length > 6
+            ? '400 68px "PingFang SC", "Microsoft YaHei", serif'
+            : '400 92px "PingFang SC", "Microsoft YaHei", serif';
+        ctx.fillText(cityName, 540, 960);
+
+        ctx.fillStyle = muted;
+        ctx.font = '28px "PingFang SC", "Microsoft YaHei", serif';
+        ctx.fillText(
+            data.count + ' 个足迹 · ' + data.photos + ' 张照片 · ' + data.tickets + ' 张票根',
+            540, 1060
+        );
+        ctx.fillStyle = accent;
+        ctx.font = '26px ui-monospace, Consolas, monospace';
+        ctx.fillText(data.latest ? '最近 ' + formatCityDate(data.latest) : '', 540, 1140);
+
+        if (data.tickets) {
+            ctx.strokeStyle = accent;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.roundRect(430, 1210, 220, 110, 14);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(500, 1210);
+            ctx.lineTo(500, 1320);
+            ctx.stroke();
+            ctx.fillStyle = ink;
+            ctx.font = '26px "PingFang SC", "Microsoft YaHei", serif';
+            ctx.fillText('票根 × ' + data.tickets, 540, 1280);
+        }
+
+        ctx.fillStyle = muted;
+        ctx.font = '24px "PingFang SC", "Microsoft YaHei", serif';
+        ctx.fillText('旅行记忆 · Travel Memory', 540, 1380);
+        return canvas;
+    }
+
+    function postcardToBlob(canvas) {
+        return new Promise(resolve => {
+            try {
+                canvas.toBlob(blob => resolve(blob), 'image/png');
+            } catch (e) {
+                resolve(null);
+            }
+        });
+    }
+
+    async function renderPostcardPreview() {
+        if (postcardBlobUrl) URL.revokeObjectURL(postcardBlobUrl);
+        const data = cityPostcardData(postcardCi);
+        postcardTitle.textContent = data.city + ' · 旅行明信片';
+        const city = cityList[postcardCi];
+        data.province = city ? cityViewItems(postcardCi).map(fp => fp.province).find(Boolean) || '' : '';
+        const image = data.cover ? await loadPostcardImage(data.cover) : null;
+        let canvas = postcardCanvas(data, image);
+        let blob = await postcardToBlob(canvas);
+        if (!blob) {
+            canvas = postcardCanvas(data, null);
+            blob = await postcardToBlob(canvas);
+        }
+        if (!blob) return;
+        postcardBlobUrl = URL.createObjectURL(blob);
+        postcardPreviewImg.src = postcardBlobUrl;
+        const ts = (data.latest || '').replace(/-/g, '');
+        postcardFileName = data.city + '-' + (ts || 'postcard') + '-旅行明信片.png';
+        postcardShare.hidden = !(
+            typeof navigator.canShare === 'function' &&
+            navigator.canShare({ files: [new File([blob], postcardFileName, { type: 'image/png' })] })
+        );
+    }
+
+    async function openPostcard(ci, triggerBtn) {
+        if (!featureEnabled('enablePostcard') || !cityList[ci] || !postcardPreview) return;
+        postcardCi = ci;
+        postcardPreviewImg.removeAttribute('src');
+        postcardPreview.classList.add('show');
+        postcardPreview.setAttribute('aria-hidden', 'false');
+        if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window)) {
+            postcardBack.focus();
+        }
+        await renderPostcardPreview();
+    }
+
+    function closePostcard(returnFocus = true) {
+        if (!postcardPreview || !postcardPreview.classList.contains('show')) return;
+        postcardPreview.classList.remove('show');
+        postcardPreview.setAttribute('aria-hidden', 'true');
+        postcardPreviewImg.removeAttribute('src');
+        if (postcardBlobUrl) {
+            URL.revokeObjectURL(postcardBlobUrl);
+            postcardBlobUrl = '';
+        }
+        postcardCi = -1;
+        if (returnFocus) focusCityWallTop();
+    }
+
+    function downloadPostcard() {
+        if (!postcardBlobUrl) return;
+        const a = document.createElement('a');
+        a.href = postcardBlobUrl;
+        a.download = postcardFileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    }
+
+    async function sharePostcard() {
+        if (!postcardBlobUrl) return;
+        const blob = await fetch(postcardBlobUrl).then(r => r.blob());
+        const file = new File([blob], postcardFileName, { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({ files: [file], title: postcardFileName });
+            } catch (e) { /* 用户取消分享无需处理 */ }
+        }
+    }
+
+    if (cityWallTimeCapsuleBtn) cityWallTimeCapsuleBtn.addEventListener('click', openTimeCapsule);
+    if (cityWallInsightBtn) cityWallInsightBtn.addEventListener('click', openInsight);
+    timeCapsuleBack.addEventListener('click', () => closeTimeCapsule());
+    timeCapsulePrev.addEventListener('click', () => {
+        if (timeCapsuleItemsCache.length < 2) return;
+        timeCapsuleIndex = (timeCapsuleIndex - 1 + timeCapsuleItemsCache.length) % timeCapsuleItemsCache.length;
+        renderTimeCapsule();
+    });
+    timeCapsuleNext.addEventListener('click', () => {
+        if (timeCapsuleItemsCache.length < 2) return;
+        timeCapsuleIndex = (timeCapsuleIndex + 1) % timeCapsuleItemsCache.length;
+        renderTimeCapsule();
+    });
+    insightBack.addEventListener('click', () => closeInsight());
+    insightAgain.addEventListener('click', () => {
+        insightVariant++;
+        renderInsight();
+    });
+    postcardBack.addEventListener('click', () => closePostcard());
+    postcardDownload.addEventListener('click', downloadPostcard);
+    postcardShare.addEventListener('click', sharePostcard);
+    [timeCapsule, insightView, postcardPreview].forEach(overlay => {
+        overlay.addEventListener('click', event => {
+            if (event.target === overlay) {
+                if (overlay === timeCapsule) closeTimeCapsule();
+                else if (overlay === insightView) closeInsight();
+                else closePostcard();
+            }
+        });
+    });
 
     cityWallBtn.addEventListener('click', openCityWall);
     cityWallBack.addEventListener('click', () => closeCityWall());

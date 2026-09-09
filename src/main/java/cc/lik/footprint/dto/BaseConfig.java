@@ -28,6 +28,10 @@ public class BaseConfig {
     private String ticketGalleryStyle;
     private String ticketGalleryInfoStyle;
     private Integer mobileCityWallColumns;
+    private Boolean enableTimeCapsule;
+    private Boolean enableInsight;
+    private Boolean cityCardHoverCarousel;
+    private Boolean enablePostcard;
     private String markerImageFrom;
     private String markerImageTo;
     private String markerImageSuffix;

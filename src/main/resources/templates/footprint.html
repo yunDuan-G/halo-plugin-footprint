@@ -20,7 +20,7 @@
     <script src="/plugins/footprint/assets/static/cesium/Cesium.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/pako.min.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/tdtplug.umd.min.js"></script>
-    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v76" rel="stylesheet">
+    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v83" rel="stylesheet">
 
 
 <!--    <link rel="stylesheet" href="../static/css/footprint.css" type="text/css">-->
@@ -49,6 +49,10 @@
             enableTerrainDefault: /*[[${settings.enableTerrainDefault}]]*/ false,
             ticketGalleryStyle: /*[[${settings.ticketGalleryStyle}]]*/ 'fan',
             mobileCityWallColumns: /*[[${settings.mobileCityWallColumns}]]*/ 2,
+            enableTimeCapsule: /*[[${settings.enableTimeCapsule}]]*/ true,
+            enableInsight: /*[[${settings.enableInsight}]]*/ true,
+            cityCardHoverCarousel: /*[[${settings.cityCardHoverCarousel}]]*/ true,
+            enablePostcard: /*[[${settings.enablePostcard}]]*/ true,
             markerImageFrom: /*[[${settings.markerImageFrom}]]*/ '',
             markerImageTo: /*[[${settings.markerImageTo}]]*/ '',
             markerImageSuffix: /*[[${settings.markerImageSuffix}]]*/ '',
@@ -192,13 +196,74 @@
                 <h2 id="cityWallTitle">城市卡片墙</h2>
                 <p id="cityWallStats"></p>
             </div>
-            <p class="city-wall-hint">点击卡片进入城市相册</p>
+            <div class="city-wall-actions" id="cityWallFeatureActions">
+                <button id="cityWallTimeCapsuleBtn" type="button" hidden>去年今天</button>
+                <button id="cityWallInsightBtn" type="button" hidden>足迹洞察</button>
+            </div>
         </div>
         <div class="city-wall-body">
             <div class="city-wall-grid" id="cityWallGrid" aria-live="polite"></div>
             <div id="cityWallEmpty" class="city-wall-empty-view" hidden>
                 <p>还没有收录城市足迹</p>
                 <span>回到地球，继续记录下一段旅程。</span>
+            </div>
+        </div>
+    </div>
+    <!-- 去年今天：历史同月同日的足迹回看 -->
+    <div id="timeCapsule" class="feature-overlay" role="dialog" aria-modal="true" aria-label="去年今天" aria-hidden="true">
+        <div class="feature-top">
+            <button id="timeCapsuleBack" class="feature-back" type="button" aria-label="返回城市墙">
+                <span>‹ 返回城市墙</span>
+            </button>
+            <div class="feature-head">
+                <p class="feature-eyebrow">THIS DAY IN MY TRIPS</p>
+                <h2>去年今天，你在哪里</h2>
+                <p id="timeCapsuleStats"></p>
+            </div>
+            <div class="feature-nav">
+                <button id="timeCapsulePrev" type="button" aria-label="上一条">‹</button>
+                <button id="timeCapsuleNext" type="button" aria-label="下一条">›</button>
+            </div>
+        </div>
+        <div class="feature-body" id="timeCapsuleBody" aria-live="polite"></div>
+    </div>
+    <!-- 足迹洞察：自动生成的旅行总结 -->
+    <div id="insightView" class="feature-overlay" role="dialog" aria-modal="true" aria-label="足迹洞察" aria-hidden="true">
+        <div class="feature-top">
+            <button id="insightBack" class="feature-back" type="button" aria-label="返回城市墙">
+                <span>‹ 返回城市墙</span>
+            </button>
+            <div class="feature-head">
+                <p class="feature-eyebrow">FOOTPRINT INSIGHT</p>
+                <h2>足迹洞察</h2>
+            </div>
+            <div class="feature-nav"></div>
+        </div>
+        <div class="feature-body insight-body">
+            <p class="insight-kicker">TRAVEL SUMMARY</p>
+            <h3 id="insightSentence"></h3>
+            <dl id="insightMetrics"></dl>
+            <button id="insightAgain" type="button">换一句</button>
+            <p class="insight-note">按相邻足迹直线距离估算，供回顾使用</p>
+        </div>
+    </div>
+    <!-- 旅行明信片预览 -->
+    <div id="postcardPreview" class="feature-overlay" role="dialog" aria-modal="true" aria-label="旅行明信片" aria-hidden="true">
+        <div class="feature-top">
+            <button id="postcardBack" class="feature-back" type="button" aria-label="返回城市墙">
+                <span>‹ 返回城市墙</span>
+            </button>
+            <div class="feature-head">
+                <p class="feature-eyebrow">CITY POSTCARD</p>
+                <h2 id="postcardTitle">旅行明信片</h2>
+            </div>
+            <div class="feature-nav"></div>
+        </div>
+        <div class="feature-body postcard-body">
+            <img id="postcardPreviewImg" alt="旅行明信片预览">
+            <div class="postcard-actions">
+                <button id="postcardDownload" type="button">下载图片</button>
+                <button id="postcardShare" type="button" hidden>分享</button>
             </div>
         </div>
     </div>
@@ -495,6 +560,6 @@
 </div>
 
 <script src="/plugins/footprint/assets/static/data/district-pinyin.js?v=footprint-reveal-v61"></script>
-<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v76"></script>
+<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v83"></script>
 </body>
 </html>

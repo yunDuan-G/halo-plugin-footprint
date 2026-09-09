@@ -195,6 +195,26 @@ spec:
           step: 1
           validation: required|number|between:1,3
           help: "手机端打开「城市」卡片墙时，每排显示的城市卡片数量（1-3）；桌面端不受影响"
+        - $formkit: checkbox
+          label: 去年今天
+          name: enableTimeCapsule
+          value: true
+          help: "在城市卡片墙顶栏显示「去年今天」入口：历史上同月同日有足迹时，可回看当天的照片与票根"
+        - $formkit: checkbox
+          label: 足迹洞察
+          name: enableInsight
+          value: true
+          help: "在城市卡片墙顶栏显示「足迹洞察」入口：自动生成旅行总结文案与统计"
+        - $formkit: checkbox
+          label: PC 城市卡片悬停轮播
+          name: cityCardHoverCarousel
+          value: true
+          help: "PC 端鼠标悬停或键盘聚焦城市卡片时，封面在最多 3 张照片间轮播；移动端不生效"
+        - $formkit: checkbox
+          label: 旅行明信片
+          name: enablePostcard
+          value: true
+          help: "为每张城市卡片提供「明信片」按钮，可预览、下载或分享生成的竖版旅行明信片"
     - group: imageProcess
       label: 图片处理配置
       help: "如果你的图床需要给同一张原图生成不同质量的缩略图，可在此按用途配置 URL 规则；三项都留空时，界面将直接使用足迹中保存的图片 URL（通用做法）。"
