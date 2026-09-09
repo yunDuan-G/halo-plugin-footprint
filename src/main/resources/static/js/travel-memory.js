@@ -1503,11 +1503,30 @@
         markerRestoreRaf = requestAnimationFrame(tick);
     }
 
+    // 浮层显隐统一先处理焦点：隐藏时先 blur，再置 inert，最后更新 aria-hidden，
+    // 避免“焦点停留在 aria-hidden=true 的祖先内”造成的无障碍警告。
+    function setOverlayHidden(el, hidden) {
+        if (!el) return;
+        if (hidden && el.contains && el.contains(document.activeElement)) {
+            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                document.activeElement.blur();
+            }
+        }
+        if ('inert' in el) {
+            el.inert = !!hidden;
+        }
+        el.setAttribute('aria-hidden', hidden ? 'true' : 'false');
+    }
+
     function hideMarkerCard() {
         document.body.classList.remove('card-open');   // 恢复右下角浮动按钮
         if (!markerCard.classList.contains('visible')) return;
         markerCard.classList.remove('visible');
-        markerCard.setAttribute('aria-hidden', 'true');
+        const keyboardRestore = lastKeyboardMarkerBtn &&
+            lastKeyboardMarkerBtn.isConnected &&
+            markerCard.contains(document.activeElement);
+        lastKeyboardMarkerBtn = null;
+        setOverlayHidden(markerCard, true);
         const selIndex = activeFootprintIndex;   // 先记录再置空，供复原动画使用
         activeFootprintIndex = -1;
         if (reduceMotion) {
@@ -1520,9 +1539,8 @@
             restoreMarkers(450, selIndex);   // 与卡片淡出时长一致
         }
         // 键盘关闭后，把焦点还给触发打开的标记按钮
-        if (lastKeyboardMarkerBtn && markerCard.contains(document.activeElement)) {
-            lastKeyboardMarkerBtn.focus();
-            lastKeyboardMarkerBtn = null;
+        if (keyboardRestore) {
+            keyboardRestore.focus();
         }
     }
 
@@ -1617,7 +1635,7 @@
         setMarkerSelected(index);
         markerCard.classList.add('visible');
         document.body.classList.add('card-open');   // 隐藏右下角浮动按钮，避免遮挡
-        markerCard.setAttribute('aria-hidden', 'false');
+        setOverlayHidden(markerCard, false);
     }
 
     document.getElementById('markerCardClose').addEventListener('click', hideMarkerCard);
@@ -1777,7 +1795,7 @@
         cityCardMedia.style.backgroundImage = photos.length ? 'url("' + photos[0].url + '")' : 'none';
         cityCardMedia.textContent = photos.length ? '' : (city.city ? city.city.charAt(0) : '?');
         cityCard.classList.add('visible');
-        cityCard.setAttribute('aria-hidden', 'false');
+        setOverlayHidden(cityCard, false);
         flyToCity(ci);
     }
 
@@ -1785,7 +1803,7 @@
         if (!cityCard.classList.contains('visible')) return;
         cityCard.classList.remove('visible');
         cityCard.classList.remove('is-revealed');
-        cityCard.setAttribute('aria-hidden', 'true');
+        setOverlayHidden(cityCard, true);
         const trigger = cityCardTriggerBtn;
         cityCardTriggerBtn = null;
         activeCityIndex = -1;
@@ -2075,14 +2093,14 @@
         lightboxIndex = index;
         lightboxTriggerBtn = triggerBtn || null;
         lightbox.classList.add('show');
-        lightbox.setAttribute('aria-hidden', 'false');
+        setOverlayHidden(lightbox, false);
         document.getElementById('lightboxClose').focus();
         renderLightboxImage();
     }
 
     function closeLightbox(returnFocus = true) {
         lightbox.classList.remove('show');
-        lightbox.setAttribute('aria-hidden', 'true');
+        setOverlayHidden(lightbox, true);
         lightboxImg.onload = null;
         lightboxImg.onerror = null;
         lightboxImg.removeAttribute('src');
@@ -2614,7 +2632,7 @@
         cityViewTriggerBtn = triggerBtn || null;
         renderCityView();
         cityView.classList.add('show');
-        cityView.setAttribute('aria-hidden', 'false');
+        setOverlayHidden(cityView, false);
         // 城市图片墙打开时直接隐藏顶部导航，不依赖相机事件（渲染循环暂停时相机事件不会触发）
         document.body.classList.add('city-view-open');
         // 触屏不自动回焦，避免“返回地球”出现焦点描边
@@ -2628,7 +2646,7 @@
         cityViewFromWall = false;
         if (lightbox.classList.contains('show')) closeLightbox(false);
         cityView.classList.remove('show');
-        cityView.setAttribute('aria-hidden', 'true');
+        setOverlayHidden(cityView, true);
         document.body.classList.remove('city-view-open');
         // 回到卡片墙时地球仍暂停；只有真正回到地球才恢复渲染
         if (!fromWall || !(cityWall && cityWall.classList.contains('show'))) {
@@ -3163,7 +3181,7 @@
         if (cityCard.classList.contains('visible')) hideCityCard(false);
         renderCityWall();
         cityWall.classList.add('show');
-        cityWall.setAttribute('aria-hidden', 'false');
+        setOverlayHidden(cityWall, false);
         document.body.classList.add('city-wall-open');
         // 与城市图片墙一致：触屏不自动聚焦，避免“返回地球”出现焦点描边
         if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window)) {
@@ -3175,7 +3193,7 @@
         if (!cityWall || !cityWall.classList.contains('show')) return;
         stopCityCardCarousel();
         cityWall.classList.remove('show');
-        cityWall.setAttribute('aria-hidden', 'true');
+        setOverlayHidden(cityWall, true);
         document.body.classList.remove('city-wall-open');
         stopCityWallCoverLoader();
         stopCityWallWarmQueue();
@@ -3327,7 +3345,7 @@
         timeCapsuleIndex = 0;
         renderTimeCapsule();
         timeCapsule.classList.add('show');
-        timeCapsule.setAttribute('aria-hidden', 'false');
+        setOverlayHidden(timeCapsule, false);
         if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window)) {
             timeCapsuleBack.focus();
         }
@@ -3336,7 +3354,7 @@
     function closeTimeCapsule(returnFocus = true) {
         if (!timeCapsule || !timeCapsule.classList.contains('show')) return;
         timeCapsule.classList.remove('show');
-        timeCapsule.setAttribute('aria-hidden', 'true');
+        setOverlayHidden(timeCapsule, true);
         if (returnFocus) focusCityWallTop();
     }
 
@@ -3447,7 +3465,7 @@
         insightVariant = 0;
         renderInsight();
         insightView.classList.add('show');
-        insightView.setAttribute('aria-hidden', 'false');
+        setOverlayHidden(insightView, false);
         if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window)) {
             insightBack.focus();
         }
@@ -3456,7 +3474,7 @@
     function closeInsight(returnFocus = true) {
         if (!insightView || !insightView.classList.contains('show')) return;
         insightView.classList.remove('show');
-        insightView.setAttribute('aria-hidden', 'true');
+        setOverlayHidden(insightView, true);
         if (returnFocus) focusCityWallTop();
     }
 
@@ -3633,7 +3651,7 @@
         postcardCi = ci;
         postcardPreviewImg.removeAttribute('src');
         postcardPreview.classList.add('show');
-        postcardPreview.setAttribute('aria-hidden', 'false');
+        setOverlayHidden(postcardPreview, false);
         if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window)) {
             postcardBack.focus();
         }
@@ -3643,7 +3661,7 @@
     function closePostcard(returnFocus = true) {
         if (!postcardPreview || !postcardPreview.classList.contains('show')) return;
         postcardPreview.classList.remove('show');
-        postcardPreview.setAttribute('aria-hidden', 'true');
+        setOverlayHidden(postcardPreview, true);
         postcardPreviewImg.removeAttribute('src');
         if (postcardBlobUrl) {
             URL.revokeObjectURL(postcardBlobUrl);
@@ -3819,13 +3837,14 @@
                     return;
                 }
                 ds.show = false;   // 默认隐藏，放大到国内范围后显示
-                viewer.dataSources.add(ds);
 
                 // 边界轮廓：从多边形层级中提取外环与孔洞环，闭合后画成贴合地面的折线
                 const now = Cesium.JulianDate.now();
                 ds.entities.values.forEach(entity => {
                     const polygon = entity.polygon;
                     if (!polygon || !polygon.hierarchy) return;
+                    // clampToGround + terrain 不支持 polygon outline，轮廓统一用贴合地面的折线绘制
+                    polygon.outline = false;
                     const hierarchy = polygon.hierarchy.getValue(now);
                     if (!hierarchy || !hierarchy.positions || !hierarchy.positions.length) return;
                     const rings = [hierarchy.positions];
@@ -3847,6 +3866,7 @@
                     });
                 });
 
+                viewer.dataSources.add(ds);
                 cityFillDataSources.push(ds);
             }).catch(e => {
                 console.warn('城市边界加载失败 ' + adcode + ':', e);
@@ -3971,7 +3991,7 @@
                 ? ticketItems.length + ' 张票根 · ' + (cities.size || '多个') + ' 个目的地' + (latest ? ' · 最近 ' + latest : '')
                 : '收集每一次出发的凭证';
             ticketGallery.classList.add('show');
-            ticketGallery.setAttribute('aria-hidden', 'false');
+            setOverlayHidden(ticketGallery, false);
             document.body.classList.add('ticket-gallery-open');
             // 打开票根页时把地址同步为 ?view=tickets，便于分享/直达
             if (!isTicketsView()) history.pushState({ ticketGallery: true }, '', window.location.pathname + '?view=tickets');
@@ -4004,7 +4024,7 @@
             }
             const pendingFocus = ticketTrigger || document.getElementById('ticketGalleryBtn');
             ticketGallery.classList.remove('show');
-            ticketGallery.setAttribute('aria-hidden', 'true');
+            setOverlayHidden(ticketGallery, true);
             document.body.classList.remove('ticket-gallery-open');
             document.body.classList.remove('ticket-strip-active');
             ticketStripHint.hidden = true;
@@ -4518,7 +4538,6 @@
     chinaDataSource.then(dataSource => {
         chinaBoundarySource = dataSource;
         dataSource.show = false;   // 默认隐藏，放大到国内范围后由 updateIntroVisibility 显示
-        viewer.dataSources.add(dataSource);
 
         // 由于 Cesium 的 strokeWidth 在复杂边界上可能渲染不佳，
         // 为每个多边形单独绘制一条折线来精确控制边界样式
@@ -4526,6 +4545,7 @@
         for (let i = 0; i < entities.length; i++) {
             const entity = entities[i];
             if (entity.polygon) {
+                entity.polygon.outline = false;   // 边界已用独立折线绘制，禁用 polygon outline
                 entity.polyline = {
                     positions: entity.polygon.hierarchy.getValue(Cesium.JulianDate.now()).positions,
                     width: 0.5,
@@ -4533,6 +4553,7 @@
                 };
             }
         }
+        viewer.dataSources.add(dataSource);
     }).catch(error => {
         console.error('加载中国轮廓数据失败:', error);
     });
