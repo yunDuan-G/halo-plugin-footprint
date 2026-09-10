@@ -215,6 +215,46 @@ spec:
           name: enablePostcard
           value: true
           help: "为每张城市卡片提供「明信片」按钮，可预览、下载或分享生成的竖版旅行明信片"
+        - $formkit: checkbox
+          label: 票根页 · 重走一遍
+          name: enableTicketJourneyReplay
+          value: false
+          help: "在票根页提供「重走」放映模式：按日期从第一张票开始，镜头在城市间飞行，逐张回放票根"
+        - $formkit: checkbox
+          label: 票根页 · 星图模式
+          name: enableTicketConstellation
+          value: false
+          help: "在票根页提供「星图」视图，票根按城市坐标连成星座（渲染方式由下方选项决定）"
+        - $formkit: select
+          label: 票根页 · 星图渲染方式
+          name: ticketConstellationMode
+          value: globe
+          options:
+            - label: 真实地球坐标星光
+              value: globe
+            - label: 抽象 2D 星空
+              value: sky
+          help: "星图开启后使用哪种渲染：globe 在地球上按真实坐标布点；sky 使用全屏 2D 星空"
+        - $formkit: checkbox
+          label: 票根页 · 时间有色
+          name: enableTicketSeasonLight
+          value: false
+          help: "票根氛围色跟随票根日期月份变化（春绿/夏金/秋赭/冬蓝），仅作用于页面环境与描边，不改变票根图颜色"
+        - $formkit: checkbox
+          label: 票根页 · 命运抽票
+          name: enableTicketOracle
+          value: false
+          help: "在票根页提供「抽取下一站」：洗牌翻开一张已有票根，并从未收录票根的城市中给出灵感"
+        - $formkit: checkbox
+          label: 票根页 · 未寄出的明信片
+          name: enableTicketLetter
+          value: false
+          help: "为每张票根提供「写信」动作，自动生成一张可下载/分享的票根明信片"
+        - $formkit: checkbox
+          label: 票根页 · 护照集章
+          name: enableTicketPassport
+          value: false
+          help: "正式浏览票根时盖章记录（本机存储），并提供护照进度页；集齐后显示金色护照封面"
     - group: imageProcess
       label: 图片处理配置
       help: "如果你的图床需要给同一张原图生成不同质量的缩略图，可在此按用途配置 URL 规则；三项都留空时，界面将直接使用足迹中保存的图片 URL（通用做法）。"

@@ -41,4 +41,11 @@ public class BaseConfig {
     private String cityWallImageFrom;
     private String cityWallImageTo;
     private String cityWallImageSuffix;
+    private Boolean enableTicketJourneyReplay;
+    private Boolean enableTicketConstellation;
+    private String ticketConstellationMode;
+    private Boolean enableTicketSeasonLight;
+    private Boolean enableTicketOracle;
+    private Boolean enableTicketLetter;
+    private Boolean enableTicketPassport;
 }

@@ -419,6 +419,20 @@
     backGlobeBtn.addEventListener('click', flyBackToGlobe);
     if (navBackGlobeBtn) navBackGlobeBtn.addEventListener('click', flyBackToGlobe);
 
+    // 票根页（重走放映、星图选星）会把镜头停在某个城市附近，
+    // 这个高度下自动旋转看起来像原地打转；返回地球/回到票夹时若自动旋转开着，
+    // 就把视角收回整个地球。只在确实被拉近（低于整球高度）时触发，避免多余飞行。
+    function restoreGlobeViewForAutoRotate() {
+        if (!autoRotate) return;
+        if (viewer.scene.mode !== Cesium.SceneMode.SCENE3D) return;
+        if (viewer.camera.positionCartographic.height >= INTRO_SHOW_HEIGHT) return;
+        viewer.camera.cancelFlight();
+        viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(104.0, 35.0, 21000000),
+            duration: reduceMotion ? 0 : 1.8
+        });
+    }
+
     // ================= 2D/3D 自定义切换按钮 =================
     // 3D：Cesium 地球（默认首页）；2D：切换为项目原有高德地图（懒加载，见 footprint.js 的 window.Footprint2D）。
     // 切换过程使用 Cesium 原生 morph 动画：3D→2D 先让地球“展开”成平面，动画结束再显示高德页面；
@@ -3899,6 +3913,59 @@
     const ticketLightboxDescription = document.getElementById('ticketGalleryDescription');
     const ticketLightboxCount = document.getElementById('ticketGalleryPosition');
     const ticketLightboxRetry = document.getElementById('ticketGalleryRetry');
+    const ticketPassportBtn = document.getElementById('ticketPassportBtn');
+    const ticketPassportCount = document.getElementById('ticketPassportCount');
+    const ticketPassport = document.getElementById('ticketPassport');
+    const ticketPassportBack = document.getElementById('ticketPassportBack');
+    const ticketPassportGrid = document.getElementById('ticketPassportGrid');
+    const ticketPassportStats = document.getElementById('ticketPassportStats');
+    const ticketPassportReset = document.getElementById('ticketPassportReset');
+    const ticketStampBadge = document.getElementById('ticketStampBadge');
+    const ticketOracleBtn = document.getElementById('ticketOracleBtn');
+    const ticketOracle = document.getElementById('ticketOracle');
+    const ticketOracleBack = document.getElementById('ticketOracleBack');
+    const ticketOracleCard = document.getElementById('ticketOracleCard');
+    const ticketOracleStats = document.getElementById('ticketOracleStats');
+    const ticketOracleInspiration = document.getElementById('ticketOracleInspiration');
+    const ticketOracleView = document.getElementById('ticketOracleView');
+    const ticketOracleAgain = document.getElementById('ticketOracleAgain');
+    const ticketOracleClose = document.getElementById('ticketOracleClose');
+    const ticketLetterBtn = document.getElementById('ticketLetterBtn');
+    const ticketLetter = document.getElementById('ticketLetter');
+    const ticketLetterBack = document.getElementById('ticketLetterBack');
+    const ticketLetterTitle = document.getElementById('ticketLetterTitle');
+    const ticketLetterImg = document.getElementById('ticketLetterImg');
+    const ticketLetterDownload = document.getElementById('ticketLetterDownload');
+    const ticketLetterShare = document.getElementById('ticketLetterShare');
+    const ticketViewModes = document.getElementById('ticketViewModes');
+    const ticketModeArchiveBtn = document.getElementById('ticketModeArchiveBtn');
+    const ticketModeReplayBtn = document.getElementById('ticketModeReplayBtn');
+    const ticketModeStarBtn = document.getElementById('ticketModeStarBtn');
+    const ticketReplayView = document.getElementById('ticketReplayView');
+    const ticketReplayCard = document.getElementById('ticketReplayCard');
+    const ticketReplaySubtitle = document.getElementById('ticketReplaySubtitle');
+    const ticketReplayRoute = document.getElementById('ticketReplayRoute');
+    const ticketReplayProgressText = document.getElementById('ticketReplayProgressText');
+    const ticketReplayBarInner = document.getElementById('ticketReplayBarInner');
+    const ticketReplayPrev = document.getElementById('ticketReplayPrev');
+    const ticketReplayPlay = document.getElementById('ticketReplayPlay');
+    const ticketReplayNext = document.getElementById('ticketReplayNext');
+    const ticketReplayExit = document.getElementById('ticketReplayExit');
+    const ticketReplayFlight = document.getElementById('ticketReplayFlight');
+    const ticketReplayFlightLabel = document.getElementById('ticketReplayFlightLabel');
+    const ticketReplayFlightCity = document.getElementById('ticketReplayFlightCity');
+    const ticketReplayFlightKm = document.getElementById('ticketReplayFlightKm');
+    const ticketReplayEnd = document.getElementById('ticketReplayEnd');
+    const ticketReplayEndStats = document.getElementById('ticketReplayEndStats');
+    const ticketReplayAgain = document.getElementById('ticketReplayAgain');
+    const ticketReplayCloseEnd = document.getElementById('ticketReplayCloseEnd');
+    const ticketConstellationView = document.getElementById('ticketConstellationView');
+    const ticketConstellationCanvas = document.getElementById('ticketConstellationCanvas');
+    const ticketConstellationTitle = document.getElementById('ticketConstellationTitle');
+    const ticketConstellationSub = document.getElementById('ticketConstellationSub');
+    const ticketConstellationLegend = document.getElementById('ticketConstellationLegend');
+    const ticketConstellationBack = document.getElementById('ticketConstellationBack');
+    const ticketConstellationCard = document.getElementById('ticketConstellationCard');
     let ticketItems = [];
     let ticketIndex = 0;
     let ticketTrigger = null;
@@ -3911,6 +3978,1500 @@
     let stripDrag = null;          // 横向长串拖拽状态
     // 后台“票根切换样式”：fan = 票夹叠放；strip = 横向长串浏览
     const ticketStripMode = !!(footprintCfg && footprintCfg.ticketGalleryStyle === 'strip');
+
+    // 票根页创意功能：护照集章 + 时间有色（阶段 A）
+    const TICKET_PASSPORT_STORAGE_KEY = 'footprint-ticket-passport-v1';
+    const TICKET_STAMP_DWELL_MS = 1500;
+    let ticketPassportRecords = [];
+    let ticketStampTimer = null;
+    let ticketStampIndex = -1;
+    let ticketViewMode = 'archive';   // archive | replay | constellation（后两个阶段启用）
+    let ticketOracleTimer = null;
+    let ticketOracleCandidate = null;
+    let ticketOracleLastIndex = -1;
+    let ticketLetterFp = null;
+    let ticketLetterBlobUrl = '';
+    let ticketLetterFileName = '';
+    let ticketLetterRenderToken = 0;   // 明信片渲染令牌：关闭浮层后丢弃未完成的渲染结果
+    let ticketConstellationItems = [];
+    let ticketConstellationIndex = 0;
+    let ticketConstellationRaf = null;
+    let ticketConstellationPickHandler = null;
+    let ticketConstellationEntities = [];
+    let ticketConstellationLineEntities = [];
+    let ticketConstellationPrevAutoRotate = false;
+    let ticketConstellationPausedRenderLoop = false;
+    let ticketConstellationSkySeed = 20260910;
+    let ticketSkyLayoutCache = null;   // 天空星点坐标缓存：尺寸/数据未变时不重复计算最小间距
+    const TICKET_SKY_PAD = 86;         // 天空星图内边距（px）
+    const TICKET_SKY_MIN_GAP = 46;     // 星点最小间距（px）：邻近城市互相推开，避免挤成一团
+    const TICKET_CONSTELLATION_MAX_LINKS = 30;   // 星座连线最多取最近 N 站，防止线条过密
+    let ticketConstellationResizeHandler = null;
+    let ticketConstellationGlowSpriteUrl = null;
+    let ticketReplayItems = [];
+    let ticketReplayPoints = [];
+    let ticketReplayIndex = 0;
+    let ticketReplayPlaying = false;
+    let ticketReplayFlying = false;
+    let ticketReplayTimer = null;
+    let ticketReplayGeneration = 0;
+    let ticketReplayPrevAutoRotate = false;
+    let ticketReplayEntryIndex = 0;              // 进入放映时的票根，退出后回到这一张
+    let ticketReplayResumeIndex = -1;            // 切到星图/回到票夹后，重走再进来接着播的位置
+    let ticketReplayPausedByOverlay = false;     // 浮层（护照/抽票/明信片）暂停放映的标记
+    const TICKET_REPLAY_DWELL_MS = 4200;
+
+    function ticketFeatureOn(key) {
+        return !!(footprintCfg && footprintCfg[key] === true);
+    }
+
+    function ticketStampId(fp) {
+        if (!fp) return '';
+        const raw = fp.key ||
+            ticketImageUrl(fp.ticketImage) ||
+            [fp.name, fp.ticketNo, fp.ticketDate || fp.createTime].filter(Boolean).join('|');
+        return String(raw || '').trim() || String(fp.name || '未知票根').trim();
+    }
+
+    function loadTicketPassport() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(TICKET_PASSPORT_STORAGE_KEY));
+            ticketPassportRecords = Array.isArray(parsed) ? parsed.filter(r => r && r.id) : [];
+        } catch (e) {
+            ticketPassportRecords = [];
+        }
+    }
+
+    // 打开护照时按当前票根列表清理失效记录：
+    // 既避免 localStorage 只增不减，也避免删掉再重建的票根（identifier 相同）直接带上旧章。
+    // 票根列表为空时不清理，防止数据还没加载完就误删整本护照。
+    function pruneTicketPassport() {
+        if (!ticketItems.length || !ticketPassportRecords.length) return false;
+        const valid = new Set(ticketItems.map(ticketStampId).filter(Boolean));
+        const kept = ticketPassportRecords.filter(record => valid.has(record.id));
+        if (kept.length === ticketPassportRecords.length) return false;
+        ticketPassportRecords = kept;
+        persistTicketPassport();
+        return true;
+    }
+
+    function persistTicketPassport() {
+        try {
+            localStorage.setItem(TICKET_PASSPORT_STORAGE_KEY, JSON.stringify(ticketPassportRecords));
+        } catch (e) {
+            /* 隐私模式/存储满时静默失败，不影响票根浏览 */
+        }
+    }
+
+    function isTicketStamped(fp) {
+        if (!fp) return false;
+        const id = ticketStampId(fp);
+        return ticketPassportRecords.some(record => record.id === id);
+    }
+
+    function clearTicketStampTimer() {
+        if (ticketStampTimer) {
+            clearTimeout(ticketStampTimer);
+            ticketStampTimer = null;
+        }
+        ticketStampIndex = -1;
+    }
+
+    function stampTicket(fp) {
+        if (!fp || !ticketFeatureOn('enableTicketPassport') || isTicketStamped(fp)) return;
+        ticketPassportRecords.push({
+            id: ticketStampId(fp),
+            stampedAt: new Date().toISOString()
+        });
+        persistTicketPassport();
+        updateTicketPassportButton();
+        updateTicketStampBadge(fp, true);
+    }
+
+    function updateTicketPassportButton() {
+        if (!ticketPassportBtn || !ticketPassportCount) return;
+        const enabled = ticketFeatureOn('enableTicketPassport');
+        ticketPassportBtn.hidden = !enabled || ticketItems.length === 0;
+        if (!enabled) return;
+        const stamped = ticketItems.filter(fp => isTicketStamped(fp)).length;
+        ticketPassportCount.textContent = stamped + '/' + ticketItems.length;
+    }
+
+    function updateTicketLetterAction(fp) {
+        if (!ticketLetterBtn) return;
+        ticketLetterBtn.hidden = !ticketFeatureOn('enableTicketLetter') || !fp;
+    }
+
+    function updateTicketModeButtons() {
+        if (!ticketViewModes) return;
+        const starEnabled = ticketFeatureOn('enableTicketConstellation') && ticketItems.length > 0;
+        const replayEnabled = ticketFeatureOn('enableTicketJourneyReplay') &&
+            ticketItems.filter(ticketHasCoordinate).length >= 2;
+        const showModes = starEnabled || replayEnabled;
+        ticketViewModes.hidden = !showModes;
+        if (!showModes) return;
+        if (ticketModeStarBtn) ticketModeStarBtn.hidden = !starEnabled;
+        if (ticketModeReplayBtn) ticketModeReplayBtn.hidden = !replayEnabled;
+        // 只开启重走或星图之一时，顶部收成单个按钮而不是三段切换器（方案 §10）
+        if (ticketModeArchiveBtn) ticketModeArchiveBtn.hidden = !(starEnabled && replayEnabled);
+        const active = ticketViewMode === 'constellation'
+            ? 'constellation'
+            : (ticketViewMode === 'replay' ? 'replay' : 'archive');
+        if (ticketModeArchiveBtn) ticketModeArchiveBtn.classList.toggle('is-active', active === 'archive');
+        if (ticketModeReplayBtn) ticketModeReplayBtn.classList.toggle('is-active', active === 'replay');
+        if (ticketModeStarBtn) ticketModeStarBtn.classList.toggle('is-active', active === 'constellation');
+    }
+
+    function updateTicketFeatureButtons() {
+        updateTicketPassportButton();
+        updateTicketModeButtons();
+        if (ticketOracleBtn) {
+            ticketOracleBtn.hidden = !ticketFeatureOn('enableTicketOracle') || ticketItems.length === 0;
+        }
+        updateTicketLetterAction(ticketItems[ticketIndex]);
+    }
+
+    function updateTicketStampBadge(fp, animate) {
+        if (!ticketStampBadge) return;
+        const stamped = ticketFeatureOn('enableTicketPassport') && isTicketStamped(fp);
+        ticketStampBadge.hidden = !stamped;
+        if (!stamped) return;
+        const meta = ticketMeta(fp);
+        ticketStampBadge.textContent = '已检票 · ' + (fp.city || meta.route || '') +
+            (meta.date ? ' · ' + meta.date : '');
+        if (animate) {
+            ticketStampBadge.classList.remove('is-stale');
+            void ticketStampBadge.offsetWidth;
+        } else {
+            ticketStampBadge.classList.add('is-stale');
+        }
+    }
+
+    function startTicketStampDwell(fp) {
+        clearTicketStampTimer();
+        if (!ticketFeatureOn('enableTicketPassport') || ticketViewMode !== 'archive') return;
+        if (isTicketStamped(fp)) return;
+        ticketStampIndex = ticketIndex;
+        ticketStampTimer = setTimeout(() => {
+            ticketStampTimer = null;
+            if (ticketGallery.classList.contains('show') &&
+                ticketViewMode === 'archive' &&
+                ticketIndex === ticketStampIndex &&
+                ticketItems[ticketIndex] === fp &&
+                !isTicketStamped(fp)) {
+                stampTicket(fp);
+            }
+        }, TICKET_STAMP_DWELL_MS);
+    }
+
+    function renderTicketPassport() {
+        if (!ticketPassportGrid || !ticketPassportStats) return;
+        if (pruneTicketPassport()) updateTicketPassportButton();
+        const ordered = ticketItems.slice().sort(compareTicketByTime);
+        ticketPassportGrid.innerHTML = '';
+        ordered.forEach(fp => {
+            const stamped = isTicketStamped(fp);
+            const cell = document.createElement('div');
+            cell.className = 'ticket-passport-cell' + (stamped ? '' : ' is-missing');
+            const img = document.createElement('img');
+            img.loading = 'lazy';
+            img.src = ticketImageUrl(fp.ticketImage);
+            img.alt = '';
+            const status = document.createElement('span');
+            status.className = 'ticket-passport-cell-status';
+            status.textContent = stamped ? '已检票' : '未检票';
+            const title = document.createElement('span');
+            title.className = 'ticket-passport-cell-title';
+            title.textContent = [fp.name || fp.ticketTitle, fp.city].filter(Boolean).join(' · ');
+            cell.append(img, status, title);
+            ticketPassportGrid.appendChild(cell);
+        });
+        const stamped = ordered.filter(fp => isTicketStamped(fp)).length;
+        ticketPassportStats.textContent = stamped + ' / ' + ordered.length + ' 已集章' +
+            (stamped === ordered.length && ordered.length ? ' · 全站抵达' : '');
+        if (ticketPassportReset) {
+            ticketPassportReset.hidden = ordered.length === 0;
+        }
+    }
+
+    function openTicketPassport() {
+        if (!ticketFeatureOn('enableTicketPassport') || !ticketItems.length || !ticketPassport) return;
+        clearTicketStampTimer();
+        pauseTicketReplayForOverlay();
+        renderTicketPassport();
+        ticketPassport.classList.add('show');
+        setOverlayHidden(ticketPassport, false);
+        if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window) &&
+            ticketPassportBack) {
+            ticketPassportBack.focus();
+        }
+    }
+
+    function closeTicketPassport(returnFocus = true) {
+        if (!ticketPassport || !ticketPassport.classList.contains('show')) return;
+        ticketPassport.classList.remove('show');
+        setOverlayHidden(ticketPassport, true);
+        if (returnFocus && ticketPassportBtn && !ticketPassportBtn.hidden) {
+            ticketPassportBtn.focus();
+        }
+        startTicketStampDwell(ticketItems[ticketIndex]);
+        resumeTicketReplayFromOverlay();
+    }
+
+    // 时间有色：按票根日期月份决定页面氛围（阶段 A）
+    function ticketSeasonKey(fp) {
+        const raw = String((fp && (fp.ticketDate || fp.createTime)) || '');
+        const match = /^(\d{4})[-/.](\d{1,2})/.exec(raw);
+        if (!match) return '';
+        const month = Number(match[2]);
+        if (month >= 3 && month <= 5) return 'spring';
+        if (month >= 6 && month <= 8) return 'summer';
+        if (month >= 9 && month <= 11) return 'autumn';
+        return 'winter';
+    }
+
+    function applyTicketSeason(fp) {
+        if (!ticketGallery) return;
+        // 时间有色只改文字强调色（CSS 变量 --season-accent），不碰背景、票根图与地球
+        const season = fp ? ticketSeasonKey(fp) : '';
+        if (season && ticketFeatureOn('enableTicketSeasonLight')) {
+            ticketGallery.dataset.season = season;
+        } else {
+            ticketGallery.removeAttribute('data-season');
+        }
+    }
+
+    function resetTicketSeason() {
+        if (ticketGallery) {
+            ticketGallery.removeAttribute('data-season');
+        }
+    }
+
+    // 星点标签：优先城市拼音 + 票根英文名（方案 §5），没有则退回城市/名称
+    function ticketStarLabel(fp) {
+        if (!fp) return '';
+        const pinyin = ticketPinyin(fp.cityAdcode);
+        const pinyinText = pinyin ? pinyin.charAt(0).toUpperCase() + pinyin.slice(1) : '';
+        const english = fp.ticketEnglish || '';
+        return [pinyinText, english].filter(Boolean).join(' · ') ||
+            fp.city || fp.name || fp.ticketTitle || '';
+    }
+
+    // ================= 命运抽票（阶段 B） =================
+    function ticketOracleBackFace() {
+        if (!ticketOracleCard) return;
+        ticketOracleCard.classList.remove('is-back');
+        void ticketOracleCard.offsetWidth;
+        ticketOracleCard.classList.add('is-back');
+        ticketOracleCard.innerHTML = '';
+        if (ticketOracleStats) {
+            ticketOracleStats.textContent = '正在翻找一张票…';
+        }
+        if (ticketOracleInspiration) ticketOracleInspiration.textContent = '';
+        if (ticketOracleView) ticketOracleView.disabled = true;
+    }
+
+    function ticketOracleShowCandidate(fp) {
+        if (!ticketOracleCard || !fp) return;
+        ticketOracleCard.classList.remove('is-back', 'is-shuffling');
+        ticketOracleCard.innerHTML = '';
+        const img = document.createElement('img');
+        img.alt = fp.ticketTitle || fp.name || '票根';
+        img.referrerPolicy = 'no-referrer';
+        img.src = ticketImageUrl(fp.ticketImage);
+        img.onerror = () => {
+            ticketOracleCard.innerHTML = '<span style="padding:20px;color:#6e5945;">这张票根暂时打不开<br>但它仍是一段旅程</span>';
+        };
+        ticketOracleCard.appendChild(img);
+        const meta = ticketMeta(fp);
+        if (ticketOracleStats) {
+            ticketOracleStats.textContent = (fp.city || meta.route || '未知城市') +
+                (meta.date ? ' · ' + meta.date : '') +
+                (fp.name ? ' · ' + fp.name : '');
+        }
+        if (ticketOracleInspiration) {
+            ticketOracleInspiration.textContent = nextTicketStopSuggestion();
+        }
+        if (ticketOracleView) ticketOracleView.disabled = false;
+    }
+
+    function nextTicketStopSuggestion() {
+        const ticketCities = new Set(ticketItems.map(fp => fp.city).filter(Boolean));
+        const candidates = [...new Set(
+            FOOTPRINTS
+                .filter(fp => !ticketImageUrl(fp.ticketImage) && fp.city)
+                .map(fp => fp.city)
+        )].filter(city => !ticketCities.has(city));
+        if (candidates.length) {
+            const pick = candidates[Math.floor(Math.random() * candidates.length)];
+            return '下一站，或许可以去「' + pick + '」看看。';
+        }
+        const fallbacks = [
+            '把去过的城市再走一遍也不错，下一张票根正在等你。',
+            '旅行的下一站不在地图上，而在你的心里。',
+            '所有出发都是回家，只是路线不同。'
+        ];
+        return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    }
+
+    function ticketOracleShuffle() {
+        clearTimeout(ticketOracleTimer);
+        ticketOracleCandidate = null;
+        ticketOracleBackFace();
+        if (ticketOracleCard) ticketOracleCard.classList.add('is-shuffling');
+        if (ticketOracleAgain) ticketOracleAgain.disabled = true;
+        let steps = 0;
+        const tick = () => {
+            steps++;
+            if (steps >= 7) {
+                if (ticketOracleCard) ticketOracleCard.classList.remove('is-shuffling');
+                const pickable = ticketItems.length > 1;
+                let idx = ticketOracleLastIndex;
+                while (pickable && idx === ticketOracleLastIndex) {
+                    idx = Math.floor(Math.random() * ticketItems.length);
+                }
+                // 只有一张票根时不会进入上面的循环，idx 会停在 -1（对应 undefined），
+                // 结果卡片一直停在背面、按钮永远不可用；这里兜底到第一张。
+                if (idx < 0 || !ticketItems[idx]) idx = 0;
+                ticketOracleLastIndex = idx;
+                ticketOracleCandidate = ticketItems[idx];
+                ticketOracleShowCandidate(ticketOracleCandidate);
+                if (ticketOracleAgain) ticketOracleAgain.disabled = false;
+                return;
+            }
+            ticketOracleTimer = setTimeout(tick, 130);
+        };
+        ticketOracleTimer = setTimeout(tick, 130);
+    }
+
+    function openTicketOracle() {
+        if (!ticketFeatureOn('enableTicketOracle') || !ticketItems.length || !ticketOracle) return;
+        clearTicketStampTimer();
+        pauseTicketReplayForOverlay();
+        ticketOracle.classList.add('show');
+        setOverlayHidden(ticketOracle, false);
+        ticketOracleShuffle();
+        if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window) &&
+            ticketOracleBack) {
+            ticketOracleBack.focus();
+        }
+    }
+
+    function closeTicketOracle(returnFocus = true) {
+        if (!ticketOracle || !ticketOracle.classList.contains('show')) return;
+        clearTimeout(ticketOracleTimer);
+        ticketOracleTimer = null;
+        ticketOracleCandidate = null;
+        ticketOracle.classList.remove('show');
+        setOverlayHidden(ticketOracle, true);
+        if (returnFocus && ticketOracleBtn && !ticketOracleBtn.hidden) {
+            ticketOracleBtn.focus();
+        }
+        startTicketStampDwell(ticketItems[ticketIndex]);
+        resumeTicketReplayFromOverlay();
+    }
+
+    function openOracleTicketInArchive() {
+        if (!ticketOracleCandidate) return;
+        const idx = ticketItems.indexOf(ticketOracleCandidate);
+        closeTicketOracle(false);
+        if (idx < 0) return;
+        // 从重走/星图里点「查看这张票」：先回到票夹，再定位到这张票
+        if (ticketViewMode !== 'archive') setTicketViewMode('archive');
+        ticketIndex = idx;
+        buildTicketWallet();
+        renderTicketWallet();
+        if (ticketStripMode) {
+            requestAnimationFrame(() => {
+                centerStripItem(ticketIndex, false);
+                positionStripArchive();
+            });
+        }
+    }
+
+    // ================= 未寄出的明信片（阶段 B） =================
+    function wrapTicketLetterText(ctx, text, maxWidth) {
+        const lines = [];
+        String(text || '').split('\n').forEach(paragraph => {
+            let line = '';
+            paragraph.split('').forEach(ch => {
+                const test = line + ch;
+                if (ctx.measureText(test).width > maxWidth && line) {
+                    lines.push(line);
+                    line = ch;
+                } else {
+                    line = test;
+                }
+            });
+            if (line) lines.push(line);
+        });
+        return lines;
+    }
+
+    function ticketLetterCanvas(fp, image) {
+        const meta = ticketMeta(fp);
+        const canvas = document.createElement('canvas');
+        canvas.width = 900;
+        canvas.height = 1280;
+        const ctx = canvas.getContext('2d');
+        const cream = '#f3eee2';
+        const white = '#fffdf7';
+        const ink = '#35423d';
+        const muted = '#8b7865';
+        const accent = '#9b704e';
+        const bg = ctx.createLinearGradient(0, 0, 0, 1280);
+        bg.addColorStop(0, '#e8e0d2');
+        bg.addColorStop(1, '#d6cbb8');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, 900, 1280);
+        ctx.strokeStyle = 'rgba(118,92,61,0.34)';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(24, 24, 852, 1232);
+
+        ctx.fillStyle = accent;
+        ctx.font = '600 24px ui-monospace, Consolas, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('A LETTER FROM A TICKET', 450, 78);
+        ctx.fillStyle = ink;
+        ctx.font = '400 44px "PingFang SC", "Microsoft YaHei", "Noto Serif SC", serif';
+        ctx.fillText('未寄出的明信片', 450, 132);
+
+        // 票根当作邮票贴在明信片一角
+        const stampW = 330;
+        const stampH = 220;
+        const stampX = 285;
+        const stampY = 176;
+        ctx.fillStyle = white;
+        ctx.fillRect(stampX, stampY, stampW, stampH);
+        if (image) {
+            const scale = Math.min((stampW - 24) / image.width, (stampH - 24) / image.height);
+            const dw = image.width * scale;
+            const dh = image.height * scale;
+            ctx.drawImage(image, stampX + (stampW - dw) / 2, stampY + (stampH - dh) / 2, dw, dh);
+        } else {
+            ctx.fillStyle = '#e4dccd';
+            ctx.fillRect(stampX + 12, stampY + 12, stampW - 24, stampH - 24);
+            ctx.fillStyle = muted;
+            ctx.font = '400 110px "Noto Serif SC", "Songti SC", serif';
+            ctx.fillText((fp.city || '?').charAt(0), 450, stampY + 158);
+        }
+
+        // 信件正文
+        const desc = String(fp.description || '').trim();
+        const noText = meta.no ? '，编号是 ' + meta.no : '';
+        const typeText = fp.ticketType ? '；那是一段关于「' + fp.ticketType + '」的旅程' : '';
+        const descText = desc ? ' 我还记得：' + (desc.length > 80 ? desc.slice(0, 80) + '…' : desc) : '';
+        const letter =
+            '致许多年后的自己：\n' +
+            '这一张票根，写于' + (meta.date || '某一天') + '的' + (fp.city || meta.route || '远方') + '。\n' +
+            '那时候的旅程叫「' + (meta.title || '一次出发') + '」' + noText + typeText + '。' +
+            descText + '当时没有说出口的话，都留在这张纸里了。\n' +
+            '—— 一张票根，代替当时的我寄出。';
+        ctx.fillStyle = ink;
+        ctx.font = '400 30px "PingFang SC", "Microsoft YaHei", "Noto Serif SC", serif';
+        ctx.textAlign = 'left';
+        const lines = wrapTicketLetterText(ctx, letter, 760);
+        const lineHeight = 46;
+        const startY = 470;
+        lines.slice(0, 13).forEach((line, i) => {
+            ctx.fillText(line, 70, startY + i * lineHeight);
+        });
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = muted;
+        ctx.font = '26px "PingFang SC", "Microsoft YaHei", serif';
+        ctx.fillText('旅行记忆 · 票根收藏', 852, 1245);
+        return canvas;
+    }
+
+    async function renderTicketLetter() {
+        const fp = ticketLetterFp;
+        if (!fp) return;
+        // 渲染是异步的（图片 + 两次 toBlob）：关闭浮层或换票后本次结果作废，
+        // 否则会把 blob URL 和 src 写回已关闭的浮层，并漏掉一次 revokeObjectURL
+        const token = ++ticketLetterRenderToken;
+        if (ticketLetterBlobUrl) URL.revokeObjectURL(ticketLetterBlobUrl);
+        ticketLetterBlobUrl = '';
+        const image = await loadPostcardImage(ticketImageUrl(fp.ticketImage));
+        if (token !== ticketLetterRenderToken || ticketLetterFp !== fp) return;
+        let canvas = ticketLetterCanvas(fp, image);
+        let blob = await postcardToBlob(canvas);
+        if (token !== ticketLetterRenderToken || ticketLetterFp !== fp) return;
+        if (!blob) {
+            canvas = ticketLetterCanvas(fp, null);
+            blob = await postcardToBlob(canvas);
+        }
+        if (!blob) return;
+        if (token !== ticketLetterRenderToken || ticketLetterFp !== fp) return;
+        ticketLetterBlobUrl = URL.createObjectURL(blob);
+        ticketLetterImg.src = ticketLetterBlobUrl;
+        const ts = String(fp.ticketDate || fp.createTime || '').replace(/-/g, '');
+        ticketLetterFileName = (fp.city || '票根') + '-' + (ts || 'letter') + '-未寄出的明信片.png';
+        ticketLetterShare.hidden = !(
+            typeof navigator.canShare === 'function' &&
+            navigator.canShare({ files: [new File([blob], ticketLetterFileName, { type: 'image/png' })] })
+        );
+    }
+
+    async function openTicketLetter(fp) {
+        if (!ticketFeatureOn('enableTicketLetter') || !fp || !ticketLetter) return;
+        clearTicketStampTimer();
+        pauseTicketReplayForOverlay();
+        ticketLetterFp = fp;
+        if (ticketLetterTitle) {
+            ticketLetterTitle.textContent = (fp.city ? fp.city + ' · ' : '') + '未寄出的明信片';
+        }
+        ticketLetterImg.removeAttribute('src');
+        ticketLetter.classList.add('show');
+        setOverlayHidden(ticketLetter, false);
+        if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window) &&
+            ticketLetterBack) {
+            ticketLetterBack.focus();
+        }
+        await renderTicketLetter();
+    }
+
+    function closeTicketLetter(returnFocus = true) {
+        if (!ticketLetter || !ticketLetter.classList.contains('show')) return;
+        ticketLetterRenderToken++;   // 作废仍在进行中的渲染
+        ticketLetter.classList.remove('show');
+        setOverlayHidden(ticketLetter, true);
+        ticketLetterImg.removeAttribute('src');
+        if (ticketLetterBlobUrl) {
+            URL.revokeObjectURL(ticketLetterBlobUrl);
+            ticketLetterBlobUrl = '';
+        }
+        ticketLetterFp = null;
+        if (returnFocus && ticketLetterBtn && !ticketLetterBtn.hidden) {
+            ticketLetterBtn.focus();
+        }
+        startTicketStampDwell(ticketItems[ticketIndex]);
+        resumeTicketReplayFromOverlay();
+    }
+
+    function downloadTicketLetter() {
+        if (!ticketLetterBlobUrl) return;
+        const a = document.createElement('a');
+        a.href = ticketLetterBlobUrl;
+        a.download = ticketLetterFileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    }
+
+    async function shareTicketLetter() {
+        if (!ticketLetterBlobUrl) return;
+        const blob = await fetch(ticketLetterBlobUrl).then(r => r.blob());
+        const file = new File([blob], ticketLetterFileName, { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({ files: [file], title: ticketLetterFileName });
+            } catch (e) { /* 用户取消分享无需处理 */ }
+        }
+    }
+
+    // ================= 星图模式（阶段 C） =================
+    function sortedTicketItems() {
+        return ticketItems.slice().sort(compareTicketByTime);
+    }
+
+    function ticketTimeKey(fp) {
+        return String((fp && (fp.ticketDate || fp.createTime)) || '');
+    }
+
+    function ticketNameKey(fp) {
+        return String((fp && (fp.name || fp.ticketTitle)) || '');
+    }
+
+    // 全局统一的时间线排序：ticketDate || createTime 升序；
+    // 两个字段都缺失的票排到最后（空串 localeCompare 最小，直接字符串比较会把它排到最前）；
+    // 同值按名称、key 兜底，保证重走/星图/护照各功能顺序一致。
+    function compareTicketByTime(a, b) {
+        const ka = ticketTimeKey(a);
+        const kb = ticketTimeKey(b);
+        if (!ka && kb) return 1;
+        if (ka && !kb) return -1;
+        const byDate = ka.localeCompare(kb);
+        if (byDate) return byDate;
+        const byName = ticketNameKey(a).localeCompare(ticketNameKey(b), 'zh-Hans-CN');
+        if (byName) return byName;
+        return String((a && a.key) || '').localeCompare(String((b && b.key) || ''));
+    }
+
+    function ticketHasCoordinate(fp) {
+        if (!fp) return false;
+        const rawLng = fp.lng;
+        const rawLat = fp.lat;
+        // 空值不能走 Number()：Number(null) / Number('') 都是 0，会被误判成有效坐标
+        if (rawLng === '' || rawLng == null || rawLat === '' || rawLat == null) return false;
+        const lng = Number(rawLng);
+        const lat = Number(rawLat);
+        if (!Number.isFinite(lng) || !Number.isFinite(lat)) return false;
+        if (lng < -180 || lng > 180 || lat < -90 || lat > 90) return false;
+        // (0, 0) 是后台表单未填写坐标时的默认值，视为没有定位
+        return !(lng === 0 && lat === 0);
+    }
+
+    // 同城判定：两边城市名都要有值且一致才算同城，
+    // 否则城市为空的票根会被误判成“同一城市”，整场放映一次都不飞。
+    function isSameTicketCity(a, b) {
+        const cityA = String((a && a.city) || '').trim();
+        const cityB = String((b && b.city) || '').trim();
+        return !!cityA && cityA === cityB;
+    }
+
+    function ticketConstellationPointFps() {
+        return ticketConstellationItems.filter(ticketHasCoordinate);
+    }
+
+    function renderTicketConstellationCard() {
+        const fp = ticketConstellationItems[ticketConstellationIndex];
+        if (!fp) return;
+        ticketConstellationCard.hidden = false;
+        ticketConstellationCard.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = ticketImageUrl(fp.ticketImage);
+        img.alt = '';
+        const body = document.createElement('div');
+        const strong = document.createElement('strong');
+        strong.textContent = fp.name || fp.ticketTitle || '一段旅程';
+        const span = document.createElement('span');
+        const meta = ticketMeta(fp);
+        span.textContent = [fp.city || meta.route, meta.date].filter(Boolean).join(' · ');
+        body.append(strong, span);
+        ticketConstellationCard.append(img, body);
+        const sub = ticketConstellationItems.length + ' 张票根 · 当前第 ' +
+            (ticketConstellationIndex + 1) + ' 张' +
+            (fp.city ? ' · ' + fp.city : '');
+        if (ticketConstellationSub) ticketConstellationSub.textContent = sub;
+    }
+
+    function selectTicketConstellation(index) {
+        if (!ticketConstellationItems.length) return;
+        ticketConstellationIndex = Math.max(0, Math.min(index, ticketConstellationItems.length - 1));
+        const selectedFp = ticketConstellationItems[ticketConstellationIndex];
+        const realIndex = selectedFp ? ticketItems.indexOf(selectedFp) : -1;
+        if (realIndex >= 0) ticketIndex = realIndex;
+        renderTicketConstellationCard();
+        // 时间有色跟随当前选中的星（星点/星光色按季节变化）
+        applyTicketSeason(selectedFp);
+        if (ticketConstellationMode() === 'sky') {
+            drawTicketSky(performance.now());
+        } else {
+            updateTicketGlobeSelection();
+            flyToTicketConstellationStar(selectedFp);
+        }
+    }
+
+    // globe：点中某颗星后把镜头带到该城市上空（方案 §5「点击任意星可选中并飞近查看」）
+    function flyToTicketConstellationStar(fp) {
+        if (!fp || !ticketHasCoordinate(fp)) return;
+        viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(Number(fp.lng), Number(fp.lat), 1200000),
+            duration: reduceMotion ? 0 : 1.4
+        });
+    }
+
+    // 缺经纬度的票根：列进图例区，不参与连线（方案 §5）
+    function renderTicketConstellationLegend() {
+        if (!ticketConstellationLegend) return;
+        const missing = ticketConstellationItems.filter(fp => !ticketHasCoordinate(fp));
+        ticketConstellationLegend.innerHTML = '';
+        ticketConstellationLegend.hidden = missing.length === 0;
+        if (!missing.length) return;
+        const head = document.createElement('li');
+        head.className = 'ticket-constellation-legend-head';
+        head.textContent = '缺少坐标 · 未参与连线（' + missing.length + '）';
+        ticketConstellationLegend.appendChild(head);
+        missing.forEach(fp => {
+            const li = document.createElement('li');
+            li.textContent = [fp.name || fp.ticketTitle, fp.city].filter(Boolean).join(' · ') || '未命名票根';
+            ticketConstellationLegend.appendChild(li);
+        });
+    }
+
+    function ticketConstellationMode() {
+        return (footprintCfg && footprintCfg.ticketConstellationMode === 'sky') ? 'sky' : 'globe';
+    }
+
+    // ---- sky：全屏 2D 星空 Canvas ----
+    function ticketSkyPseudoRandom(i) {
+        const x = Math.sin(i * 127.1 + ticketConstellationSkySeed * 311.7) * 43758.5453;
+        return x - Math.floor(x);
+    }
+
+    function ticketSkyLayout(points, w, h) {
+        const pad = TICKET_SKY_PAD;
+        const innerW = Math.max(1, w - pad * 2);
+        const innerH = Math.max(1, h - pad * 2);
+        const lngs = points.map(fp => Number(fp.lng));
+        const lats = points.map(fp => Number(fp.lat));
+        const minLng = Math.min(...lngs);
+        const maxLng = Math.max(...lngs);
+        const minLat = Math.min(...lats);
+        const maxLat = Math.max(...lats);
+        const spanX = maxLng - minLng;
+        const spanY = maxLat - minLat;
+        const spreadX = spanX > 1e-6;
+        const spreadY = spanY > 1e-6;
+        // 单张票根、或所有票同坐标时跨度为 0：居中放置。
+        // 原来用 Math.max(span, 0.001) 归一化，会把星点推到画布左上角 (pad, pad)。
+        const raw = points.map(fp => ({
+            x: pad + (spreadX ? (Number(fp.lng) - minLng) / spanX : 0.5) * innerW,
+            y: pad + (spreadY ? (maxLat - Number(fp.lat)) / spanY : 0.5) * innerH
+        }));
+        return spreadTicketSkyPoints(raw, pad, innerW, innerH);
+    }
+
+    // 最小间距修正：坐标过近的星点互相推开，避免国内城市挤成一团（方案 §5 要求）。
+    // 迭代次数固定，点数多时也只是一次性有限次两两比较（结果会被缓存）。
+    function spreadTicketSkyPoints(points, pad, innerW, innerH) {
+        const list = points.map(p => ({ x: p.x, y: p.y }));
+        const maxX = pad + innerW;
+        const maxY = pad + innerH;
+        for (let pass = 0; pass < 12; pass++) {
+            let moved = false;
+            for (let i = 0; i < list.length; i++) {
+                for (let j = i + 1; j < list.length; j++) {
+                    const a = list[i];
+                    const b = list[j];
+                    let dx = b.x - a.x;
+                    let dy = b.y - a.y;
+                    let dist = Math.hypot(dx, dy);
+                    if (dist >= TICKET_SKY_MIN_GAP) continue;
+                    if (dist < 0.001) {
+                        // 完全重合：按稳定角度错开，保证每个星点都能被点中
+                        const angle = ((i + 1) * 137.5 + j * 47) * Math.PI / 180;
+                        dx = Math.cos(angle);
+                        dy = Math.sin(angle);
+                        dist = 1;
+                    }
+                    const push = (TICKET_SKY_MIN_GAP - dist) / 2;
+                    const ux = dx / dist;
+                    const uy = dy / dist;
+                    a.x -= ux * push;
+                    a.y -= uy * push;
+                    b.x += ux * push;
+                    b.y += uy * push;
+                    moved = true;
+                }
+            }
+            list.forEach(p => {
+                p.x = Math.min(maxX, Math.max(pad, p.x));
+                p.y = Math.min(maxY, Math.max(pad, p.y));
+            });
+            if (!moved) break;
+        }
+        return list;
+    }
+
+    // 天空画布尺寸与星点坐标：绘制与点击命中必须共用同一份数据
+    function ticketSkyViewport() {
+        const rect = ticketConstellationView.getBoundingClientRect();
+        return {
+            w: Math.max(320, Math.floor(rect.width)),
+            h: Math.max(240, Math.floor(rect.height))
+        };
+    }
+
+    function ticketSkyPositions(w, h) {
+        const points = ticketConstellationPointFps();
+        const key = w + 'x' + h + '|' + points.length + '|' + ticketConstellationSkySeed;
+        if (ticketSkyLayoutCache && ticketSkyLayoutCache.key === key) return ticketSkyLayoutCache;
+        const positions = points.length ? ticketSkyLayout(points, w, h) : [];
+        ticketSkyLayoutCache = { key, points, positions };
+        return ticketSkyLayoutCache;
+    }
+
+    function ticketSkyTrace(ctx, positions) {
+        if (!positions.length) return;
+        ctx.beginPath();
+        ctx.moveTo(positions[0].x, positions[0].y);
+        for (let i = 0; i < positions.length - 1; i++) {
+            const cur = positions[i];
+            const next = positions[i + 1];
+            const mx = (cur.x + next.x) / 2;
+            const my = (cur.y + next.y) / 2;
+            ctx.quadraticCurveTo(cur.x, cur.y, mx, my);
+        }
+        const last = positions[positions.length - 1];
+        ctx.lineTo(last.x, last.y);
+    }
+
+    function ticketSkyGlowDot(ctx, x, y, coreRadius, alpha, active, time) {
+        const halo = coreRadius * (active ? 8 : 5.5);
+        const pulse = active ? (1 + Math.sin(time / 360) * 0.16) : 1;
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, halo * pulse);
+        grad.addColorStop(0, 'rgba(255, 240, 216, ' + alpha + ')');
+        grad.addColorStop(0.3, 'rgba(244, 198, 142, ' + (alpha * 0.5) + ')');
+        grad.addColorStop(1, 'rgba(244, 198, 142, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(x, y, halo * pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = active ? '#fff8ea' : 'rgba(255, 243, 224, 0.94)';
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(1.1, coreRadius * pulse), 0, Math.PI * 2);
+        ctx.fill();
+
+        if (active) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 226, 184, ' + (0.35 + Math.sin(time / 300) * 0.18) + ')';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(x, y, (7 + Math.sin(time / 300) * 1.4) * pulse, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    function drawTicketSky(time) {
+        const canvas = ticketConstellationCanvas;
+        const ctx = canvas && canvas.getContext('2d');
+        if (!canvas || !ctx) return;
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const { w, h } = ticketSkyViewport();
+        if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
+            canvas.width = Math.floor(w * dpr);
+            canvas.height = Math.floor(h * dpr);
+        }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+
+        for (let i = 0; i < 170; i++) {
+            const x = ticketSkyPseudoRandom(i) * w;
+            const y = ticketSkyPseudoRandom(i + 999) * h;
+            const r = 0.6 + ticketSkyPseudoRandom(i + 300) * 1.4;
+            ctx.fillStyle = 'rgba(244, 239, 230, ' + (0.18 + ticketSkyPseudoRandom(i + 600) * 0.5) + ')';
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        const layout = ticketSkyPositions(w, h);
+        const points = layout.points;
+        const positions = layout.positions;
+        // 连线只取最近 N 站，与地球星图保持一致，票根多时不会糊成一片
+        const linePositions = positions.slice(-TICKET_CONSTELLATION_MAX_LINKS);
+        if (linePositions.length > 1) {
+            ctx.save();
+            ctx.shadowColor = 'rgba(240, 194, 130, 0.55)';
+            ctx.shadowBlur = 14;
+            ctx.strokeStyle = 'rgba(255, 219, 174, 0.10)';
+            ctx.lineWidth = 3;
+            ticketSkyTrace(ctx, linePositions);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = 'rgba(255, 226, 188, 0.42)';
+            ctx.lineWidth = 1;
+            ticketSkyTrace(ctx, linePositions);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        const activePoint = points.findIndex(fp => fp === ticketConstellationItems[ticketConstellationIndex]);
+        // 减弱动效时不呼吸，只保留静态星光
+        const dotTime = reduceMotion ? 0 : time;
+        positions.forEach((p, i) => {
+            const isActive = i === activePoint;
+            ticketSkyGlowDot(ctx, p.x, p.y, isActive ? 2.6 : 1.8, isActive ? 0.95 : 0.62, isActive, dotTime);
+        });
+        if (!points.length) {
+            ctx.fillStyle = 'rgba(244, 239, 230, 0.72)';
+            ctx.font = '15px "PingFang SC", "Microsoft YaHei", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('还没有带坐标的票根，无法点亮星图', w / 2, h / 2);
+        }
+    }
+
+    function ticketSkyTick(time) {
+        drawTicketSky(time);
+        ticketConstellationRaf = requestAnimationFrame(ticketSkyTick);
+    }
+
+    function handleTicketSkyClick(event) {
+        const canvas = ticketConstellationCanvas;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        // 与绘制共用同一份坐标（含尺寸取整与最小间距修正），否则点击位置会偏移
+        const { w, h } = ticketSkyViewport();
+        const layout = ticketSkyPositions(w, h);
+        const points = layout.points;
+        const positions = layout.positions;
+        let best = -1;
+        let bestDist = Infinity;
+        positions.forEach((p, i) => {
+            const d = Math.hypot(p.x - x, p.y - y);
+            if (d < Math.min(30, bestDist)) {
+                bestDist = d;
+                best = i;
+            }
+        });
+        if (best >= 0) {
+            const target = points[best];
+            const idx = ticketConstellationItems.findIndex(fp => fp === target);
+            if (idx >= 0) selectTicketConstellation(idx);
+        }
+    }
+
+    // ---- globe：真实地球坐标星光 ----
+    function ticketGlowSprite() {
+        if (ticketConstellationGlowSpriteUrl) return ticketConstellationGlowSpriteUrl;
+        const size = 128;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+        grad.addColorStop(0, 'rgba(255,255,255,1)');
+        grad.addColorStop(0.18, 'rgba(255,244,224,0.85)');
+        grad.addColorStop(0.5, 'rgba(235,190,130,0.22)');
+        grad.addColorStop(1, 'rgba(235,190,130,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, size, size);
+        ticketConstellationGlowSpriteUrl = canvas.toDataURL();
+        return ticketConstellationGlowSpriteUrl;
+    }
+
+    function updateTicketGlobeSelection() {
+        const activeFp = ticketConstellationItems[ticketConstellationIndex];
+        ticketConstellationEntities.forEach((ent, i) => {
+            const fp = ticketConstellationPointFps()[i];
+            const active = fp === activeFp;
+            if (ent.billboard) {
+                ent.billboard.width = active ? 46 : 24;
+                ent.billboard.height = active ? 46 : 24;
+                ent.billboard.color = active
+                    ? Cesium.Color.fromCssColorString('#f7d6a2')
+                    : Cesium.Color.fromCssColorString('#e7b277').withAlpha(0.72);
+            }
+            ent.label = active
+                ? {
+                    text: ticketStarLabel(fp),
+                    font: '600 14px "PingFang SC", "Microsoft YaHei", sans-serif',
+                    fillColor: Cesium.Color.WHITE,
+                    outlineColor: Cesium.Color.BLACK.withAlpha(0.55),
+                    outlineWidth: 3,
+                    pixelOffset: new Cesium.Cartesian2(0, -18),
+                    showBackground: true,
+                    backgroundColor: Cesium.Color.BLACK.withAlpha(0.35),
+                    backgroundPadding: new Cesium.Cartesian2(8, 5)
+                }
+                : undefined;
+        });
+    }
+
+    // globe：同城多张票根的星点坐标。
+    // 第一张留在城市中心，其余按黄金角绕中心轻微错开，避免星点完全重叠（方案 §5）。
+    function ticketGlobeStarPositions(points) {
+        const counts = new Map();
+        const spread = 0.32;   // 度，约 35km：肉眼可分辨，又不偏离城市
+        return points.map((fp, i) => {
+            const key = String((fp.city || '').trim() || fp.cityAdcode || '') ||
+                ('k:' + (fp.key || fp.name || fp.ticketTitle || ('idx' + i)));
+            const n = counts.get(key) || 0;
+            counts.set(key, n + 1);
+            const lng = Number(fp.lng);
+            const lat = Number(fp.lat);
+            if (!n) return { lng, lat };
+            const angle = n * 137.5 * Math.PI / 180;
+            const radius = spread * (1 + Math.floor(n / 6) * 0.7);
+            return {
+                lng: lng + Math.cos(angle) * radius,
+                lat: lat + Math.sin(angle) * radius
+            };
+        });
+    }
+
+    function drawTicketGlobeConstellation() {
+        const points = ticketConstellationPointFps();
+        if (!points.length) {
+            if (ticketConstellationSub) {
+                ticketConstellationSub.textContent = '票根缺少坐标，无法在地球上点亮星图';
+            }
+            return;
+        }
+        const starPositions = ticketGlobeStarPositions(points);
+        points.forEach((fp, i) => {
+            const pos = starPositions[i];
+            const entity = viewer.entities.add({
+                position: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, 6000),
+                billboard: {
+                    image: ticketGlowSprite(),
+                    width: 24,
+                    height: 24,
+                    color: Cesium.Color.fromCssColorString('#e7b277').withAlpha(0.72),
+                    scaleByDistance: new Cesium.NearFarScalar(200000, 1.2, 12000000, 0.25),
+                    disableDepthTestDistance: Number.POSITIVE_INFINITY
+                }
+            });
+            entity.constIndex = i;
+            ticketConstellationEntities.push(entity);
+        });
+        // 连线只取最近 N 站：票根很多时避免线条糊成一片（方案 §5）
+        const linePoints = starPositions.slice(-TICKET_CONSTELLATION_MAX_LINKS);
+        if (linePoints.length > 1) {
+            const coords = [];
+            linePoints.forEach(pos => coords.push(pos.lng, pos.lat));
+            const lineEnt = viewer.entities.add({
+                id: 'ticket-const-line-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+                polyline: {
+                    positions: Cesium.Cartesian3.fromDegreesArray(coords),
+                    width: 2.4,
+                    material: new Cesium.PolylineGlowMaterialProperty({
+                        glowPower: 0.14,
+                        taperPower: 0.12,
+                        color: Cesium.Color.fromCssColorString('#e7b277').withAlpha(0.42)
+                    }),
+                    arcType: Cesium.ArcType.GEODESIC,
+                    clampToGround: false
+                }
+            });
+            ticketConstellationLineEntities.push(lineEnt);
+        }
+        updateTicketGlobeSelection();
+        if (ticketConstellationPickHandler) {
+            ticketConstellationPickHandler.destroy();
+        }
+        ticketConstellationPickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+        ticketConstellationPickHandler.setInputAction((movement) => {
+            const picked = viewer.scene.pick(movement.position);
+            const idx = picked && picked.id ? ticketConstellationEntities.indexOf(picked.id) : -1;
+            if (idx >= 0) {
+                const target = ticketConstellationPointFps()[idx];
+                const realIdx = ticketConstellationItems.findIndex(fp => fp === target);
+                if (realIdx >= 0) selectTicketConstellation(realIdx);
+            }
+        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+        const lngs = points.map(fp => Number(fp.lng));
+        const lats = points.map(fp => Number(fp.lat));
+        const rect = Cesium.Rectangle.fromDegrees(
+            Math.min(...lngs) - 2, Math.min(...lats) - 2,
+            Math.max(...lngs) + 2, Math.max(...lats) + 2
+        );
+        viewer.camera.flyTo({ destination: rect, duration: reduceMotion ? 0 : 1.1 });
+    }
+
+    function clearTicketConstellationGlobe() {
+        ticketConstellationEntities.forEach(ent => {
+            if (ent) viewer.entities.remove(ent);
+        });
+        ticketConstellationEntities = [];
+        if (ticketConstellationPickHandler) {
+            ticketConstellationPickHandler.destroy();
+            ticketConstellationPickHandler = null;
+        }
+        ticketConstellationLineEntities.forEach(ent => {
+            if (ent) viewer.entities.remove(ent);
+        });
+        ticketConstellationLineEntities = [];
+        if (ticketConstellationPrevAutoRotate && !autoRotate) setAutoRotate(true);
+        ticketConstellationPrevAutoRotate = false;
+    }
+
+    function clearTicketConstellation() {
+        if (ticketConstellationRaf) {
+            cancelAnimationFrame(ticketConstellationRaf);
+            ticketConstellationRaf = null;
+        }
+        if (ticketConstellationResizeHandler) {
+            window.removeEventListener('resize', ticketConstellationResizeHandler);
+            ticketConstellationResizeHandler = null;
+        }
+        if (ticketConstellationPausedRenderLoop && viewer && !viewer.useDefaultRenderLoop) {
+            setGlobeRenderLoop(true);
+        }
+        ticketConstellationPausedRenderLoop = false;
+        clearTicketConstellationGlobe();
+        ticketSkyLayoutCache = null;   // 星点坐标缓存随星图一起失效
+        if (ticketConstellationView) ticketConstellationView.hidden = true;
+        if (ticketGallery) ticketGallery.classList.remove('is-star-mode');
+    }
+
+    function enterTicketConstellation() {
+        if (!ticketConstellationView) return;
+        ticketSkyLayoutCache = null;   // 每次进入星图重新计算星点布局
+        ticketConstellationItems = sortedTicketItems();
+        ticketConstellationIndex = Math.max(0, ticketConstellationItems
+            .findIndex(fp => fp === ticketItems[ticketIndex]));
+        ticketGallery.classList.add('is-star-mode');
+        ticketConstellationView.hidden = false;
+        renderTicketConstellationCard();
+        renderTicketConstellationLegend();
+        applyTicketSeason(ticketConstellationItems[ticketConstellationIndex]);
+        if (ticketConstellationMode() === 'sky') {
+            ticketConstellationView.classList.add('is-sky');
+            if (viewer && viewer.useDefaultRenderLoop) {
+                setGlobeRenderLoop(false);
+                ticketConstellationPausedRenderLoop = true;
+            }
+            const resize = () => {
+                if (ticketViewMode === 'constellation' && ticketConstellationMode() === 'sky') {
+                    drawTicketSky(performance.now());
+                }
+            };
+            ticketConstellationResizeHandler = resize;
+            window.addEventListener('resize', resize);
+            ticketConstellationRaf = requestAnimationFrame(ticketSkyTick);
+        } else {
+            ticketConstellationView.classList.remove('is-sky');
+            ticketConstellationPrevAutoRotate = autoRotate;
+            if (autoRotate) setAutoRotate(false);
+            drawTicketGlobeConstellation();
+        }
+        updateTicketModeButtons();
+    }
+
+    // ================= 重走一遍（阶段 D） =================
+    function updateTicketReplayPlayButton() {
+        if (ticketReplayPlay) {
+            ticketReplayPlay.textContent = ticketReplayPlaying ? '暂停' : '继续';
+        }
+    }
+
+    function ticketReplayFlyTo(fp, duration, onDone) {
+        if (!fp || !ticketHasCoordinate(fp)) {
+            // 没有坐标时不飞：仍回调，避免调用方把 ticketReplayFlying 卡在 true
+            if (onDone) onDone();
+            return;
+        }
+        const target = Cesium.Cartesian3.fromDegrees(Number(fp.lng), Number(fp.lat), 150000);
+        const dur = reduceMotion ? 0 : Math.max(0, duration || 0);
+        if (dur <= 0) {
+            viewer.camera.flyTo({ destination: target, duration: 0 });
+            if (onDone) onDone();
+            return;
+        }
+        viewer.camera.flyTo({
+            destination: target,
+            duration: dur,
+            complete: onDone || undefined,
+            cancel: onDone || undefined
+        });
+    }
+
+    // 相机飞行是异步的：暂停/改站/退出时必须显式取消，
+    // 否则镜头会继续飞向已经放弃的目标（票夹已经回来了，地球还在动）
+    function cancelTicketReplayFlight() {
+        try {
+            viewer.camera.cancelFlight();
+        } catch (e) {
+            /* 相机未在飞行或场景尚未就绪时忽略 */
+        }
+    }
+
+    function ticketReplayShowStop(index, animate) {
+        const points = ticketReplayPoints;
+        if (!points.length) return;
+        const len = points.length;
+        ticketReplayIndex = Math.max(0, Math.min(index, len - 1));
+        const fp = points[ticketReplayIndex];
+        // 放映期间不改写票夹游标；退出时由 clearTicketReplay 复位到进入前的票根
+
+        ticketReplayCard.classList.remove('is-arriving', 'is-missing');
+        ticketReplayCard.innerHTML = '';
+        const img = document.createElement('img');
+        img.alt = fp.ticketTitle || fp.name || '票根';
+        img.referrerPolicy = 'no-referrer';
+        img.decoding = 'async';
+        img.onerror = () => {
+            ticketReplayCard.classList.add('is-missing');
+            ticketReplayCard.textContent = (fp.city || fp.name || '?').charAt(0);
+        };
+        img.src = ticketImageUrl(fp.ticketImage);
+        ticketReplayCard.appendChild(img);
+        if (animate) {
+            void ticketReplayCard.offsetWidth;
+            ticketReplayCard.classList.add('is-arriving');
+        }
+
+        const meta = ticketMeta(fp);
+        ticketReplaySubtitle.textContent = [fp.name || meta.title, fp.city || meta.route, meta.date]
+            .filter(Boolean).join(' · ');
+        // 时间有色：氛围色跟随当前放映到的那一张票根
+        applyTicketSeason(fp);
+        if (ticketReplayIndex === 0) {
+            ticketReplayRoute.textContent = ticketHasCoordinate(fp)
+                ? '旅程起点 · 从第一张票根出发'
+                : '旅程起点 · 这张票根没有定位，原地停留';
+        } else {
+            const prev = points[ticketReplayIndex - 1];
+            const sameCity = isSameTicketCity(prev, fp);
+            const noCoord = !ticketHasCoordinate(prev) || !ticketHasCoordinate(fp);
+            const km = (!sameCity && !noCoord)
+                ? ' · 距上一站约 ' + Math.round(haversineKm(prev, fp)).toLocaleString('zh-CN') + ' km'
+                : '';
+            ticketReplayRoute.textContent = (noCoord
+                ? '上一站无法定位，原地淡入下一张'
+                : (sameCity ? '与上一站同一城市，原地停留' : '沿着上一站的方向继续')) + km;
+        }
+        ticketReplayProgressText.textContent = (ticketReplayIndex + 1) + ' / ' + len;
+        if (ticketReplayBarInner) {
+            ticketReplayBarInner.style.width = (((ticketReplayIndex + 1) / len) * 100) + '%';
+        }
+        // 预加载下一张，避免飞行落地后才开始解码
+        const next = points[ticketReplayIndex + 1];
+        if (next) {
+            const pre = new Image();
+            pre.src = ticketImageUrl(next.ticketImage);
+        }
+    }
+
+    function ticketReplayShowFlight(to, km) {
+        if (!ticketReplayFlight) return;
+        if (ticketReplayView) ticketReplayView.classList.add('is-flying');
+        ticketReplayFlightLabel.textContent = '正在飞往';
+        ticketReplayFlightCity.textContent = to.city || to.name || '下一站';
+        ticketReplayFlightKm.textContent = km;
+        ticketReplayFlight.hidden = false;
+    }
+
+    function ticketReplayHideFlight() {
+        if (ticketReplayFlight) ticketReplayFlight.hidden = true;
+        if (ticketReplayView) ticketReplayView.classList.remove('is-flying');
+    }
+
+    function scheduleNextTicketReplay() {
+        clearTimeout(ticketReplayTimer);
+        ticketReplayTimer = null;
+        if (!ticketReplayPlaying || ticketViewMode !== 'replay') return;
+        const gen = ticketReplayGeneration;
+        ticketReplayTimer = setTimeout(() => {
+            if (gen !== ticketReplayGeneration || !ticketReplayPlaying || ticketReplayFlying) return;
+            const points = ticketReplayPoints;
+            const next = ticketReplayIndex + 1;
+            if (next >= points.length) {
+                finishTicketReplay();
+                return;
+            }
+            const from = points[ticketReplayIndex];
+            const to = points[next];
+            const sameCity = isSameTicketCity(from, to);
+            const noCoord = !ticketHasCoordinate(from) || !ticketHasCoordinate(to);
+            if (sameCity || noCoord) {
+                ticketReplayTimer = setTimeout(() => {
+                    if (gen !== ticketReplayGeneration || !ticketReplayPlaying) return;
+                    ticketReplayHideFlight();
+                    ticketReplayShowStop(next, true);
+                    scheduleNextTicketReplay();
+                }, 520);
+            } else {
+                const km = '约 ' + Math.round(haversineKm(from, to)).toLocaleString('zh-CN') + ' km · 直线估算';
+                ticketReplayFlying = true;
+                ticketReplayShowFlight(to, km);
+                ticketReplayFlyTo(to, 2.3, () => {
+                    if (gen !== ticketReplayGeneration || !ticketReplayPlaying) return;
+                    ticketReplayFlying = false;
+                    ticketReplayTimer = setTimeout(() => {
+                        if (gen !== ticketReplayGeneration || !ticketReplayPlaying) return;
+                        ticketReplayHideFlight();
+                        ticketReplayShowStop(next, true);
+                        scheduleNextTicketReplay();
+                    }, 480);
+                });
+            }
+        }, TICKET_REPLAY_DWELL_MS);
+    }
+
+    function pauseTicketReplay() {
+        if (!ticketReplayPlaying) return;
+        ticketReplayGeneration++;
+        ticketReplayPlaying = false;
+        clearTimeout(ticketReplayTimer);
+        ticketReplayTimer = null;
+        ticketReplayFlying = false;
+        cancelTicketReplayFlight();
+        ticketReplayHideFlight();
+        if (ticketReplayView) ticketReplayView.classList.add('is-focused');
+        updateTicketReplayPlayButton();
+    }
+
+    function resumeTicketReplay() {
+        if (ticketReplayPlaying || !ticketReplayPoints.length || ticketViewMode !== 'replay') return;
+        if (!ticketReplayEnd.hidden) return;
+        ticketReplayGeneration++;
+        ticketReplayPlaying = true;
+        updateTicketReplayPlayButton();
+        if (ticketReplayView) ticketReplayView.classList.remove('is-focused');
+        ticketReplayShowStop(ticketReplayIndex, false);
+        scheduleNextTicketReplay();
+    }
+
+    // 抽票/护照/明信片浮层打开时暂停放映，关闭后接着播，不丢播放位置
+    function pauseTicketReplayForOverlay() {
+        if (ticketViewMode !== 'replay' || !ticketReplayPlaying) return;
+        ticketReplayPausedByOverlay = true;
+        pauseTicketReplay();
+    }
+
+    function resumeTicketReplayFromOverlay() {
+        if (!ticketReplayPausedByOverlay) return;
+        ticketReplayPausedByOverlay = false;
+        if (ticketViewMode !== 'replay' || !ticketGallery.classList.contains('show')) return;
+        if (!ticketReplayEnd.hidden) return;
+        resumeTicketReplay();
+    }
+
+    // 手动上一站/下一站：卡片立即切换，同时把镜头带到这一站（缺坐标时保持原地）
+    function ticketReplayFlyToStop(index) {
+        const fp = ticketReplayPoints[index];
+        if (!ticketHasCoordinate(fp)) return;
+        ticketReplayFlyTo(fp, 1.4, null);
+    }
+
+    function stepTicketReplay(delta) {
+        if (!ticketReplayPoints.length || !ticketReplayEnd.hidden) return;
+        const wasPlaying = ticketReplayPlaying;
+        pauseTicketReplay();
+        const len = ticketReplayPoints.length;
+        const next = (ticketReplayIndex + delta + len) % len;
+        // 播放中不重复触发落卡动画：紧接着的 resume 会重绘当前卡片
+        ticketReplayShowStop(next, !wasPlaying);
+        ticketReplayFlyToStop(next);
+        if (wasPlaying) resumeTicketReplay();
+    }
+
+    function finishTicketReplay() {
+        if (!ticketReplayEnd) return;
+        ticketReplayGeneration++;
+        ticketReplayPlaying = false;
+        clearTimeout(ticketReplayTimer);
+        ticketReplayTimer = null;
+        ticketReplayFlying = false;
+        ticketReplayHideFlight();
+        updateTicketReplayPlayButton();
+        const points = ticketReplayPoints;
+        let km = 0;
+        for (let i = 1; i < points.length; i++) {
+            if (ticketHasCoordinate(points[i - 1]) && ticketHasCoordinate(points[i])) {
+                km += haversineKm(points[i - 1], points[i]);
+            }
+        }
+        const cities = new Set(points.map(fp => fp.city).filter(Boolean));
+        const first = points[0];
+        const last = points[points.length - 1];
+        const yearSpan = (() => {
+            const a = Number(String(first.ticketDate || first.createTime || '').slice(0, 4));
+            const b = Number(String(last.ticketDate || last.createTime || '').slice(0, 4));
+            return (a && b && b > a) ? ' · 跨越 ' + (b - a + 1) + ' 年' : '';
+        })();
+        ticketReplayEndStats.textContent =
+            points.length + ' 张票根 · ' + (cities.size || '多个') + ' 座城市 · 约 ' +
+            Math.round(km).toLocaleString('zh-CN') + ' 公里' + yearSpan;
+        ticketReplayEnd.hidden = false;
+        ticketReplayResumeIndex = 0;   // 已播完：下次进重走从头开始，而不是停在终点卡
+    }
+
+    function startTicketReplay(startIndex = 0) {
+        if (!ticketReplayPoints.length) return;
+        ticketReplayGeneration++;
+        ticketReplayPlaying = true;
+        ticketReplayFlying = false;
+        const len = ticketReplayPoints.length;
+        const start = Math.max(0, Math.min(Number(startIndex) || 0, len - 1));
+        ticketReplayIndex = start;
+        if (ticketReplayEnd) ticketReplayEnd.hidden = true;
+        ticketReplayHideFlight();
+        if (ticketReplayView) {
+            ticketReplayView.classList.remove('is-focused', 'is-flying');
+        }
+        if (autoRotate) setAutoRotate(false);
+        ticketReplayShowStop(start, true);
+        if (ticketHasCoordinate(ticketReplayPoints[start])) {
+            ticketReplayFlyTo(ticketReplayPoints[start], 0.001, null);
+        }
+        scheduleNextTicketReplay();
+        updateTicketReplayPlayButton();
+    }
+
+    // 至少两张带经纬度的票根才能放映（入口按钮与进入校验共用同一条件）
+    function canEnterTicketReplay() {
+        return !!ticketReplayView && ticketItems.filter(ticketHasCoordinate).length >= 2;
+    }
+
+    function enterTicketReplay() {
+        if (!ticketReplayView) return;
+        ticketReplayItems = sortedTicketItems();
+        ticketReplayPoints = ticketReplayItems;
+        if (!canEnterTicketReplay()) return;
+        // 只在真正进入放映时记录一次：自动旋转状态与当前票根，退出时复位
+        ticketReplayPrevAutoRotate = autoRotate;
+        ticketReplayEntryIndex = ticketIndex;
+        ticketGallery.classList.add('is-replay-mode');
+        ticketReplayView.hidden = false;
+        // 从星图切回来时接着上次的站继续播（-1 表示从头开始）
+        startTicketReplay(ticketReplayResumeIndex);
+        updateTicketModeButtons();
+    }
+
+    function clearTicketReplay() {
+        const wasReplay = ticketViewMode === 'replay';
+        ticketReplayGeneration++;
+        ticketReplayPlaying = false;
+        ticketReplayFlying = false;
+        clearTimeout(ticketReplayTimer);
+        ticketReplayTimer = null;
+        cancelTicketReplayFlight();
+        ticketReplayHideFlight();
+        if (ticketReplayEnd) ticketReplayEnd.hidden = true;
+        if (ticketReplayView) ticketReplayView.hidden = true;
+        if (ticketReplayView) ticketReplayView.classList.remove('is-focused', 'is-flying');
+        if (ticketGallery) ticketGallery.classList.remove('is-replay-mode');
+        // 回到进入放映前的票根，不停留在最后看过的那一张；
+        // 只有真的在放映中才复位，避免之后切模式时把票夹游标拽回旧位置
+        if (wasReplay) {
+            // 记下播到哪一站：切到星图再切回来能接着播（方案 §5 互斥要求）
+            ticketReplayResumeIndex = ticketReplayIndex;
+            if (ticketItems[ticketReplayEntryIndex]) ticketIndex = ticketReplayEntryIndex;
+        }
+        ticketReplayPausedByOverlay = false;
+        if (ticketReplayPrevAutoRotate && !autoRotate) setAutoRotate(true);
+        ticketReplayPrevAutoRotate = false;
+        updateTicketReplayPlayButton();
+    }
+
+    function setTicketViewMode(mode) {
+        if (mode === ticketViewMode) return;
+        clearTicketConstellation();
+        clearTicketReplay();
+        if (mode === 'constellation') {
+            ticketViewMode = 'constellation';
+            clearTicketStampTimer();
+            enterTicketConstellation();
+        } else if (mode === 'replay') {
+            // 先校验再改状态：不满足条件时保持票夹视图，避免模式卡在 replay
+            if (!canEnterTicketReplay()) {
+                ticketViewMode = 'archive';
+                updateTicketModeButtons();
+                return;
+            }
+            ticketViewMode = 'replay';
+            clearTicketStampTimer();
+            enterTicketReplay();
+        } else {
+            ticketViewMode = 'archive';
+            clearTicketStampTimer();
+            if (ticketItems[ticketIndex]) {
+                applyTicketSeason(ticketItems[ticketIndex]);
+            }
+            renderTicketWallet();
+            // 退出放映后把横向长串重新居中到入口票根，避免字幕与卷轴错位
+            if (ticketStripMode) {
+                requestAnimationFrame(() => {
+                    centerStripItem(ticketIndex, false);
+                    positionStripArchive();
+                });
+            }
+            updateTicketModeButtons();
+            startTicketStampDwell(ticketItems[ticketIndex]);
+            // 从重走/星图回到票夹：自动旋转开着时同样把视角收回整个地球
+            restoreGlobeViewForAutoRotate();
+        }
+    }
 
     function ticketEscape(value) {
         return String(value || '').replace(/[&<>"']/g, char => ({
@@ -3980,10 +5541,18 @@
     function setTicketView(open, targetIndex, startRotation) {
         if (!ticketGallery) return;
         if (open) {
+            if (ticketViewMode !== 'archive') {
+                clearTicketConstellation();
+                clearTicketReplay();
+                ticketViewMode = 'archive';
+            }
+            ticketReplayResumeIndex = -1;   // 重新打开票根页时，重走从头开始
             // 打开票根前自动收起可能开着的足迹详情卡 / 城市聚合卡
             if (markerCard && markerCard.classList.contains('visible')) hideMarkerCard();
             if (cityCard && cityCard.classList.contains('visible')) hideCityCard(false);
             ticketItems = ticketItemsFromFootprints();
+            loadTicketPassport();
+            updateTicketFeatureButtons();
             ticketGalleryEmpty.hidden = ticketItems.length > 0;
             const cities = new Set(ticketItems.map(fp => fp.city).filter(Boolean));
             const latest = ticketItems.map(fp => ticketDate(fp.ticketDate || fp.createTime)).filter(Boolean)[0] || '';
@@ -4011,6 +5580,7 @@
                 }
                 focusTicketGalleryControl();
             } else {
+                resetTicketSeason();
                 ticketWallet.hidden = true;
                 ticketStrip.hidden = true;
                 ticketStripHint.hidden = true;
@@ -4018,11 +5588,25 @@
                 focusTicketGalleryControl();
             }
         } else {
+            // 关闭票根页时浮层会跟着关闭，这时不要再去恢复放映
+            ticketReplayPausedByOverlay = false;
+            if (ticketPassport && ticketPassport.classList.contains('show')) closeTicketPassport(false);
+            if (ticketOracle && ticketOracle.classList.contains('show')) closeTicketOracle(false);
+            if (ticketLetter && ticketLetter.classList.contains('show')) closeTicketLetter(false);
+            if (ticketViewMode !== 'archive') {
+                clearTicketConstellation();
+                clearTicketReplay();
+                ticketViewMode = 'archive';
+            }
+            // 返回地球：自动旋转开着时，把重走/星图留下的近地面视角收回整个地球
+            restoreGlobeViewForAutoRotate();
             // 先把焦点移出票根容器，再标记 aria-hidden，避免无障碍警告
             if (ticketGallery.contains(document.activeElement)) {
                 document.activeElement.blur();
             }
             const pendingFocus = ticketTrigger || document.getElementById('ticketGalleryBtn');
+            clearTicketStampTimer();
+            resetTicketSeason();
             ticketGallery.classList.remove('show');
             setOverlayHidden(ticketGallery, true);
             document.body.classList.remove('ticket-gallery-open');
@@ -4187,12 +5771,17 @@
     function renderTicketWallet() {
         const fp = ticketItems[ticketIndex];
         if (!fp) return;
+        applyTicketSeason(fp);
         renderTicketMeta(fp);
+        updateTicketStampBadge(fp, false);
+        updateTicketLetterAction(fp);
+        startTicketStampDwell(fp);
         if (ticketStripMode) {
             renderStripWallet();
         } else {
             renderFanWallet();
         }
+        updateTicketFeatureButtons();
     }
 
     function renderFanWallet() {
@@ -4375,6 +5964,51 @@
 
     ticketGalleryBtn.addEventListener('click', () => setTicketView(true));
     ticketGalleryBack.addEventListener('click', () => setTicketView(false));
+    ticketModeArchiveBtn.addEventListener('click', () => setTicketViewMode('archive'));
+    ticketModeReplayBtn.addEventListener('click', () => setTicketViewMode('replay'));
+    ticketModeStarBtn.addEventListener('click', () => setTicketViewMode('constellation'));
+    ticketConstellationBack.addEventListener('click', () => setTicketViewMode('archive'));
+    ticketConstellationCanvas.addEventListener('click', handleTicketSkyClick);
+    ticketReplayPrev.addEventListener('click', () => stepTicketReplay(-1));
+    ticketReplayNext.addEventListener('click', () => stepTicketReplay(1));
+    ticketReplayPlay.addEventListener('click', () => {
+        if (ticketReplayPlaying) pauseTicketReplay();
+        else resumeTicketReplay();
+    });
+    ticketReplayExit.addEventListener('click', () => setTicketViewMode('archive'));
+    ticketReplayAgain.addEventListener('click', () => startTicketReplay());
+    ticketReplayCloseEnd.addEventListener('click', () => setTicketViewMode('archive'));
+    ticketPassportBtn.addEventListener('click', openTicketPassport);
+    ticketPassportBack.addEventListener('click', () => closeTicketPassport());
+    ticketOracleBtn.addEventListener('click', openTicketOracle);
+    ticketOracleBack.addEventListener('click', () => closeTicketOracle());
+    ticketOracleAgain.addEventListener('click', ticketOracleShuffle);
+    ticketOracleClose.addEventListener('click', () => closeTicketOracle());
+    ticketOracleView.addEventListener('click', openOracleTicketInArchive);
+    ticketLetterBtn.addEventListener('click', () => {
+        const fp = ticketItems[ticketIndex];
+        if (fp) openTicketLetter(fp);
+    });
+    ticketLetterBack.addEventListener('click', () => closeTicketLetter());
+    ticketLetterDownload.addEventListener('click', downloadTicketLetter);
+    ticketLetterShare.addEventListener('click', shareTicketLetter);
+    ticketPassportReset.addEventListener('click', () => {
+        if (!window.confirm('确定清除这台设备上的全部集章记录吗？')) return;
+        ticketPassportRecords = [];
+        persistTicketPassport();
+        if (ticketPassport.classList.contains('show')) renderTicketPassport();
+        updateTicketPassportButton();
+        updateTicketStampBadge(ticketItems[ticketIndex], false);
+    });
+    [ticketPassport, ticketOracle, ticketLetter].forEach(overlay => {
+        if (!overlay) return;
+        overlay.addEventListener('click', event => {
+            if (event.target !== overlay) return;
+            if (overlay === ticketPassport) closeTicketPassport();
+            else if (overlay === ticketOracle) closeTicketOracle();
+            else closeTicketLetter();
+        });
+    });
     ticketLightboxRetry.addEventListener('click', () => reloadTicket(ticketIndex));
     ticketStripProgress.querySelector('.ticket-progress-rail').addEventListener('click', event => {
         const segment = event.target.closest('.ticket-progress-segment');
@@ -4492,6 +6126,47 @@
         if (event.target === ticketLightbox) closeTicketLightbox();
     });
     document.addEventListener('keydown', event => {
+        if (ticketOracle && ticketOracle.classList.contains('show') && event.key === 'Escape') {
+            event.preventDefault();
+            closeTicketOracle();
+            return;
+        }
+        if (ticketLetter && ticketLetter.classList.contains('show') && event.key === 'Escape') {
+            event.preventDefault();
+            closeTicketLetter();
+            return;
+        }
+        if (ticketPassport && ticketPassport.classList.contains('show') && event.key === 'Escape') {
+            event.preventDefault();
+            closeTicketPassport();
+            return;
+        }
+        if (ticketGallery.classList.contains('show') && ticketViewMode === 'replay') {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                event.preventDefault();
+                stepTicketReplay(event.key === 'ArrowRight' ? 1 : -1);
+                return;
+            }
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                setTicketViewMode('archive');
+                return;
+            }
+        }
+        if (ticketGallery.classList.contains('show') && ticketViewMode === 'constellation') {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                event.preventDefault();
+                const dir = event.key === 'ArrowRight' ? 1 : -1;
+                const total = ticketConstellationItems.length || 1;
+                selectTicketConstellation((ticketConstellationIndex + dir + total) % total);
+                return;
+            }
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                setTicketViewMode('archive');
+                return;
+            }
+        }
         if (ticketLightbox.classList.contains('show')) {
             if (event.key === 'ArrowLeft') { event.preventDefault(); switchTicket(-1); }
             if (event.key === 'ArrowRight') { event.preventDefault(); switchTicket(1); }
@@ -4502,6 +6177,12 @@
             event.preventDefault();
             setTicketView(false);
         }
+    });
+    // 页面切到后台时停止放映：后台标签页会节流定时器，回来容易一次跳好几站
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden || ticketViewMode !== 'replay') return;
+        if (!ticketGallery.classList.contains('show')) return;
+        pauseTicketReplay();
     });
     document.addEventListener('footprints:loaded', () => {
         if (ticketGallery.classList.contains('show')) {

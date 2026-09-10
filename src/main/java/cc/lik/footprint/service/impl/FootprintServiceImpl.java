@@ -82,7 +82,14 @@ public class FootprintServiceImpl implements FootprintService {
                     image.path("timelineImageSuffix").asText(""),
                     image.path("cityWallImageFrom").asText(""),
                     image.path("cityWallImageTo").asText(""),
-                    image.path("cityWallImageSuffix").asText("")
+                    image.path("cityWallImageSuffix").asText(""),
+                    globe.path("enableTicketJourneyReplay").asBoolean(false),
+                    globe.path("enableTicketConstellation").asBoolean(false),
+                    globe.path("ticketConstellationMode").asText("globe"),
+                    globe.path("enableTicketSeasonLight").asBoolean(false),
+                    globe.path("enableTicketOracle").asBoolean(false),
+                    globe.path("enableTicketLetter").asBoolean(false),
+                    globe.path("enableTicketPassport").asBoolean(false)
                 ));
             })
             .flatMap(config -> config);
