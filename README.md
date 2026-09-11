@@ -336,6 +336,19 @@ DELETE /apis/footprint.lik.cc/v1alpha1/footprints/{name}
 | `GET` | `/apis/api.footprint.lik.cc/v1alpha1/footprints/location/{address}` | 根据地址返回经纬度，响应为 `经度,纬度` 文本 |
 | `POST` | `/apis/api.footprint.lik.cc/v1alpha1/footprints/{name}/geocode` | 对指定足迹执行逆地理编码，并回填省/市及 adcode |
 
+### 票根图片代理
+
+```text
+GET /footprints/image-proxy?url={图片地址}
+```
+
+票根图可能放在别的域名（图床、CDN，本地开发时页面域名与图片域名也常不同），跨域图片既会被 CORS 拦掉，
+画进 canvas 之后也无法导出（`toBlob` 抛 `SecurityError`），「未寄出的明信片」「旅行明信片」就出不来图。
+前端遇到跨域票根图时会改走这个同源代理，由插件服务端取一次图再回给浏览器。
+
+出于安全考虑只允许代理**本站足迹里出现过的图片域名**（`spec.ticketImage`、`spec.image`、`spec.galleryImages[].url` 的 host），
+并且拒绝 localhost / 内网地址、非 http(s) 协议与非图片响应；单张图片上限 10MB。
+
 `GET /footprints/stats` 返回：
 
 ```json

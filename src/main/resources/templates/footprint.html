@@ -20,7 +20,7 @@
     <script src="/plugins/footprint/assets/static/cesium/Cesium.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/pako.min.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/tdtplug.umd.min.js"></script>
-    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v94" rel="stylesheet">
+    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v123" rel="stylesheet">
 
 
 <!--    <link rel="stylesheet" href="../static/css/footprint.css" type="text/css">-->
@@ -54,8 +54,6 @@
             cityCardHoverCarousel: /*[[${settings.cityCardHoverCarousel}]]*/ true,
             enablePostcard: /*[[${settings.enablePostcard}]]*/ true,
             enableTicketJourneyReplay: /*[[${settings.enableTicketJourneyReplay}]]*/ false,
-            enableTicketConstellation: /*[[${settings.enableTicketConstellation}]]*/ false,
-            ticketConstellationMode: /*[[${settings.ticketConstellationMode}]]*/ 'globe',
             enableTicketSeasonLight: /*[[${settings.enableTicketSeasonLight}]]*/ false,
             enableTicketOracle: /*[[${settings.enableTicketOracle}]]*/ false,
             enableTicketLetter: /*[[${settings.enableTicketLetter}]]*/ false,
@@ -172,12 +170,29 @@
                 <span id="cityViewBackLabel">返回地球</span>
             </button>
             <div class="city-view-head">
-                <p class="city-view-eyebrow">Footprints · 足迹</p>
-                <h2 class="city-view-title-head" aria-label="城市名称">
-                    <button type="button" id="cityViewTitle" class="city-title-options"
-                            aria-haspopup="listbox" aria-expanded="false" aria-label="切换城市">城市</button>
-                </h2>
-                <p id="cityViewStats"></p>
+                <!-- 标题行：足迹 / 城市名 / 统计。到访条刻意放到它下面另起一行，
+                     否则到访一多就会把这行撑宽，把城市名顶到一边 -->
+                <div class="city-view-headline">
+                    <p class="city-view-eyebrow">Footprints · 足迹</p>
+                    <h2 class="city-view-title-head" aria-label="城市名称">
+                        <button type="button" id="cityViewTitle" class="city-title-options"
+                                aria-haspopup="listbox" aria-expanded="false" aria-label="切换城市">城市</button>
+                    </h2>
+                    <p id="cityViewStats"></p>
+                </div>
+                <div class="city-view-meta" id="cityViewMeta" hidden>
+                    <div id="cityViewTimeline" class="city-view-timeline" hidden>
+                        <!-- 手机端折叠入口：桌面端由 CSS 隐藏，到访直接平铺成一行 -->
+                        <button type="button" id="cityViewTimelineToggle" class="city-view-timeline-toggle"
+                                aria-expanded="false" aria-controls="cityViewTimelineList" aria-label="展开到访记录">
+                            <span>到访</span><b id="cityViewTimelineCount">0</b><span>次</span>
+                            <i class="city-view-timeline-chevron" aria-hidden="true">▾</i>
+                        </button>
+                        <span class="city-view-timeline-label">到访</span>
+                        <ol id="cityViewTimelineList" class="city-view-timeline-list"></ol>
+                    </div>
+                    <button id="cityViewTickets" class="city-view-tickets" type="button" hidden>看这座城市的票根</button>
+                </div>
                 <div id="cityViewCityList" class="city-view-city-list" role="listbox" aria-label="城市列表" hidden></div>
             </div>
             <div class="city-view-nav">
@@ -270,9 +285,16 @@
             <div class="feature-nav"></div>
         </div>
         <div class="feature-body postcard-body">
-            <img id="postcardPreviewImg" alt="旅行明信片预览">
+            <div id="postcardStage" class="postcard-stage is-loading">
+                <div class="postcard-skeleton" aria-hidden="true"></div>
+                <img id="postcardPreviewImg" alt="旅行明信片预览">
+                <div class="postcard-status">
+                    <p id="postcardStatus" aria-live="polite">正在生成明信片…</p>
+                    <button id="postcardRetry" type="button" hidden>重新生成</button>
+                </div>
+            </div>
             <div class="postcard-actions">
-                <button id="postcardDownload" type="button">下载图片</button>
+                <button id="postcardDownload" type="button" disabled>下载图片</button>
                 <button id="postcardShare" type="button" hidden>分享</button>
             </div>
         </div>
@@ -295,8 +317,8 @@
                 <div id="ticketViewModes" class="ticket-view-modes" role="group" aria-label="票根浏览模式" hidden>
                     <button id="ticketModeArchiveBtn" type="button" data-ticket-mode="archive" class="is-active">票夹</button>
                     <button id="ticketModeReplayBtn" type="button" data-ticket-mode="replay">重走</button>
-                    <button id="ticketModeStarBtn" type="button" data-ticket-mode="constellation">星图</button>
                 </div>
+                <button id="ticketCityFilter" type="button" hidden></button>
                 <button id="ticketOracleBtn" type="button" hidden>
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                         <path d="M4.5 4.5 19.5 19.5M4.5 19.5 19.5 4.5"/>
@@ -370,47 +392,79 @@
                 <span>回到地球，继续记录下一段旅程。</span>
             </div>
         </div>
-        <div id="ticketConstellationView" class="ticket-constellation-view" hidden>
-            <canvas id="ticketConstellationCanvas" aria-label="票根星图"></canvas>
-            <div class="ticket-constellation-hint">
-                <p id="ticketConstellationTitle">你的票根星座</p>
-                <p id="ticketConstellationSub"></p>
-                <!-- 缺经纬度的票根：放在图例区，不参与连线 -->
-                <ul id="ticketConstellationLegend" class="ticket-constellation-legend" hidden></ul>
-                <button id="ticketConstellationBack" type="button">回到票夹</button>
-            </div>
-            <div id="ticketConstellationCard" class="ticket-constellation-card" hidden></div>
-        </div>
         <div id="ticketReplayView" class="ticket-replay-view" hidden>
-            <div id="ticketReplayCard" class="ticket-replay-card" aria-live="polite"></div>
+            <div id="ticketReplayCard" class="ticket-replay-card" role="button" tabindex="0"
+                 aria-live="polite" aria-expanded="false" aria-label="放大票根"></div>
             <div class="ticket-replay-cinema">
                 <div class="ticket-replay-copy">
-                <p id="ticketReplaySubtitle" class="ticket-replay-subtitle"></p>
-                <p id="ticketReplayRoute" class="ticket-replay-route"></p>
+                    <p class="ticket-replay-title">
+                        <span id="ticketReplaySubtitle" class="ticket-replay-subtitle"></span>
+                        <span id="ticketReplayCityBadge" class="ticket-replay-city-badge" hidden></span>
+                    </p>
+                    <p class="ticket-replay-meta">
+                        <span id="ticketReplayRoute" class="ticket-replay-route"></span>
+                        <span id="ticketReplayDistance" class="ticket-replay-distance"></span>
+                        <span id="ticketReplayTotal" class="ticket-replay-total"></span>
+                    </p>
                 </div>
                 <div class="ticket-replay-progress">
-                    <span id="ticketReplayProgressText"></span>
+                    <div class="ticket-replay-progress-head">
+                        <span id="ticketReplayProgressText"></span>
+                        <span id="ticketReplayEta" class="ticket-replay-eta"></span>
+                    </div>
                     <div class="ticket-replay-bar"><i id="ticketReplayBarInner"></i></div>
                 </div>
-                <div class="ticket-replay-controls">
-                    <button id="ticketReplayPrev" type="button" aria-label="上一站">‹</button>
-                    <button id="ticketReplayPlay" type="button">暂停</button>
-                    <button id="ticketReplayNext" type="button" aria-label="下一站">›</button>
-                    <button id="ticketReplayExit" type="button">退出</button>
+                <div class="ticket-replay-actions">
+                    <div class="ticket-replay-transport">
+                        <button id="ticketReplayPrev" type="button" aria-label="上一站">‹</button>
+                        <button id="ticketReplayPlay" type="button">暂停</button>
+                        <button id="ticketReplayNext" type="button" aria-label="下一站">›</button>
+                    </div>
+                    <div class="ticket-replay-extras">
+                        <button id="ticketReplaySpeed" type="button" aria-label="播放速度，当前 1 倍速">1×</button>
+                        <button id="ticketReplayOpen" type="button">查看这张票</button>
+                        <button id="ticketReplayExit" type="button">退出</button>
+                    </div>
                 </div>
             </div>
-            <div id="ticketReplayFlight" class="ticket-replay-flight" hidden>
-                <p id="ticketReplayFlightLabel">正在飞往</p>
-                <strong id="ticketReplayFlightCity"></strong>
-                <span id="ticketReplayFlightKm"></span>
+            <div id="ticketReplayFlight" class="ticket-replay-flight" aria-hidden="true">
+                <p id="ticketReplayFlightLabel" class="ticket-replay-flight-kicker">正在飞往</p>
+                <div class="ticket-replay-flight-route">
+                    <span id="ticketReplayFlightFrom" class="ticket-replay-flight-from"></span>
+                    <i class="ticket-replay-flight-arrow" aria-hidden="true"></i>
+                    <strong id="ticketReplayFlightCity" class="ticket-replay-flight-city"></strong>
+                </div>
+                <div class="ticket-replay-flight-track"><i></i></div>
+                <span id="ticketReplayFlightKm" class="ticket-replay-flight-km"></span>
             </div>
             <div id="ticketReplayEnd" class="ticket-replay-end" hidden>
-                <p class="ticket-replay-end-kicker">THE JOURNEY SO FAR</p>
-                <h3>重走完毕</h3>
-                <p id="ticketReplayEndStats"></p>
-                <div class="ticket-replay-end-actions">
-                    <button id="ticketReplayAgain" type="button">再看一次</button>
-                    <button id="ticketReplayCloseEnd" type="button">回到票夹</button>
+                <div class="ticket-replay-end-card" role="dialog" aria-labelledby="ticketReplayEndTitle">
+                    <p class="ticket-replay-end-kicker">THE JOURNEY SO FAR</p>
+                    <h3 id="ticketReplayEndTitle">重走完毕</h3>
+                    <p id="ticketReplayEndRange" class="ticket-replay-end-range"></p>
+                    <dl class="ticket-replay-end-metrics">
+                        <div class="ticket-replay-end-metric">
+                            <dt>张票根</dt>
+                            <dd id="ticketReplayEndTickets">—</dd>
+                        </div>
+                        <div class="ticket-replay-end-metric">
+                            <dt>座城市</dt>
+                            <dd id="ticketReplayEndCities">—</dd>
+                        </div>
+                        <div class="ticket-replay-end-metric">
+                            <dt>公里</dt>
+                            <dd id="ticketReplayEndKm">—</dd>
+                        </div>
+                        <div class="ticket-replay-end-metric">
+                            <dt>年跨度</dt>
+                            <dd id="ticketReplayEndSpan">—</dd>
+                        </div>
+                    </dl>
+                    <p id="ticketReplayEndNote" class="ticket-replay-end-note"></p>
+                    <div class="ticket-replay-end-actions">
+                        <button id="ticketReplayAgain" type="button">再看一次</button>
+                        <button id="ticketReplayCloseEnd" type="button">回到票夹</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -455,12 +509,16 @@
         </div>
         <div class="feature-body">
             <div class="ticket-oracle-stage">
-                <div id="ticketOracleCard" class="ticket-oracle-card" aria-live="polite"></div>
-                <p id="ticketOracleInspiration" class="ticket-oracle-inspiration"></p>
-                <div class="ticket-oracle-actions">
-                    <button id="ticketOracleView" type="button">查看这张票</button>
-                    <button id="ticketOracleAgain" type="button">再抽一次</button>
-                    <button id="ticketOracleClose" type="button">关闭</button>
+                <div class="ticket-oracle-stack">
+                    <div id="ticketOracleCard" class="ticket-oracle-card" aria-live="polite"></div>
+                    <div class="ticket-oracle-below">
+                        <p id="ticketOracleInspiration" class="ticket-oracle-inspiration"></p>
+                        <div class="ticket-oracle-actions">
+                            <button id="ticketOracleView" type="button">查看这张票</button>
+                            <button id="ticketOracleAgain" type="button">再抽一次</button>
+                            <button id="ticketOracleClose" type="button">关闭</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -478,9 +536,17 @@
             <div class="feature-nav"></div>
         </div>
         <div class="feature-body ticket-letter-body">
-            <img id="ticketLetterImg" alt="未寄出的明信片预览">
+            <div id="ticketLetterStage" class="ticket-letter-stage is-loading">
+                <div class="ticket-letter-skeleton" aria-hidden="true"></div>
+                <img id="ticketLetterImg" alt="未寄出的明信片预览">
+                <div class="ticket-letter-status">
+                    <p id="ticketLetterStatus" aria-live="polite">正在写这封信…</p>
+                    <button id="ticketLetterRetry" type="button" hidden>重新生成</button>
+                </div>
+            </div>
+            <p id="ticketLetterCaption" class="ticket-letter-caption"></p>
             <div class="postcard-actions ticket-letter-actions">
-                <button id="ticketLetterDownload" type="button">下载图片</button>
+                <button id="ticketLetterDownload" type="button" disabled>下载图片</button>
                 <button id="ticketLetterShare" type="button" hidden>分享</button>
             </div>
             <p class="ticket-letter-note">这封信由票根自动写成，正面是票根，背面是当时想说的话。</p>
@@ -703,6 +769,6 @@
 </div>
 
 <script src="/plugins/footprint/assets/static/data/district-pinyin.js?v=footprint-reveal-v61"></script>
-<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v94"></script>
+<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v123"></script>
 </body>
 </html>

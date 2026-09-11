@@ -221,21 +221,6 @@ spec:
           value: false
           help: "在票根页提供「重走」放映模式：按日期从第一张票开始，镜头在城市间飞行，逐张回放票根"
         - $formkit: checkbox
-          label: 票根页 · 星图模式
-          name: enableTicketConstellation
-          value: false
-          help: "在票根页提供「星图」视图，票根按城市坐标连成星座（渲染方式由下方选项决定）"
-        - $formkit: select
-          label: 票根页 · 星图渲染方式
-          name: ticketConstellationMode
-          value: globe
-          options:
-            - label: 真实地球坐标星光
-              value: globe
-            - label: 抽象 2D 星空
-              value: sky
-          help: "星图开启后使用哪种渲染：globe 在地球上按真实坐标布点；sky 使用全屏 2D 星空"
-        - $formkit: checkbox
           label: 票根页 · 时间有色
           name: enableTicketSeasonLight
           value: false
