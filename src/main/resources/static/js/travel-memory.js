@@ -2869,6 +2869,9 @@
     const cityWallBody = document.getElementById('cityWallBody');
     const cityWallTimeCapsuleBtn = document.getElementById('cityWallTimeCapsuleBtn');
     const cityWallInsightBtn = document.getElementById('cityWallInsightBtn');
+    const cityWallProvinceFilter = document.getElementById('cityWallProvinceFilter');
+    // 只看某个省（从足迹洞察的省份排行点进来）；关闭卡片墙时自动清掉
+    let cityWallProvinceFilterName = '';
 
     // 4 个创意功能的开关统一从后台 globe3d 设置读取（默认开启）
     function featureEnabled(key) {
@@ -3165,12 +3168,30 @@
         return { count: fps.length, photos, tickets, latest, first, places, cover, coverRaw, province, previews };
     }
 
+    // 「只看某个省」的开关：足迹洞察的省份排行点进来时用，只影响卡片墙这一层
+    function renderCityWallProvinceFilter() {
+        if (!cityWallProvinceFilter) return;
+        cityWallProvinceFilter.hidden = !cityWallProvinceFilterName;
+        if (!cityWallProvinceFilterName) return;
+        cityWallProvinceFilter.textContent = '只看 ' + cityWallProvinceFilterName + ' ✕';
+        cityWallProvinceFilter.setAttribute('aria-label',
+            '清除筛选，显示全部城市（当前只看 ' + cityWallProvinceFilterName + '）');
+    }
+
+    function setCityWallProvinceFilter(name) {
+        cityWallProvinceFilterName = name || '';
+        renderCityWall();
+        if (cityWallBody) cityWallBody.scrollTop = 0;
+    }
+
     function cityWallCards() {
-        const cards = cityList.map((city, ci) => ({
-            ci,
-            name: city.city,
-            ...cityWallCardData(ci)
-        }));
+        const cards = cityList
+            .map((city, ci) => ({
+                ci,
+                name: city.city,
+                ...cityWallCardData(ci)
+            }))
+            .filter(card => !cityWallProvinceFilterName || card.province === cityWallProvinceFilterName);
         // 最近去过的城市排前面，无日期时按名称兜底，保持顺序稳定
         cards.sort((a, b) => {
             const byDate = String(b.latest || '').localeCompare(String(a.latest || ''));
@@ -3200,6 +3221,7 @@
             ? cityCount + ' 座城市 · ' + footprintTotal + ' 个足迹 · ' + photoTotal + ' 张照片' +
               (ticketTotal ? ' · ' + ticketTotal + ' 张票根' : '')
             : '每一座城市，都值得一张卡片';
+        renderCityWallProvinceFilter();
         cityWallGrid.innerHTML = '';
         if (cityWallEmpty) cityWallEmpty.hidden = cityCount > 0;
 
@@ -3345,6 +3367,9 @@
         cityWall.classList.remove('show');
         setOverlayHidden(cityWall, true);
         document.body.classList.remove('city-wall-open');
+        // 关掉卡片墙就清掉省份筛选，下次进来看到的是全部城市
+        cityWallProvinceFilterName = '';
+        renderCityWallProvinceFilter();
         stopCityWallCoverLoader();
         stopCityWallWarmQueue();
         setGlobeRenderLoop(true);
@@ -3511,10 +3536,17 @@
     // ---------------- 足迹洞察 ----------------
     const insightView = document.getElementById('insightView');
     const insightBack = document.getElementById('insightBack');
-    const insightSentenceEl = document.getElementById('insightSentence');
-    const insightMetricsEl = document.getElementById('insightMetrics');
-    const insightAgain = document.getElementById('insightAgain');
-    let insightVariant = 0;
+    const insightDeck = document.getElementById('insightDeck');
+    const insightDots = document.getElementById('insightDots');
+    const insightPageCount = document.getElementById('insightPageCount');
+    const insightPrevCard = document.getElementById('insightPrevCard');
+    const insightNextCard = document.getElementById('insightNextCard');
+    const insightTitleEl = document.getElementById('insightTitle');
+    let insightCards = [];
+    let insightCardIndex = 0;
+    let insightSentenceVariant = 0;   // 概览那句总结的说法序号
+    let insightYearIndex = 0;         // 年度回顾里选中的年份下标
+    let insightSentenceCache = [];    // 概览的几句总结，换说法时只换文字、不重建卡片
 
     function haversineKm(a, b) {
         const R = 6371;
@@ -3524,6 +3556,262 @@
         const s = Math.sin(dLat / 2) ** 2 +
             Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
         return 2 * R * Math.asin(Math.sqrt(s));
+    }
+
+    // ---- 洞察用的小工具 ----
+    function insightSeasonOf(month) {
+        if (month >= 3 && month <= 5) return '春';
+        if (month >= 6 && month <= 8) return '夏';
+        if (month >= 9 && month <= 11) return '秋';
+        return '冬';
+    }
+
+    function insightMonthOf(fp) {
+        const month = Number(String(fp.createTime || '').slice(5, 7));
+        return month >= 1 && month <= 12 ? month : 0;
+    }
+
+    function insightSpotDate(fp) {
+        return fp && fp.createTime ? String(fp.createTime).slice(0, 10).replace(/-/g, '.') : '—';
+    }
+
+    function insightKm(value) {
+        const n = Math.round(Number(value) || 0);
+        return n.toLocaleString('zh-CN');
+    }
+
+    function insightPlaceName(fp) {
+        return (fp && (fp.city || fp.name)) || '某地';
+    }
+
+    // 时间维度：首次 / 最近、跨度、最常出发的月份、连续出行月、12 个月分布
+    function insightTimeStats(fps) {
+        const dated = fps
+            .filter(fp => fp.createTime)
+            .slice()
+            .sort((a, b) => String(a.createTime).localeCompare(String(b.createTime)));
+        if (!dated.length) return null;
+        const first = dated[0];
+        const last = dated[dated.length - 1];
+        const firstTime = new Date(String(first.createTime) + 'T00:00:00').getTime();
+        const lastTime = new Date(String(last.createTime) + 'T00:00:00').getTime();
+        const spanDays = Number.isFinite(firstTime) && Number.isFinite(lastTime)
+            ? Math.max(0, Math.round((lastTime - firstTime) / 86400000))
+            : 0;
+        const spanYears = Math.floor(spanDays / 365);
+        const months = new Array(12).fill(0);
+        const monthKeys = new Set();
+        dated.forEach(fp => {
+            const month = insightMonthOf(fp);
+            if (!month) return;
+            months[month - 1] += 1;
+            const year = Number(String(fp.createTime).slice(0, 4)) || 0;
+            monthKeys.add(year * 12 + (month - 1));
+        });
+        const topMonthCount = Math.max(...months);
+        const topMonth = months.indexOf(topMonthCount) + 1;
+        // 连续出行月：把「年 * 12 + 月」排成序列，找最长的一段相邻月份
+        const keys = [...monthKeys].sort((a, b) => a - b);
+        let streak = keys.length ? 1 : 0;
+        let best = streak;
+        for (let i = 1; i < keys.length; i++) {
+            streak = keys[i] === keys[i - 1] + 1 ? streak + 1 : 1;
+            best = Math.max(best, streak);
+        }
+        return {
+            first,
+            last,
+            spanDays,
+            spanYears,
+            restDays: spanDays - spanYears * 365,
+            months,
+            topMonth,
+            topMonthCount,
+            monthCount: keys.length,
+            monthStreak: best
+        };
+    }
+
+    // 省份维度：每个省去过多少座城市、留下多少条足迹
+    function insightProvinceStats(fps) {
+        const map = new Map();
+        fps.forEach(fp => {
+            const name = String(fp.province || '').trim();
+            if (!name) return;
+            if (!map.has(name)) map.set(name, { name, footprints: 0, cities: new Set() });
+            const item = map.get(name);
+            item.footprints += 1;
+            if (fp.city) item.cities.add(fp.city);
+        });
+        const list = [...map.values()]
+            .map(item => ({ name: item.name, footprints: item.footprints, cities: item.cities.size }))
+            .sort((a, b) => b.footprints - a.footprints ||
+                b.cities - a.cities ||
+                a.name.localeCompare(b.name, 'zh-Hans-CN'));
+        return { list, total: list.length };
+    }
+
+    // 单段之最：按时间相邻的两条足迹算一段，取最长 / 最短 / 平均与四个方向极值
+    function insightSegmentStats(fps) {
+        const located = fps.filter(fp => Number.isFinite(fp.lat) && Number.isFinite(fp.lng));
+        const dated = located
+            .filter(fp => fp.createTime)
+            .slice()
+            .sort((a, b) => String(a.createTime).localeCompare(String(b.createTime)));
+        const segments = [];
+        for (let i = 1; i < dated.length; i++) {
+            const km = haversineKm(dated[i - 1], dated[i]);
+            if (Number.isFinite(km)) segments.push({ from: dated[i - 1], to: dated[i], km });
+        }
+        const byKm = segments.slice().sort((a, b) => b.km - a.km);
+        const byLat = located.slice().sort((a, b) => a.lat - b.lat);
+        const byLng = located.slice().sort((a, b) => a.lng - b.lng);
+        const totalKm = segments.reduce((sum, item) => sum + item.km, 0);
+        return {
+            count: segments.length,
+            longest: byKm[0] || null,
+            shortest: byKm[byKm.length - 1] || null,
+            average: segments.length ? totalKm / segments.length : 0,
+            totalKm,
+            south: byLat[0] || null,
+            north: byLat[byLat.length - 1] || null,
+            west: byLng[0] || null,
+            east: byLng[byLng.length - 1] || null
+        };
+    }
+
+    // 类型维度：每种类型多少次，以及它最常出现在哪个季节
+    function insightTypeStats(fps) {
+        const map = new Map();
+        fps.forEach(fp => {
+            const name = String(fp.footprintType || '').trim() || '旅行';
+            if (!map.has(name)) map.set(name, { name, count: 0, seasons: { 春: 0, 夏: 0, 秋: 0, 冬: 0 } });
+            const item = map.get(name);
+            item.count += 1;
+            const month = insightMonthOf(fp);
+            if (month) item.seasons[insightSeasonOf(month)] += 1;
+        });
+        const list = [...map.values()].map(item => {
+            const top = Object.entries(item.seasons).sort((a, b) => b[1] - a[1])[0] || ['', 0];
+            return {
+                name: item.name,
+                count: item.count,
+                season: top[1] ? top[0] : '',
+                seasonCount: top[1] || 0
+            };
+        }).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-Hans-CN'));
+        return { list };
+    }
+
+    // 年度回顾：按年份聚合，倒序排列
+    function insightYearStats(fps) {
+        const map = new Map();
+        fps.forEach(fp => {
+            const year = String(fp.createTime || '').slice(0, 4);
+            if (!/^\d{4}$/.test(year)) return;
+            if (!map.has(year)) map.set(year, []);
+            map.get(year).push(fp);
+        });
+        return [...map.entries()]
+            .sort((a, b) => b[0].localeCompare(a[0]))
+            .map(([year, items]) => {
+                const dated = items
+                    .filter(fp => Number.isFinite(fp.lat) && Number.isFinite(fp.lng))
+                    .slice()
+                    .sort((a, b) => String(a.createTime).localeCompare(String(b.createTime)));
+                let km = 0;
+                for (let i = 1; i < dated.length; i++) km += haversineKm(dated[i - 1], dated[i]);
+                const seasons = [...new Set(items
+                    .map(fp => insightMonthOf(fp))
+                    .filter(Boolean)
+                    .map(insightSeasonOf))];
+                return {
+                    year,
+                    footprints: items.length,
+                    cities: new Set(items.map(fp => fp.city).filter(Boolean)).size,
+                    provinces: [...new Set(items.map(fp => String(fp.province || '').trim()).filter(Boolean))],
+                    photos: items.reduce((n, fp) => n + cityWallImages(fp).length, 0),
+                    tickets: items.filter(fp => ticketImageUrl(fp.ticketImage)).length,
+                    km: Math.round(km),
+                    months: new Set(items.map(fp => String(fp.createTime || '').slice(5, 7)).filter(Boolean)).size,
+                    seasons
+                };
+            });
+    }
+
+    // 轻成就：全部用已有数据算，满足条件即点亮
+    function insightAchievements(m, time, province, segment) {
+        const years = new Set(FOOTPRINTS
+            .map(fp => String(fp.createTime || '').slice(0, 4))
+            .filter(year => /^\d{4}$/.test(year)));
+        const seasonSet = new Set(FOOTPRINTS
+            .map(fp => insightMonthOf(fp))
+            .filter(Boolean)
+            .map(insightSeasonOf));
+        const maxCityVisits = cityList.reduce((max, city, ci) => Math.max(max, cityViewItems(ci).length), 0);
+        const photos = FOOTPRINTS.reduce((n, fp) => n + cityWallImages(fp).length, 0);
+        const northSouth = segment && segment.north && segment.south
+            ? Math.abs(segment.north.lat - segment.south.lat)
+            : 0;
+        const longest = segment && segment.longest ? segment.longest.km : 0;
+        return [
+            { name: '跨省旅人', desc: '点亮 3 个以上省份', done: province.total >= 3, progress: province.total + ' 个省' },
+            {
+                name: '南北纵贯',
+                desc: '最北与最南相隔 8 度以上',
+                done: northSouth >= 8,
+                progress: northSouth ? northSouth.toFixed(1) + ' 度' : '暂无数据'
+            },
+            {
+                name: '长途跋涉',
+                desc: '单段行程超过 500 公里',
+                done: longest >= 500,
+                progress: longest ? insightKm(longest) + ' km' : '暂无数据'
+            },
+            {
+                name: '票根收藏家',
+                desc: '一半以上的足迹有票根',
+                done: m.footprintCount > 0 && m.ticketCount * 2 >= m.footprintCount,
+                progress: m.ticketCount + '/' + m.footprintCount
+            },
+            {
+                name: '跨年旅人',
+                desc: '在两个以上年份出发',
+                done: years.size >= 2,
+                progress: years.size + ' 个年份'
+            },
+            {
+                name: '同城三刷',
+                desc: '同一座城市去过 3 次以上',
+                done: maxCityVisits >= 3,
+                progress: '最多 ' + maxCityVisits + ' 次'
+            },
+            {
+                name: '相册达人',
+                desc: '累计收录 100 张以上照片',
+                done: photos >= 100,
+                progress: photos + ' 张'
+            },
+            {
+                name: '四季出行',
+                desc: '春夏秋冬都出发过',
+                done: seasonSet.size >= 4,
+                progress: seasonSet.size + ' 个季节'
+            }
+        ];
+    }
+
+    // 顶部称号：按数据挑一个最贴切的
+    function insightTitleOf(m, time, province, segment) {
+        if (province.total >= 10) return '远行者 · 走过 ' + province.total + ' 个省份';
+        if (segment && segment.north && segment.south) {
+            const span = Math.abs(segment.north.lat - segment.south.lat);
+            if (span >= 12) return '南北纵贯者 · 跨越 ' + span.toFixed(1) + ' 个纬度';
+        }
+        if (m.ticketCount >= 5) return '票根收藏家 · 攒下 ' + m.ticketCount + ' 张票根';
+        if (m.cityCount >= 10) return '城市收集者 · 点亮 ' + m.cityCount + ' 座城市';
+        if (time && time.monthStreak >= 3) return '四季旅人 · 连续 ' + time.monthStreak + ' 个月出发';
+        return '刚出发的旅人 · ' + m.footprintCount + ' 段旅程';
     }
 
     function insightMetrics() {
@@ -3553,6 +3841,7 @@
             footprintCount: FOOTPRINTS.length,
             cityCount: cityList.length,
             ticketCount: ticketItemsFromFootprints().length,
+            photoCount: FOOTPRINTS.reduce((n, fp) => n + cityWallImages(fp).length, 0),
             distanceKm: Math.round(distance),
             topSeason: topSeason && topSeason[1] ? topSeason[0] : '',
             topSeasonCount: topSeason ? topSeason[1] : 0,
@@ -3563,56 +3852,447 @@
         };
     }
 
-    function insightSentences(m) {
-        const dist = m.distanceKm ? '约 ' + m.distanceKm.toLocaleString('zh-CN') + ' 公里' : '许多公里';
+    // 概览卡的几句总结：数据是真的，语气留一点文艺
+    function insightSentences(m, time, province, segment) {
+        const longest = segment && segment.longest;
+        const list = [];
+        list.push('约 ' + m.footprintCount + ' 次出发、' + m.cityCount +
+            ' 座城市，地图上的每一处坐标都是一个故事。');
+        if (m.distanceKm) {
+            list.push(m.cityCount + ' 座城市、约 ' + m.distanceKm.toLocaleString('zh-CN') +
+                ' 公里的路，是你一步一步走出来的版图。');
+        }
+        list.push((m.topSeason ? '你似乎总在' + m.topSeason + '天收拾行囊，' : '你总在合适的时候出发，') +
+            (m.topType ? '「' + m.topType + '」是你写得最多的一页。' : '每一程都值得被记住。'));
+        if (province && province.total) {
+            list.push(province.total + ' 个省份里，' + province.list[0].name +
+                '被你翻开的次数最多 —— 那里大概有值得反复抵达的理由。');
+        } else if (m.south && m.north) {
+            list.push('从 ' + insightPlaceName(m.south) + ' 到 ' + insightPlaceName(m.north) +
+                '，世界在地图上被你慢慢点亮。');
+        }
+        list.push(m.ticketCount
+            ? '你还留下了 ' + m.ticketCount + ' 张票根，每一次出发都被妥帖地收着。'
+            : m.photoCount + ' 张照片被好好收着，它们替你说着当时的光线与心情。');
+        if (longest) {
+            list.push('走得最远的一次，是从' + insightPlaceName(longest.from) + '到' +
+                insightPlaceName(longest.to) + '，约 ' + insightKm(longest.km) + ' 公里。');
+        }
+        if (time) {
+            list.push('从 ' + insightSpotDate(time.first) + ' 到 ' + insightSpotDate(time.last) + '，' +
+                (time.spanYears > 0
+                    ? time.spanYears + ' 年 ' + time.restDays + ' 天'
+                    : time.spanDays + ' 天') +
+                '的光阴，被你拆成了 ' + time.monthCount + ' 个月的出发。');
+        }
+        return list.length ? list : ['还没有足迹数据，出发后回来看看你的旅行洞察。'];
+    }
+
+    // ---- 洞察卡：数据 -> DOM ----
+    function insightMetric(label, value, opts = {}) {
+        return { label, value, hint: opts.hint || '', action: opts.action || null };
+    }
+
+    function insightMetricsDom(items, id) {
+        const wrap = document.createElement('div');
+        wrap.className = 'insight-metrics';
+        if (id) wrap.id = id;
+        items.forEach(item => {
+            const node = document.createElement(item.action ? 'button' : 'div');
+            node.className = 'insight-metric' + (item.action ? ' is-link' : '');
+            if (item.action) {
+                node.type = 'button';
+                node.addEventListener('click', item.action);
+            }
+            const label = document.createElement('span');
+            label.className = 'insight-metric-label';
+            label.textContent = item.label;
+            const value = document.createElement('strong');
+            value.className = 'insight-metric-value';
+            value.textContent = item.value;
+            node.append(label, value);
+            if (item.hint) {
+                const hint = document.createElement('em');
+                hint.className = 'insight-metric-hint';
+                hint.textContent = item.hint;
+                node.appendChild(hint);
+            }
+            wrap.appendChild(node);
+        });
+        return wrap;
+    }
+
+    // 12 个月分布条
+    function insightMonthsDom(months) {
+        const wrap = document.createElement('div');
+        wrap.className = 'insight-months';
+        wrap.setAttribute('aria-hidden', 'true');
+        const max = Math.max(1, ...months);
+        months.forEach((count, i) => {
+            const col = document.createElement('div');
+            col.className = 'insight-month' +
+                (count && count === max ? ' is-top' : '') +
+                (count ? '' : ' is-empty');
+            col.title = (i + 1) + ' 月 · ' + count + ' 次';
+            const bar = document.createElement('span');
+            bar.className = 'insight-month-bar';
+            bar.style.setProperty('--month-ratio', String(count / max));
+            const label = document.createElement('em');
+            label.textContent = String(i + 1);
+            col.append(bar, label);
+            wrap.appendChild(col);
+        });
+        return wrap;
+    }
+
+    function insightChipsDom(chips) {
+        const wrap = document.createElement('div');
+        wrap.className = 'insight-chips';
+        chips.forEach(chip => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'insight-chip' + (chip.className ? ' ' + chip.className : '') +
+                (chip.active ? ' is-active' : '');
+            btn.textContent = chip.text;
+            btn.setAttribute('aria-pressed', chip.active ? 'true' : 'false');
+            btn.addEventListener('click', chip.onClick);
+            wrap.appendChild(btn);
+        });
+        return wrap;
+    }
+
+    function insightBadgesDom(badges) {
+        const wrap = document.createElement('div');
+        wrap.className = 'insight-badges';
+        badges.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'insight-badge' + (item.done ? ' is-earned' : ' is-locked');
+            const mark = document.createElement('span');
+            mark.className = 'insight-badge-mark';
+            mark.textContent = item.done ? '✓' : '·';
+            const text = document.createElement('span');
+            text.className = 'insight-badge-text';
+            const name = document.createElement('strong');
+            name.textContent = item.name;
+            const desc = document.createElement('em');
+            desc.textContent = item.desc + (item.progress ? ' · ' + item.progress : '');
+            text.append(name, desc);
+            row.append(mark, text);
+            wrap.appendChild(row);
+        });
+        return wrap;
+    }
+
+    function insightCardDom(card) {
+        const section = document.createElement('section');
+        section.className = 'insight-card';
+        section.dataset.cardId = card.id;
+        section.setAttribute('role', 'tabpanel');
+        const kicker = document.createElement('p');
+        kicker.className = 'insight-kicker';
+        kicker.textContent = card.kicker;
+        const headline = document.createElement('h3');
+        headline.className = 'insight-headline';
+        if (card.headlineId) headline.id = card.headlineId;
+        headline.textContent = card.headline;
+        section.append(kicker, headline);
+        if (card.chips && card.chips.length) section.appendChild(insightChipsDom(card.chips));
+        if (card.months) section.appendChild(insightMonthsDom(card.months));
+        if (card.metrics && card.metrics.length) section.appendChild(insightMetricsDom(card.metrics, card.metricsId));
+        if (card.badges && card.badges.length) section.appendChild(insightBadgesDom(card.badges));
+        return section;
+    }
+
+    function insightYearHeadline(item) {
+        return item.year + ' 年 · ' + item.footprints + ' 次出发、' + item.cities + ' 座城市' +
+            (item.km ? '，约 ' + insightKm(item.km) + ' 公里' : '') + '。';
+    }
+
+    function insightYearMetrics(item) {
         return [
-            '你的足迹点亮了 ' + m.cityCount + ' 座城市，走过 ' + m.footprintCount + ' 段旅程，累计' + dist + '。',
-            (m.topSeason ? '你似乎最爱在' + m.topSeason + '天出发，' : '你总在合适的时间出发，') +
-                (m.topType ? '尤其偏爱「' + m.topType + '」类型的记录。' : '每一程都值得被记住。'),
-            '从 ' + (m.south && m.south.city || '南') + ' 到 ' + (m.north && m.north.city || '北') +
-                '、从 ' + (m.west && m.west.city || '西') + ' 到 ' + (m.east && m.east.city || '东') +
-                '，世界在地图上被慢慢点亮。',
-            m.ticketCount
-                ? m.footprintCount + ' 段旅程里，你收集了 ' + m.ticketCount + ' 张票根，每次出发都有凭证。'
-                : '你走过了 ' + m.cityCount + ' 座城市，用照片记下了 ' + m.footprintCount + ' 段旅程。',
-            '你的足迹里，' + (m.topType || '旅行') + ' 出现了 ' + m.topTypeCount + ' 次，是最常被记录的主题。',
-            '约 ' + m.footprintCount + ' 次出发、' + m.cityCount + ' 座城市，地图上的每一处坐标都是一个故事。'
+            insightMetric('足迹', item.footprints + ' 次'),
+            insightMetric('城市', item.cities + ' 座'),
+            insightMetric('省份', item.provinces.length + ' 个'),
+            insightMetric('照片', item.photos + ' 张'),
+            insightMetric('票根', item.tickets + ' 张'),
+            insightMetric('估算里程', item.km ? insightKm(item.km) + ' km' : '—'),
+            insightMetric('到访月份', item.months + ' 个月'),
+            insightMetric('到访季节', item.seasons.join('、') || '—')
         ];
     }
 
-    function renderInsight() {
-        if (!FOOTPRINTS.length) {
-            insightSentenceEl.textContent = '还没有足迹数据，出发后回来看看你的旅行洞察。';
-            insightMetricsEl.innerHTML = '';
-            return;
-        }
-        const m = insightMetrics();
-        const sentences = insightSentences(m);
-        insightVariant = insightVariant % sentences.length;
-        insightSentenceEl.textContent = sentences[insightVariant];
-        insightMetricsEl.innerHTML = '';
-        const items = [
-            ['足迹', m.footprintCount + ' 次'],
-            ['城市', m.cityCount + ' 座'],
-            ['票根', m.ticketCount + ' 张'],
-            ['估算里程', m.distanceKm ? m.distanceKm.toLocaleString('zh-CN') + ' km' : '—'],
-            ['出发季节', m.topSeason ? m.topSeason + '（' + m.topSeasonCount + ' 次）' : '—'],
-            ['最爱类型', m.topType ? m.topType + '（' + m.topTypeCount + ' 次）' : '—']
-        ];
-        items.forEach(([label, value]) => {
-            const row = document.createElement('div');
-            const dt = document.createElement('dt');
-            dt.textContent = label;
-            const dd = document.createElement('dd');
-            dd.textContent = value;
-            row.append(dt, dd);
-            insightMetricsEl.appendChild(row);
+    function refreshInsightYearCard(index) {
+        const years = insightYearStats(FOOTPRINTS);
+        if (!years.length) return;
+        insightYearIndex = Math.max(0, Math.min(index, years.length - 1));
+        const active = years[insightYearIndex];
+        const headline = document.getElementById('insightYearHeadline');
+        if (headline) headline.textContent = insightYearHeadline(active);
+        const metrics = document.getElementById('insightYearMetrics');
+        if (metrics) metrics.replaceWith(insightMetricsDom(insightYearMetrics(active), 'insightYearMetrics'));
+        if (!insightDeck) return;
+        [...insightDeck.querySelectorAll('.insight-year-chip')].forEach((chip, i) => {
+            chip.classList.toggle('is-active', i === insightYearIndex);
+            chip.setAttribute('aria-pressed', i === insightYearIndex ? 'true' : 'false');
         });
+    }
+
+    // 只换概览那句话，下面那张统计表保持原样：
+    // 以前是整张卡重建，统计表会跟着重放一次淡入动画
+    function swapInsightSentence() {
+        if (!insightSentenceCache.length) return;
+        insightSentenceVariant += 1;
+        const node = document.getElementById('insightOverviewHeadline');
+        if (!node) return;
+        node.classList.remove('is-swapping');
+        void node.offsetWidth;   // 触发重排，让动画能重新播
+        node.textContent = insightSentenceCache[insightSentenceVariant % insightSentenceCache.length];
+        node.classList.add('is-swapping');
+    }
+
+    // 点数字直达对应内容：票根墙 / 某座城市 / 某省
+    function insightOpenTicketWall() {
+        closeInsight(false);
+        setTicketView(true);
+    }
+
+    function insightOpenCity(cityName) {
+        const ci = cityList.findIndex(city => city.city === cityName);
+        if (ci < 0) return;
+        closeInsight(false);
+        openCityView(ci, null);
+    }
+
+    function insightFilterProvince(name) {
+        if (!name) return;
+        closeInsight(false);
+        setCityWallProvinceFilter(name);
+    }
+
+    function insightCardsData() {
+        const m = insightMetrics();
+        const time = insightTimeStats(FOOTPRINTS);
+        const province = insightProvinceStats(FOOTPRINTS);
+        const segment = insightSegmentStats(FOOTPRINTS);
+        const type = insightTypeStats(FOOTPRINTS);
+        const years = insightYearStats(FOOTPRINTS);
+        const badges = insightAchievements(m, time, province, segment);
+        const title = insightTitleOf(m, time, province, segment);
+        if (!FOOTPRINTS.length) {
+            return {
+                title: '',
+                cards: [{
+                    id: 'empty',
+                    kicker: 'TRAVEL SUMMARY',
+                    headline: '还没有足迹数据，出发后回来看看你的旅行洞察。',
+                    metrics: []
+                }]
+            };
+        }
+        const sentences = insightSentences(m, time, province, segment);
+        insightSentenceCache = sentences;
+        const cards = [];
+
+        // 1. 概览
+        cards.push({
+            id: 'overview',
+            kicker: 'TRAVEL SUMMARY',
+            headlineId: 'insightOverviewHeadline',
+            headline: sentences[insightSentenceVariant % sentences.length],
+            chips: [{
+                text: '换一个说法',
+                onClick: swapInsightSentence
+            }],
+            metrics: [
+                insightMetric('足迹', m.footprintCount + ' 次', { action: () => closeInsight() }),
+                insightMetric('城市', m.cityCount + ' 座', { action: () => closeInsight() }),
+                insightMetric('票根', m.ticketCount + ' 张', { action: insightOpenTicketWall }),
+                insightMetric('照片', m.photoCount + ' 张'),
+                insightMetric('估算里程', m.distanceKm ? m.distanceKm.toLocaleString('zh-CN') + ' km' : '—'),
+                insightMetric('出发季节', m.topSeason ? m.topSeason + '（' + m.topSeasonCount + ' 次）' : '—')
+            ]
+        });
+
+        // 2. 时间
+        if (time) {
+            const spanText = time.spanYears > 0
+                ? time.spanYears + ' 年 ' + time.restDays + ' 天'
+                : time.spanDays + ' 天';
+            cards.push({
+                id: 'time',
+                kicker: 'TIMELINE · 时间',
+                headline: '第一次出发是在 ' + insightSpotDate(time.first) + ' 的' +
+                    insightPlaceName(time.first) + '，最近一次停在 ' + insightSpotDate(time.last) + ' 的' +
+                    insightPlaceName(time.last) + ' —— 这条路，你走了 ' + spanText + '。',
+                months: time.months,
+                metrics: [
+                    insightMetric('首次出发', insightSpotDate(time.first), { hint: insightPlaceName(time.first) }),
+                    insightMetric('最近一次', insightSpotDate(time.last), { hint: insightPlaceName(time.last) }),
+                    insightMetric('最常出发的月份', time.topMonth + ' 月 · ' + time.topMonthCount + ' 次'),
+                    insightMetric('出行过的月份', time.monthCount + ' 个月'),
+                    insightMetric('最长连续出行', time.monthStreak + ' 个月'),
+                    insightMetric('旅行跨度', spanText)
+                ]
+            });
+        }
+
+        // 3. 省份：点某个省 → 回到卡片墙并只看这个省
+        if (province.total) {
+            cards.push({
+                id: 'province',
+                kicker: 'PROVINCES · 省份',
+                headline: province.total + ' 个省份、' + m.cityCount + ' 座城市，' +
+                    province.list[0].name + '留下了你最多的脚印。',
+                metrics: province.list.slice(0, 9).map(item => insightMetric(
+                    item.name,
+                    item.cities + ' 座城市 · ' + item.footprints + ' 个足迹',
+                    { action: () => insightFilterProvince(item.name) }
+                ))
+            });
+        }
+
+        // 4. 距离与方位：点城市进对应图片墙
+        if (segment.count) {
+            const longest = segment.longest;
+            const shortest = segment.shortest;
+            cards.push({
+                id: 'segment',
+                kicker: 'DISTANCE · 距离',
+                headline: '最长的一次远行，是从' + insightPlaceName(longest.from) + '到' +
+                    insightPlaceName(longest.to) + '，约 ' + insightKm(longest.km) + ' 公里。',
+                metrics: [
+                    insightMetric('最长一段', insightKm(longest.km) + ' km', {
+                        hint: insightPlaceName(longest.from) + ' → ' + insightPlaceName(longest.to),
+                        action: () => insightOpenCity(longest.to.city)
+                    }),
+                    insightMetric('最短一段', insightKm(shortest.km) + ' km', {
+                        hint: insightPlaceName(shortest.from) + ' → ' + insightPlaceName(shortest.to)
+                    }),
+                    insightMetric('平均每段', insightKm(segment.average) + ' km'),
+                    insightMetric('累计里程', insightKm(segment.totalKm) + ' km'),
+                    insightMetric('最北', insightPlaceName(segment.north), {
+                        action: () => insightOpenCity(segment.north.city)
+                    }),
+                    insightMetric('最南', insightPlaceName(segment.south), {
+                        action: () => insightOpenCity(segment.south.city)
+                    }),
+                    insightMetric('最东', insightPlaceName(segment.east), {
+                        action: () => insightOpenCity(segment.east.city)
+                    }),
+                    insightMetric('最西', insightPlaceName(segment.west), {
+                        action: () => insightOpenCity(segment.west.city)
+                    })
+                ]
+            });
+        }
+
+        // 5. 类型与季节交叉
+        if (type.list.length) {
+            const top = type.list[0];
+            cards.push({
+                id: 'type',
+                kicker: 'TYPES · 主题',
+                headline: '「' + top.name + '」出现了 ' + top.count + ' 次' +
+                    (top.season
+                        ? '，' + top.season + '天的风里，你出发得最多。'
+                        : '，是你写得最多的一页。'),
+                metrics: type.list.slice(0, 9).map(item => insightMetric(
+                    item.name,
+                    item.count + ' 次',
+                    { hint: item.season ? '多在' + item.season + '天（' + item.seasonCount + ' 次）' : '' }
+                ))
+            });
+        }
+
+        // 6. 年度回顾：卡内切换年份
+        if (years.length) {
+            if (insightYearIndex >= years.length) insightYearIndex = 0;
+            const active = years[insightYearIndex];
+            cards.push({
+                id: 'year',
+                kicker: 'YEAR IN REVIEW · 年度回顾',
+                headlineId: 'insightYearHeadline',
+                headline: insightYearHeadline(active),
+                chips: years.map((item, i) => ({
+                    text: item.year + ' 年',
+                    className: 'insight-year-chip',
+                    active: i === insightYearIndex,
+                    onClick: () => refreshInsightYearCard(i)
+                })),
+                metricsId: 'insightYearMetrics',
+                metrics: insightYearMetrics(active)
+            });
+        }
+
+        // 7. 称号与轻成就
+        if (badges.length) {
+            cards.push({
+                id: 'badge',
+                kicker: 'ACHIEVEMENTS · 称号与成就',
+                headline: '「' + title + '」',
+                badges
+            });
+        }
+
+        return { title, cards };
+    }
+
+    function renderInsightDots() {
+        const single = insightCards.length < 2;
+        if (insightDots) {
+            insightDots.innerHTML = '';
+            insightDots.hidden = single;
+            insightCards.forEach((card, i) => {
+                const dot = document.createElement('button');
+                dot.type = 'button';
+                dot.className = 'insight-dot' + (i === insightCardIndex ? ' is-active' : '');
+                dot.setAttribute('role', 'tab');
+                dot.setAttribute('aria-selected', i === insightCardIndex ? 'true' : 'false');
+                dot.setAttribute('aria-label', '第 ' + (i + 1) + ' 张：' + card.kicker);
+                dot.addEventListener('click', () => showInsightCard(i));
+                insightDots.appendChild(dot);
+            });
+        }
+        // 「3 / 7」：一眼看清在第几张、总共几张，点一下看下一张
+        if (insightPageCount) {
+            insightPageCount.hidden = single;
+            insightPageCount.textContent = (insightCardIndex + 1) + ' / ' + insightCards.length;
+            insightPageCount.setAttribute('aria-label',
+                '第 ' + (insightCardIndex + 1) + ' 张，共 ' + insightCards.length + ' 张，点击看下一张');
+        }
+    }
+
+    function showInsightCard(index) {
+        if (!insightDeck || !insightCards.length) return;
+        insightCardIndex = (index + insightCards.length) % insightCards.length;
+        [...insightDeck.children].forEach((el, i) => {
+            el.classList.toggle('is-active', i === insightCardIndex);
+        });
+        renderInsightDots();
+        // 翻页后回到顶部，避免长卡片停在中间（真正滚动的是 feature-body）
+        const scroller = insightView.querySelector('.feature-body');
+        if (scroller && scroller.scrollTop) scroller.scrollTop = 0;
+    }
+
+    function renderInsight() {
+        if (!insightDeck) return;
+        const data = insightCardsData();
+        insightCards = data.cards;
+        if (insightTitleEl) insightTitleEl.textContent = data.title || '';
+        insightDeck.innerHTML = '';
+        insightCards.forEach(card => insightDeck.appendChild(insightCardDom(card)));
+        if (insightCardIndex >= insightCards.length) insightCardIndex = 0;
+        const single = insightCards.length < 2;
+        if (insightPrevCard) insightPrevCard.hidden = single;
+        if (insightNextCard) insightNextCard.hidden = single;
+        showInsightCard(insightCardIndex);
     }
 
     function openInsight() {
         if (!featureEnabled('enableInsight') || !insightView) return;
-        insightVariant = 0;
+        insightSentenceVariant = 0;
+        insightCardIndex = 0;
+        insightYearIndex = 0;
         renderInsight();
         insightView.classList.add('show');
         setOverlayHidden(insightView, false);
@@ -3922,9 +4602,19 @@
         renderTimeCapsule();
     });
     insightBack.addEventListener('click', () => closeInsight());
-    insightAgain.addEventListener('click', () => {
-        insightVariant++;
-        renderInsight();
+    if (insightPrevCard) insightPrevCard.addEventListener('click', () => showInsightCard(insightCardIndex - 1));
+    if (insightNextCard) insightNextCard.addEventListener('click', () => showInsightCard(insightCardIndex + 1));
+    if (insightPageCount) insightPageCount.addEventListener('click', () => showInsightCard(insightCardIndex + 1));
+    // 洞察卡左右翻页也支持键盘
+    document.addEventListener('keydown', event => {
+        if (!insightView || !insightView.classList.contains('show')) return;
+        if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            showInsightCard(insightCardIndex - 1);
+        } else if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            showInsightCard(insightCardIndex + 1);
+        }
     });
     postcardBack.addEventListener('click', () => closePostcard());
     postcardDownload.addEventListener('click', downloadPostcard);
@@ -3942,6 +4632,9 @@
 
     cityWallBtn.addEventListener('click', openCityWall);
     cityWallBack.addEventListener('click', () => closeCityWall());
+    if (cityWallProvinceFilter) {
+        cityWallProvinceFilter.addEventListener('click', () => setCityWallProvinceFilter(''));
+    }
     // 数据重新加载（如刷新直达）后，若卡片墙正处于打开状态则重建
     document.addEventListener('footprints:loaded', () => {
         if (cityWall && cityWall.classList.contains('show')) renderCityWall();

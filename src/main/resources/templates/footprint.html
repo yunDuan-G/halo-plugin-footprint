@@ -20,7 +20,7 @@
     <script src="/plugins/footprint/assets/static/cesium/Cesium.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/pako.min.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/tdtplug.umd.min.js"></script>
-    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v123" rel="stylesheet">
+    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v131" rel="stylesheet">
 
 
 <!--    <link rel="stylesheet" href="../static/css/footprint.css" type="text/css">-->
@@ -83,9 +83,9 @@
         <div class="nav-group nav-group-primary">
             <button id="sceneModeBtn" type="button" title="切换到 2D 平面地图">2D 地图</button>
             <span class="nav-sep"></span>
-            <button id="cityWallBtn" type="button" title="查看城市卡片墙">城市</button>
+            <button id="cityWallBtn" type="button" title="打开城记：按最近到访排列的城市卡片墙">城记</button>
             <span class="nav-sep"></span>
-            <button id="ticketGalleryBtn" type="button" title="查看票根墙">票根</button>
+            <button id="ticketGalleryBtn" type="button" title="打开票根册：按时间收好的旅途票根">票根册</button>
             <span class="nav-sep nav-sep-back"></span>
             <button id="navBackGlobeBtn" type="button" title="回到整球视图">回到整球</button>
         </div>
@@ -220,6 +220,7 @@
                 <p class="city-wall-eyebrow">CITY COLLECTION · 城市目录</p>
                 <h2 id="cityWallTitle">城市卡片墙</h2>
                 <p id="cityWallStats"></p>
+                <button id="cityWallProvinceFilter" class="city-wall-province-filter" type="button" hidden></button>
             </div>
             <div class="city-wall-actions" id="cityWallFeatureActions">
                 <button id="cityWallTimeCapsuleBtn" type="button" hidden>去年今天</button>
@@ -252,7 +253,7 @@
         </div>
         <div class="feature-body" id="timeCapsuleBody" aria-live="polite"></div>
     </div>
-    <!-- 足迹洞察：自动生成的旅行总结 -->
+    <!-- 足迹洞察：可翻页的洞察卡（概览 / 时间 / 省份 / 距离 / 类型 / 年度 / 成就） -->
     <div id="insightView" class="feature-overlay" role="dialog" aria-modal="true" aria-label="足迹洞察" aria-hidden="true">
         <div class="feature-top">
             <button id="insightBack" class="feature-back" type="button" aria-label="返回城市墙">
@@ -261,15 +262,20 @@
             <div class="feature-head">
                 <p class="feature-eyebrow">FOOTPRINT INSIGHT</p>
                 <h2>足迹洞察</h2>
+                <p id="insightTitle"></p>
             </div>
-            <div class="feature-nav"></div>
+            <div class="feature-nav">
+                <button id="insightPrevCard" type="button" aria-label="上一张洞察">‹</button>
+                <button id="insightNextCard" type="button" aria-label="下一张洞察">›</button>
+            </div>
         </div>
         <div class="feature-body insight-body">
-            <p class="insight-kicker">TRAVEL SUMMARY</p>
-            <h3 id="insightSentence"></h3>
-            <dl id="insightMetrics"></dl>
-            <button id="insightAgain" type="button">换一句</button>
-            <p class="insight-note">按相邻足迹直线距离估算，供回顾使用</p>
+            <div class="insight-deck" id="insightDeck"></div>
+            <div class="insight-pager">
+                <div class="insight-dots" id="insightDots" role="tablist" aria-label="洞察分页"></div>
+                <button id="insightPageCount" class="insight-page-count" type="button" hidden>1 / 7</button>
+            </div>
+            <p class="insight-note">按相邻足迹直线距离估算，供回顾使用；带箭头的数字可以点进去看对应内容</p>
         </div>
     </div>
     <!-- 旅行明信片预览 -->
@@ -769,6 +775,6 @@
 </div>
 
 <script src="/plugins/footprint/assets/static/data/district-pinyin.js?v=footprint-reveal-v61"></script>
-<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v123"></script>
+<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v131"></script>
 </body>
 </html>
