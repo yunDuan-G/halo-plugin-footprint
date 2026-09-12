@@ -3563,6 +3563,9 @@
     let insightSentenceVariant = 0;   // 概览那句总结的说法序号
     let insightYearIndex = 0;         // 年度回顾里选中的年份下标
     let insightSentenceCache = [];    // 概览的几句总结，换说法时只换文字、不重建卡片
+    let insightTitleVariant = 0;      // 当前显示第几个称号
+    let insightTitleCache = [];       // 已解锁的称号（按稀缺度排），换称号时在这份列表里循环
+    const INSIGHT_TITLE_SLOTS = 13;   // 条件称号的总数，用来显示「已解锁 N / 13」
 
     function haversineKm(a, b) {
         const R = 6371;
@@ -3755,79 +3758,278 @@
             });
     }
 
-    // 轻成就：全部用已有数据算，满足条件即点亮
-    function insightAchievements(m, time, province, segment) {
-        const years = new Set(FOOTPRINTS
-            .map(fp => String(fp.createTime || '').slice(0, 4))
-            .filter(year => /^\d{4}$/.test(year)));
-        const seasonSet = new Set(FOOTPRINTS
-            .map(fp => insightMonthOf(fp))
-            .filter(Boolean)
-            .map(insightSeasonOf));
+    // 票根收藏家的判定只有这一处：称号和徽章共用，免得同名两个门槛，
+    // 出现「顶栏自称票根收藏家，下面那枚徽章却还灰着」
+    function insightTicketCollectorDone(m) {
+        return m.footprintCount > 0 && m.ticketCount * 2 >= m.footprintCount;
+    }
+
+    // 周末：createTime 被统一成 YYYY-MM-DD，小时已经丢了，只能算到「星期」这一层
+    function insightIsWeekend(fp) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String((fp && fp.createTime) || ''));
+        if (!m) return false;
+        const day = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay();
+        return day === 0 || day === 6;
+    }
+
+    // 成就与称号共用的派生统计：只算一遍，两边都从这里取，免得口径漂移
+    function insightDerived(segment) {
+        const located = FOOTPRINTS.filter(fp => Number.isFinite(fp.lat) && Number.isFinite(fp.lng));
+        const byLat = located.slice().sort((a, b) => a.lat - b.lat);
+        const byLng = located.slice().sort((a, b) => a.lng - b.lng);
         const maxCityVisits = cityList.reduce((max, city, ci) => Math.max(max, cityViewItems(ci).length), 0);
-        const photos = FOOTPRINTS.reduce((n, fp) => n + cityWallImages(fp).length, 0);
-        const northSouth = segment && segment.north && segment.south
-            ? Math.abs(segment.north.lat - segment.south.lat)
-            : 0;
-        const longest = segment && segment.longest ? segment.longest.km : 0;
+        let repeatCities = 0;
+        cityList.forEach((city, ci) => {
+            if (cityViewItems(ci).length >= 2) repeatCities += 1;
+        });
+        const ticketedCityKeys = new Set(FOOTPRINTS
+            .filter(fp => ticketImageUrl(fp.ticketImage))
+            .map(fp => cityKeyOf(fp)));
+        return {
+            north: byLat[byLat.length - 1] || null,
+            south: byLat[0] || null,
+            east: byLng[byLng.length - 1] || null,
+            west: byLng[0] || null,
+            // 只有一条数据时跨度按 0 算，免得「跨越 0.0 个纬度」也算点亮
+            latSpan: byLat.length >= 2 ? byLat[byLat.length - 1].lat - byLat[0].lat : 0,
+            lngSpan: byLng.length >= 2 ? byLng[byLng.length - 1].lng - byLng[0].lng : 0,
+            yearCount: new Set(FOOTPRINTS
+                .map(fp => String(fp.createTime || '').slice(0, 4))
+                .filter(year => /^\d{4}$/.test(year))).size,
+            seasonCount: new Set(FOOTPRINTS
+                .map(fp => insightMonthOf(fp))
+                .filter(Boolean)
+                .map(insightSeasonOf)).size,
+            maxCityVisits,
+            repeatCities,
+            photos: FOOTPRINTS.reduce((n, fp) => n + cityWallImages(fp).length, 0),
+            weekendCount: FOOTPRINTS.filter(insightIsWeekend).length,
+            // 画廊是「一条足迹带多张图」，所以这里比 cityWallImages 的 1 张兜底要严
+            galleryCount: FOOTPRINTS.filter(fp => cityWallImages(fp).length >= 2).length,
+            articleCount: FOOTPRINTS.filter(fp => String(fp.article || '').trim()).length,
+            typeCount: new Set(FOOTPRINTS
+                .map(fp => String(fp.footprintType || '').trim() || '旅行')).size,
+            // 「一城一票」：所有城市都能翻出票根。城市太少不算数，免得点亮得太容易
+            unticketedCities: cityList.filter(city => !ticketedCityKeys.has(city.key)).length,
+            allCitiesTicketed: cityList.length >= 3 &&
+                cityList.every(city => ticketedCityKeys.has(city.key)),
+            longest: segment && segment.longest ? segment.longest.km : 0
+        };
+    }
+
+    // 轻成就：全部用已有数据算，满足条件即点亮。
+    // 未点亮的补一句 remaining（还差多少），显示在进度位置
+    function insightAchievements(m, time, province, segment, stats) {
+        const s = stats || insightDerived(segment);
+        const ticketHalf = Math.ceil(m.footprintCount / 2);
+        const ticketGap = Math.max(0, ticketHalf - m.ticketCount);
         return [
-            { name: '跨省旅人', desc: '点亮 3 个以上省份', done: province.total >= 3, progress: province.total + ' 个省' },
+            {
+                name: '跨省旅人',
+                desc: '点亮 3 个以上省份',
+                done: province.total >= 3,
+                progress: province.total + ' 个省',
+                remaining: '还差 ' + Math.max(0, 3 - province.total) + ' 个省'
+            },
+            {
+                name: '疆域辽阔',
+                desc: '到访 8 个省份以上',
+                done: province.total >= 8,
+                progress: province.total + ' 个省',
+                remaining: '还差 ' + Math.max(0, 8 - province.total) + ' 个省'
+            },
             {
                 name: '南北纵贯',
                 desc: '最北与最南相隔 8 度以上',
-                done: northSouth >= 8,
-                progress: northSouth ? northSouth.toFixed(1) + ' 度' : '暂无数据'
+                done: s.latSpan >= 8,
+                progress: s.latSpan ? s.latSpan.toFixed(1) + ' 度' : '暂无数据',
+                remaining: s.latSpan ? '还差 ' + Math.max(0, 8 - s.latSpan).toFixed(1) + ' 度' : '暂无数据'
+            },
+            {
+                name: '北境行者',
+                desc: '最北的足迹在北纬 40° 以上',
+                done: !!s.north && s.north.lat >= 40,
+                progress: s.north ? '北纬 ' + s.north.lat.toFixed(1) + '°' : '暂无数据',
+                remaining: s.north
+                    ? '最北北纬 ' + s.north.lat.toFixed(1) + '°，还差 ' +
+                        Math.max(0, 40 - s.north.lat).toFixed(1) + ' 度'
+                    : '暂无数据'
+            },
+            {
+                name: '经度猎手',
+                desc: '最东与最西相隔 10 度以上',
+                done: s.lngSpan >= 10,
+                progress: s.lngSpan ? s.lngSpan.toFixed(1) + ' 度' : '暂无数据',
+                remaining: s.lngSpan ? '还差 ' + Math.max(0, 10 - s.lngSpan).toFixed(1) + ' 度' : '暂无数据'
             },
             {
                 name: '长途跋涉',
                 desc: '单段行程超过 500 公里',
-                done: longest >= 500,
-                progress: longest ? insightKm(longest) + ' km' : '暂无数据'
+                done: s.longest >= 500,
+                progress: s.longest ? insightKm(s.longest) + ' km' : '暂无数据',
+                remaining: s.longest ? '还差 ' + insightKm(Math.max(0, 500 - s.longest)) + ' km' : '暂无数据'
+            },
+            {
+                name: '千里单骑',
+                desc: '单段行程超过 1000 公里',
+                done: s.longest >= 1000,
+                progress: s.longest ? insightKm(s.longest) + ' km' : '暂无数据',
+                remaining: s.longest ? '还差 ' + insightKm(Math.max(0, 1000 - s.longest)) + ' km' : '暂无数据'
             },
             {
                 name: '票根收藏家',
                 desc: '一半以上的足迹有票根',
-                done: m.footprintCount > 0 && m.ticketCount * 2 >= m.footprintCount,
-                progress: m.ticketCount + '/' + m.footprintCount
+                done: insightTicketCollectorDone(m),
+                progress: m.ticketCount + '/' + m.footprintCount,
+                remaining: m.footprintCount ? '还差 ' + ticketGap + ' 张（要 ' + ticketHalf + ' 张）' : '暂无数据'
+            },
+            {
+                name: '票根大户',
+                desc: '累计票根 20 张以上',
+                done: m.ticketCount >= 20,
+                progress: m.ticketCount + ' 张',
+                remaining: '还差 ' + Math.max(0, 20 - m.ticketCount) + ' 张'
             },
             {
                 name: '跨年旅人',
                 desc: '在两个以上年份出发',
-                done: years.size >= 2,
-                progress: years.size + ' 个年份'
+                done: s.yearCount >= 2,
+                progress: s.yearCount + ' 个年份',
+                remaining: '还差 ' + Math.max(0, 2 - s.yearCount) + ' 个年份'
+            },
+            {
+                name: '岁月留痕',
+                desc: '记录跨度 3 年以上',
+                done: !!time && time.spanYears >= 3,
+                progress: time ? time.spanYears + ' 年' : '暂无数据',
+                remaining: time ? '还差 ' + Math.max(0, 3 - time.spanYears) + ' 年' : '暂无数据'
             },
             {
                 name: '同城三刷',
                 desc: '同一座城市去过 3 次以上',
-                done: maxCityVisits >= 3,
-                progress: '最多 ' + maxCityVisits + ' 次'
+                done: s.maxCityVisits >= 3,
+                progress: '最多 ' + s.maxCityVisits + ' 次',
+                remaining: '最多 ' + s.maxCityVisits + ' 次，还差 ' + Math.max(0, 3 - s.maxCityVisits) + ' 次'
+            },
+            {
+                name: '单城五刷',
+                desc: '同一座城市去过 5 次以上',
+                done: s.maxCityVisits >= 5,
+                progress: '最多 ' + s.maxCityVisits + ' 次',
+                remaining: '最多 ' + s.maxCityVisits + ' 次，还差 ' + Math.max(0, 5 - s.maxCityVisits) + ' 次'
+            },
+            {
+                name: '回头客',
+                desc: '有 5 座城市去过两次以上',
+                done: s.repeatCities >= 5,
+                progress: s.repeatCities + ' 座城市',
+                remaining: '还差 ' + Math.max(0, 5 - s.repeatCities) + ' 座'
             },
             {
                 name: '相册达人',
                 desc: '累计收录 100 张以上照片',
-                done: photos >= 100,
-                progress: photos + ' 张'
+                done: s.photos >= 100,
+                progress: s.photos + ' 张',
+                remaining: '还差 ' + Math.max(0, 100 - s.photos) + ' 张'
+            },
+            {
+                name: '快门狂魔',
+                desc: '累计收录 500 张以上照片',
+                done: s.photos >= 500,
+                progress: s.photos + ' 张',
+                remaining: '还差 ' + Math.max(0, 500 - s.photos) + ' 张'
+            },
+            {
+                name: '画廊主人',
+                desc: '3 条足迹带多图画廊',
+                done: s.galleryCount >= 3,
+                progress: s.galleryCount + ' 条',
+                remaining: '还差 ' + Math.max(0, 3 - s.galleryCount) + ' 条'
+            },
+            {
+                name: '图文并茂',
+                desc: '5 条足迹挂了文章链接',
+                done: s.articleCount >= 5,
+                progress: s.articleCount + ' 条',
+                remaining: '还差 ' + Math.max(0, 5 - s.articleCount) + ' 条'
+            },
+            {
+                name: '一城一票',
+                desc: '每座城市都留下了票根',
+                done: s.allCitiesTicketed,
+                progress: '票根覆盖 ' + (cityList.length - s.unticketedCities) + '/' + cityList.length + ' 座城市',
+                remaining: cityList.length < 3
+                    ? '至少 3 座城市后解锁'
+                    : '还有 ' + s.unticketedCities + ' 座城市没票根'
             },
             {
                 name: '四季出行',
                 desc: '春夏秋冬都出发过',
-                done: seasonSet.size >= 4,
-                progress: seasonSet.size + ' 个季节'
+                done: s.seasonCount >= 4,
+                progress: s.seasonCount + ' 个季节',
+                remaining: '还差 ' + Math.max(0, 4 - s.seasonCount) + ' 个季节'
+            },
+            {
+                name: '月度常客',
+                desc: '累计在 10 个不同月份出发过',
+                done: !!time && time.monthCount >= 10,
+                progress: time ? time.monthCount + ' 个月份' : '暂无数据',
+                remaining: time ? '还差 ' + Math.max(0, 10 - time.monthCount) + ' 个月份' : '暂无数据'
+            },
+            {
+                name: '周末出走',
+                desc: '5 次以上出发落在周末',
+                done: s.weekendCount >= 5,
+                progress: s.weekendCount + ' 次',
+                remaining: '还差 ' + Math.max(0, 5 - s.weekendCount) + ' 次'
+            },
+            {
+                name: '万里行者',
+                desc: '累计里程 1 万公里以上',
+                done: m.distanceKm >= 10000,
+                progress: insightKm(m.distanceKm) + ' km',
+                remaining: '还差 ' + insightKm(Math.max(0, 10000 - m.distanceKm)) + ' km'
+            },
+            {
+                name: '主题收藏家',
+                desc: '主题类型 5 种以上',
+                done: s.typeCount >= 5,
+                progress: s.typeCount + ' 种',
+                remaining: '还差 ' + Math.max(0, 5 - s.typeCount) + ' 种'
             }
         ];
     }
 
-    // 顶部称号：按数据挑一个最贴切的
-    function insightTitleOf(m, time, province, segment) {
-        if (province.total >= 10) return '远行者 · 走过 ' + province.total + ' 个省份';
-        if (segment && segment.north && segment.south) {
-            const span = Math.abs(segment.north.lat - segment.south.lat);
-            if (span >= 12) return '南北纵贯者 · 跨越 ' + span.toFixed(1) + ' 个纬度';
-        }
-        if (m.ticketCount >= 5) return '票根收藏家 · 攒下 ' + m.ticketCount + ' 张票根';
-        if (m.cityCount >= 10) return '城市收集者 · 点亮 ' + m.cityCount + ' 座城市';
-        if (time && time.monthStreak >= 3) return '四季旅人 · 连续 ' + time.monthStreak + ' 个月出发';
+    // 称号：把所有已解锁的收集出来（顺序 = 稀缺度，从难到易）。
+    // 第一句默认显示，成就卡上的「换一个称号」就在这份列表里循环，所以不再只挑一句。
+    function insightTitlesOf(m, time, province, segment, stats) {
+        const s = stats || insightDerived(segment);
+        const list = [];
+        if (m.cityCount >= 30) list.push('百城 · 点亮 ' + m.cityCount + ' 座城市');
+        if (m.distanceKm >= 10000) list.push('万里行者 · 约 ' + insightKm(m.distanceKm) + ' 公里');
+        if (s.photos >= 500) list.push('快门收藏家 · 收下 ' + s.photos + ' 张照片');
+        if (s.lngSpan >= 20) list.push('东西横穿者 · 跨越 ' + s.lngSpan.toFixed(1) + ' 个经度');
+        if (s.latSpan >= 12) list.push('南北纵贯者 · 跨越 ' + s.latSpan.toFixed(1) + ' 个纬度');
+        if (s.repeatCities >= 5) list.push('老地方收集者 · ' + s.repeatCities + ' 座城市去过两次以上');
+        if (time && time.spanYears >= 3) list.push('常年旅人 · 记录横跨 ' + time.spanYears + ' 年');
+        if (province.total >= 10) list.push('远行者 · 走过 ' + province.total + ' 个省份');
+        if (province.total >= 8) list.push('疆域辽阔者 · 走过 ' + province.total + ' 个省份');
+        if (insightTicketCollectorDone(m)) list.push('票根收藏家 · 攒下 ' + m.ticketCount + ' 张票根');
+        if (m.cityCount >= 10) list.push('城市收集者 · 点亮 ' + m.cityCount + ' 座城市');
+        if (s.weekendCount >= 10) list.push('周末出走者 · ' + s.weekendCount + ' 次出发落在周末');
+        if (time && time.monthStreak >= 3) list.push('四季旅人 · 连续 ' + time.monthStreak + ' 个月出发');
+        return list;
+    }
+
+    // 一句条件称号都没解锁时的兜底，不算进「N / 13」
+    function insightFallbackTitle(m) {
         return '刚出发的旅人 · ' + m.footprintCount + ' 段旅程';
+    }
+
+    // 还是保留「给一个最贴切的」这个入口，给需要单句的地方用
+    function insightTitleOf(m, time, province, segment, stats) {
+        const list = insightTitlesOf(m, time, province, segment, stats);
+        return list.length ? list[0] : insightFallbackTitle(m);
     }
 
     function insightMetrics() {
@@ -3856,7 +4058,9 @@
         return {
             footprintCount: FOOTPRINTS.length,
             cityCount: cityList.length,
-            ticketCount: ticketItemsFromFootprints().length,
+            // 足迹洞察看的是全部数据：这里不能用 ticketItemsFromFootprints()，
+            // 它认票根页的「只看某座城市」筛选，会把概览的票根数和票根收藏家一起算少
+            ticketCount: FOOTPRINTS.filter(fp => ticketImageUrl(fp.ticketImage)).length,
             photoCount: FOOTPRINTS.reduce((n, fp) => n + cityWallImages(fp).length, 0),
             distanceKm: Math.round(distance),
             topSeason: topSeason && topSeason[1] ? topSeason[0] : '',
@@ -3868,8 +4072,13 @@
         };
     }
 
-    // 概览卡的几句总结：数据是真的，语气留一点文艺
-    function insightSentences(m, time, province, segment) {
+    // 概览卡的几句总结：数据是真的，语气留一点文艺。
+    // 说法大致按「总览 → 节奏 → 地理 → 偏爱 → 距离 → 收藏 → 年份 → 称号」铺开，
+    // 缺哪块数据就跳过哪句：「换一个说法」在数据齐全时能翻二十来次，数据少时也不会露出空话。
+    // 第 1 句保持任何数据都成立，打开洞察时默认显示的就是它。
+    function insightSentences(m, time, province, segment, extras = {}) {
+        const years = extras.years || [];
+        const title = extras.title || '';
         const longest = segment && segment.longest;
         const list = [];
         list.push('约 ' + m.footprintCount + ' 次出发、' + m.cityCount +
@@ -3880,26 +4089,110 @@
         }
         list.push((m.topSeason ? '你似乎总在' + m.topSeason + '天收拾行囊，' : '你总在合适的时候出发，') +
             (m.topType ? '「' + m.topType + '」是你写得最多的一页。' : '每一程都值得被记住。'));
+
+        // 节奏：平均多久出发一次。密一点说「熟练」，疏一点说「算数」
+        if (time && m.footprintCount >= 3) {
+            const gapDays = Math.round(time.spanDays / (m.footprintCount - 1));
+            if (gapDays > 0) {
+                list.push(m.footprintCount + ' 次出发散在 ' + time.monthCount + ' 个月里，平均每 ' + gapDays +
+                    (gapDays <= 60
+                        ? ' 天就收拾一次行李 —— 出发这件事，你早就做得很熟练。'
+                        : ' 天才动身一回 —— 不算频繁，但每一次都算数。'));
+            }
+        }
+        if (time && time.monthStreak >= 3) {
+            list.push('最长的一段，你连着 ' + time.monthStreak +
+                ' 个月都在路上 —— 那段时间，行李箱大概一直没收起来过。');
+        }
+        if (time && time.topMonthCount >= 2) {
+            list.push(time.topMonth + ' 月是你的高发期，前后一共出发了 ' + time.topMonthCount +
+                ' 次，那个月份的风，你大概最熟悉。');
+        }
+        if (m.topSeason && m.topSeasonCount >= 2) {
+            list.push(m.topSeason + '季是你最常选中的时节，' + m.topSeasonCount + ' 次出发落在了那里。');
+        }
+
         if (province && province.total) {
             list.push(province.total + ' 个省份里，' + province.list[0].name +
                 '被你翻开的次数最多 —— 那里大概有值得反复抵达的理由。');
-        } else if (m.south && m.north) {
+        }
+        // 地理跨度：纬度看南北，经度看东西
+        const latSpan = m.south && m.north ? Math.abs(m.north.lat - m.south.lat) : 0;
+        if (latSpan >= 3) {
+            list.push('从最南的 ' + insightPlaceName(m.south) + ' 到最北的 ' + insightPlaceName(m.north) +
+                '，你把 ' + latSpan.toFixed(1) + ' 个纬度装进了自己的地图。');
+        } else if (!province.total && m.south && m.north &&
+            insightPlaceName(m.south) !== insightPlaceName(m.north)) {
             list.push('从 ' + insightPlaceName(m.south) + ' 到 ' + insightPlaceName(m.north) +
                 '，世界在地图上被你慢慢点亮。');
         }
-        list.push(m.ticketCount
-            ? '你还留下了 ' + m.ticketCount + ' 张票根，每一次出发都被妥帖地收着。'
-            : m.photoCount + ' 张照片被好好收着，它们替你说着当时的光线与心情。');
+        if (m.west && m.east) {
+            const lngSpan = Math.abs(m.east.lng - m.west.lng);
+            if (lngSpan >= 3) {
+                list.push('最东是 ' + insightPlaceName(m.east) + '，最西是 ' + insightPlaceName(m.west) +
+                    '，中间隔着 ' + lngSpan.toFixed(1) + ' 个经度 —— 那是你横向丈量世界的方式。');
+            }
+        }
+
+        // 偏爱：回去得最多的那座城市，以及所有被重复抵达过的城市
+        let topCityName = '';
+        let topCityVisits = 0;
+        let repeatCities = 0;
+        cityList.forEach((city, ci) => {
+            const visits = cityViewItems(ci).length;
+            if (visits >= 2) repeatCities += 1;
+            if (visits > topCityVisits) {
+                topCityVisits = visits;
+                topCityName = city.city || '';
+            }
+        });
+        if (topCityName && topCityVisits >= 2) {
+            list.push('在 ' + m.cityCount + ' 座城市里，' + topCityName + ' 是你回去最多的地方（' +
+                topCityVisits + ' 次），有些地方就是值得反复抵达。');
+        }
+        if (repeatCities >= 2) {
+            list.push('有 ' + repeatCities + ' 座城市你去过两次以上，它们大概更像「老地方」。');
+        }
+
         if (longest) {
             list.push('走得最远的一次，是从' + insightPlaceName(longest.from) + '到' +
                 insightPlaceName(longest.to) + '，约 ' + insightKm(longest.km) + ' 公里。');
         }
-        if (time) {
+        if (segment && segment.count >= 2 && segment.average > 0) {
+            list.push('平均每一段约 ' + insightKm(segment.average) +
+                ' 公里，步子不算大，但一直没有停下来过。');
+        }
+
+        // 收藏：照片和票根都有就合起来说，只有一样时只说那一样
+        if (m.ticketCount && m.photoCount) {
+            list.push(m.photoCount + ' 张照片、' + m.ticketCount +
+                ' 张票根，你不仅出发，也把它们都妥帖地留了下来。');
+        } else {
+            list.push(m.ticketCount
+                ? '你还留下了 ' + m.ticketCount + ' 张票根，每一次出发都被妥帖地收着。'
+                : m.photoCount + ' 张照片被好好收着，' +
+                    (m.photoCount > 1 ? '它们替你说着' : '它替你说着') + '当时的光线与心情。');
+        }
+        if (m.photoCount - m.footprintCount >= 2) {
+            list.push('照片比足迹多出 ' + (m.photoCount - m.footprintCount) +
+                ' 张 —— 有些地方，你显然舍不得只拍一张。');
+        }
+
+        if (time && time.spanDays > 0) {
             list.push('从 ' + insightSpotDate(time.first) + ' 到 ' + insightSpotDate(time.last) + '，' +
                 (time.spanYears > 0
                     ? time.spanYears + ' 年 ' + time.restDays + ' 天'
                     : time.spanDays + ' 天') +
                 '的光阴，被你拆成了 ' + time.monthCount + ' 个月的出发。');
+        }
+        if (years.length >= 2) {
+            const busiest = years.reduce((best, item) =>
+                item.footprints > best.footprints ? item : best, years[0]);
+            list.push(busiest.year + ' 年是你出发最多的一年，一共 ' + busiest.footprints +
+                ' 次，那一年你把地图铺得最开。');
+        }
+        if (title) {
+            list.push('按现在的记录，你担得起「' + title + '」—— 这不是标签，是你自己走出来的。');
         }
         return list.length ? list : ['还没有足迹数据，出发后回来看看你的旅行洞察。'];
     }
@@ -3991,7 +4284,10 @@
             const name = document.createElement('strong');
             name.textContent = item.name;
             const desc = document.createElement('em');
-            desc.textContent = item.desc + (item.progress ? ' · ' + item.progress : '');
+            // 已点亮的给结果值（12 个省），没点亮的给「还差多少」——
+            // 只写 6/24 的话得自己算还差几张
+            const detail = item.done ? item.progress : (item.remaining || item.progress);
+            desc.textContent = item.desc + (detail ? ' · ' + detail : '');
             text.append(name, desc);
             row.append(mark, text);
             wrap.appendChild(row);
@@ -4012,6 +4308,12 @@
         if (card.headlineId) headline.id = card.headlineId;
         headline.textContent = card.headline;
         section.append(kicker, headline);
+        if (card.note) {
+            const note = document.createElement('p');
+            note.className = 'insight-card-note';
+            note.textContent = card.note;
+            section.appendChild(note);
+        }
         if (card.chips && card.chips.length) section.appendChild(insightChipsDom(card.chips));
         if (card.months) section.appendChild(insightMonthsDom(card.months));
         if (card.metrics && card.metrics.length) section.appendChild(insightMetricsDom(card.metrics, card.metricsId));
@@ -4057,13 +4359,29 @@
     // 以前是整张卡重建，统计表会跟着重放一次淡入动画
     function swapInsightSentence() {
         if (!insightSentenceCache.length) return;
-        insightSentenceVariant += 1;
+        insightSentenceVariant = (insightSentenceVariant + 1) % insightSentenceCache.length;
         const node = document.getElementById('insightOverviewHeadline');
         if (!node) return;
         node.classList.remove('is-swapping');
         void node.offsetWidth;   // 触发重排，让动画能重新播
-        node.textContent = insightSentenceCache[insightSentenceVariant % insightSentenceCache.length];
+        node.textContent = insightSentenceCache[insightSentenceVariant];
         node.classList.add('is-swapping');
+    }
+
+    // 换一个称号：只改成就卡那句和顶栏副标题，徽章表与卡片结构都不动。
+    // 称号在两个地方同时出现，所以必须一起更新，不然顶栏和卡里会对不上
+    function swapInsightTitle() {
+        if (insightTitleCache.length < 2) return;
+        insightTitleVariant = (insightTitleVariant + 1) % insightTitleCache.length;
+        const next = insightTitleCache[insightTitleVariant];
+        const node = document.getElementById('insightBadgeHeadline');
+        if (node) {
+            node.classList.remove('is-swapping');
+            void node.offsetWidth;   // 触发重排，让动画能重新播
+            node.textContent = '「' + next + '」';
+            node.classList.add('is-swapping');
+        }
+        if (insightTitleEl) insightTitleEl.textContent = next;
     }
 
     // 点数字直达对应内容：票根墙 / 某座城市 / 某省
@@ -4092,8 +4410,14 @@
         const segment = insightSegmentStats(FOOTPRINTS);
         const type = insightTypeStats(FOOTPRINTS);
         const years = insightYearStats(FOOTPRINTS);
-        const badges = insightAchievements(m, time, province, segment);
-        const title = insightTitleOf(m, time, province, segment);
+        const derived = insightDerived(segment);
+        const badges = insightAchievements(m, time, province, segment, derived);
+        const titles = insightTitlesOf(m, time, province, segment, derived);
+        insightTitleCache = titles;
+        if (insightTitleVariant >= titles.length) insightTitleVariant = 0;
+        const title = titles.length
+            ? titles[insightTitleVariant % titles.length]
+            : insightFallbackTitle(m);
         if (!FOOTPRINTS.length) {
             return {
                 title: '',
@@ -4105,8 +4429,9 @@
                 }]
             };
         }
-        const sentences = insightSentences(m, time, province, segment);
+        const sentences = insightSentences(m, time, province, segment, { years, title });
         insightSentenceCache = sentences;
+        if (insightSentenceVariant >= sentences.length) insightSentenceVariant = 0;
         const cards = [];
 
         // 1. 概览
@@ -4245,7 +4570,10 @@
             cards.push({
                 id: 'badge',
                 kicker: 'ACHIEVEMENTS · 称号与成就',
+                headlineId: 'insightBadgeHeadline',
                 headline: '「' + title + '」',
+                note: titles.length ? '已解锁 ' + titles.length + ' / ' + INSIGHT_TITLE_SLOTS + ' 个称号' : '',
+                chips: titles.length > 1 ? [{ text: '换一个称号', onClick: swapInsightTitle }] : [],
                 badges
             });
         }
@@ -4306,7 +4634,7 @@
 
     function openInsight() {
         if (!featureEnabled('enableInsight') || !insightView) return;
-        insightSentenceVariant = 0;
+        // 说法序号不重置：关掉再打开会接着上一句往下走，而不是每次都被拉回同一句
         insightCardIndex = 0;
         insightYearIndex = 0;
         renderInsight();
