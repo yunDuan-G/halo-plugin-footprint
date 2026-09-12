@@ -1554,9 +1554,13 @@
         document.body.classList.remove('card-open');   // 恢复右下角浮动按钮
         if (!markerCard.classList.contains('visible')) return;
         markerCard.classList.remove('visible');
-        const keyboardRestore = lastKeyboardMarkerBtn &&
+        // 注意：这里要的是「那个按钮」，不是判断结果 —— 直接写 && 链会得到布尔值，
+        // 后面调 .focus() 会抛 TypeError（键盘打开卡片后再点「打开图片墙」会因此打不开图墙）
+        const keyboardRestore = (lastKeyboardMarkerBtn &&
             lastKeyboardMarkerBtn.isConnected &&
-            markerCard.contains(document.activeElement);
+            markerCard.contains(document.activeElement))
+            ? lastKeyboardMarkerBtn
+            : null;
         lastKeyboardMarkerBtn = null;
         setOverlayHidden(markerCard, true);
         const selIndex = activeFootprintIndex;   // 先记录再置空，供复原动画使用
@@ -1579,23 +1583,18 @@
     // ================= 详情卡主图：加载成功显示图片，失败回退首字占位 + 重试 =================
     let cardImgLoadId = 0;   // 防止快速切换卡片时旧请求覆盖新图
 
-    // 主图右下角的“共 N 张”入口角标：图片加载状态变化后重新挂载
+    // 主图右下角的“共 N 张”角标：纯展示，图片加载状态变化后重新挂载；
+    // 进图片墙的入口统一交给卡片里的「打开图片墙」按钮，避免同一去处挂两个可点入口
     function refreshCardMediaGallery(fp) {
         const old = document.getElementById('markerCardMediaGallery');
         if (old) old.remove();
         const imgs = fp ? cityWallImages(fp) : [];
         if (!imgs.length) return;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.id = 'markerCardMediaGallery';
-        btn.className = 'marker-card-media-gallery';
-        btn.textContent = '共 ' + imgs.length + ' 张';
-        btn.setAttribute('aria-label', '查看' + (fp.name || '足迹') + '的全部照片');
-        btn.addEventListener('click', () => {
-            const idx = FOOTPRINTS.indexOf(fp);
-            if (idx >= 0) openFootprintAlbum(fp, btn);
-        });
-        markerCardMedia.appendChild(btn);
+        const chip = document.createElement('span');
+        chip.id = 'markerCardMediaGallery';
+        chip.className = 'marker-card-media-gallery';
+        chip.textContent = '共 ' + imgs.length + ' 张';
+        markerCardMedia.appendChild(chip);
     }
 
     function showCardMonogram(fp, showRetry) {
@@ -2760,13 +2759,30 @@
         setOverlayHidden(cityView, false);
         // 城市图片墙打开时直接隐藏顶部导航，不依赖相机事件（渲染循环暂停时相机事件不会触发）
         document.body.classList.add('city-view-open');
-        // 触屏不自动回焦，避免“返回地球”出现焦点描边
+        // 触屏不自动回焦，避免“返回地球”出现焦点描边；
+        // 注意 .show 刚加上时整层还是 visibility: hidden（离散过渡约在 130ms 后才翻转），
+        // 此时直接 focus() 会被浏览器忽略，键盘用户会停在原来的按钮上，所以要等它真的可见
         if (!(window.matchMedia('(hover: none)').matches || 'ontouchstart' in window)) {
-            cityViewBack.focus();
+            focusCityViewBackWhenVisible();
         }
     }
 
+    let cityViewFocusRaf = 0;
+    function focusCityViewBackWhenVisible() {
+        cancelAnimationFrame(cityViewFocusRaf);
+        const tick = () => {
+            if (!cityView.classList.contains('show')) return;   // 已经关掉就别再抢焦点
+            if (getComputedStyle(cityViewBack).visibility === 'hidden') {
+                cityViewFocusRaf = requestAnimationFrame(tick);
+                return;
+            }
+            cityViewBack.focus();
+        };
+        cityViewFocusRaf = requestAnimationFrame(tick);
+    }
+
     function closeCityView(returnFocus = true) {
+        cancelAnimationFrame(cityViewFocusRaf);
         const fromWall = cityViewFromWall;
         cityViewFromWall = false;
         if (lightbox.classList.contains('show')) closeLightbox(false);
