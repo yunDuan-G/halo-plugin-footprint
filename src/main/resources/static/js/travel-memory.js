@@ -1746,20 +1746,34 @@
                 ent.billboard.height = 0;
             }
         });
-        const startedAt = performance.now();
         const STEP_MS = 55;
         const DURATION_MS = 420;
+        // 基准时间必须取「第一帧的时间戳」，不能用 performance.now()：
+        // 这个函数是从相机 moveEnd（落地收尾）调进来的，那一刻还在 Cesium 的渲染帧里，
+        // performance.now() 会晚于当前帧的起始时间，于是第一帧算出来 t <= 0、
+        // pending 一直是 false，动画立刻结束，这一城的标记就永远停在 0 尺寸（看不见）。
+        let startedAt = null;
+        const restoreSize = (fi) => {
+            const ent = markerEntities[fi];
+            if (ent && ent.billboard) {
+                ent.billboard.width = 25;
+                ent.billboard.height = 25;
+            }
+        };
         const tick = (now) => {
+            if (startedAt === null) startedAt = now;
             let pending = false;
             indices.forEach((fi, k) => {
                 const ent = markerEntities[fi];
                 if (!ent || !ent.billboard) return;
                 const t = (now - startedAt - k * STEP_MS) / DURATION_MS;
                 if (t >= 1) {
-                    ent.billboard.width = 25;
-                    ent.billboard.height = 25;
-                } else if (t > 0) {
+                    restoreSize(fi);
+                } else {
+                    // t <= 0 是「这一站还没轮到」，也要让循环继续跑；
+                    // 之前只在 t > 0 时继续，第一帧 t=0 会让循环立刻退出，动画整段丢失
                     pending = true;
+                    if (t <= 0) return;
                     const eased = 1 - Math.pow(1 - t, 3);
                     ent.billboard.width = Math.max(1, Math.round(25 * eased));
                     ent.billboard.height = Math.max(1, Math.round(25 * eased));
@@ -1769,6 +1783,9 @@
                 cityRevealRaf = requestAnimationFrame(tick);
             } else {
                 cityRevealRaf = null;
+                // 兜底：动画结束时还没长到正常尺寸的（包括上面那种一帧就退出、以及
+                // 中途被切回聚合模式的情况），直接补回 25，绝不让标记停在看不见的尺寸
+                indices.forEach(restoreSize);
             }
         };
         cityRevealRaf = requestAnimationFrame(tick);
