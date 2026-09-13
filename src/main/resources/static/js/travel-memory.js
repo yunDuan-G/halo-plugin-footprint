@@ -151,6 +151,51 @@
         maximumLevel: 18
     });
 
+    // ================= 天地图用量统计 =================
+    // 天地图按 Key 计额度（个人 Key 每天约一万次），这里只做"看得见"：
+    // 把当天发出的瓦片数记在 localStorage，状态栏直接显示。
+    // 注意：不要再在客户端做令牌桶限速/排队/透明瓦片兜底——那会让瓦片迟到或留空，
+    // 转动地球时看起来就是"卡住"（观感远比省几额度重要）。要省量请走缓存方案。
+    const TILE_USAGE_KEY = 'footprint-tile-usage';
+    let tdtTilesSinceStatus = 0;
+
+    function tdtCountTile() {
+        // 攒够 25 张刷一次状态栏，别每来一张瓦片就重写一次 DOM
+        tdtTilesSinceStatus += 1;
+        if (tdtTilesSinceStatus >= 25) {
+            tdtTilesSinceStatus = 0;
+            try { updateStatusText(); } catch (e) { /* 初始化未完成时忽略 */ }
+        }
+        try {
+            const today = new Date().toISOString().slice(0, 10);
+            const raw = JSON.parse(localStorage.getItem(TILE_USAGE_KEY) || '{}');
+            const count = raw.date === today ? (Number(raw.count) || 0) : 0;
+            localStorage.setItem(TILE_USAGE_KEY, JSON.stringify({ date: today, count: count + 1 }));
+        } catch (e) {
+            // 隐私模式下 localStorage 可能不可用，忽略
+        }
+    }
+
+    function tdtTodayUsage() {
+        try {
+            const today = new Date().toISOString().slice(0, 10);
+            const raw = JSON.parse(localStorage.getItem(TILE_USAGE_KEY) || '{}');
+            return raw.date === today ? (Number(raw.count) || 0) : 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    // 给天地图的 provider 包一层：只计数，不改请求节奏
+    function countTdtProvider(provider) {
+        const original = provider.requestImage.bind(provider);
+        provider.requestImage = function (x, y, level, request) {
+            tdtCountTile();
+            return original(x, y, level, request);
+        };
+        return provider;
+    }
+
     // ================= 天地图影像（需要 Key） =================
     // 天地图 _w（Web 墨卡托）瓦片：第 L 级为 2^L × 2^L 张（第 1 级即 2×2），
     // 行列号与 Cesium 默认 WebMercatorTilingScheme 直接对应，无需任何偏移。
@@ -163,22 +208,37 @@
             subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'],
             maximumLevel: 18
         };
-        tdtVec = new Cesium.UrlTemplateImageryProvider({
+        // 只请求中国范围内的瓦片：境外瓦片拿回来也是空白，但照样扣额度。
+        // 低层级（z ≤ 5）放行，保证整球视角不会开天窗——和三维地形用的是同一套思路。
+        const TDT_RECT = Cesium.Rectangle.fromDegrees(72.0, 0.5, 138.5, 56.5);
+        const limitToChina = (provider) => {
+            provider.getTileDataAvailable = function (x, y, level) {
+                try {
+                    if (level <= 5) return true;
+                    const rect = provider.tilingScheme.tileXYToRectangle(x, y, level);
+                    return Cesium.Rectangle.contains(TDT_RECT, Cesium.Rectangle.center(rect));
+                } catch (e) {
+                    return true;   // 异常时放行，别影响渲染
+                }
+            };
+            return provider;
+        };
+        tdtVec = countTdtProvider(limitToChina(new Cesium.UrlTemplateImageryProvider({
             ...tdtOptions,
             url: 'https://t{s}.tianditu.gov.cn/DataServer?T=vec_w&x={x}&y={y}&l={z}&tk=' + TDT_KEY
-        });
-        tdtCva = new Cesium.UrlTemplateImageryProvider({
+        })));
+        tdtCva = countTdtProvider(limitToChina(new Cesium.UrlTemplateImageryProvider({
             ...tdtOptions,
             url: 'https://t{s}.tianditu.gov.cn/DataServer?T=cva_w&x={x}&y={y}&l={z}&tk=' + TDT_KEY
-        });
-        tdtImg = new Cesium.UrlTemplateImageryProvider({
+        })));
+        tdtImg = countTdtProvider(limitToChina(new Cesium.UrlTemplateImageryProvider({
             ...tdtOptions,
             url: 'https://t{s}.tianditu.gov.cn/DataServer?T=img_w&x={x}&y={y}&l={z}&tk=' + TDT_KEY
-        });
-        tdtCia = new Cesium.UrlTemplateImageryProvider({
+        })));
+        tdtCia = countTdtProvider(limitToChina(new Cesium.UrlTemplateImageryProvider({
             ...tdtOptions,
             url: 'https://t{s}.tianditu.gov.cn/DataServer?T=cia_w&x={x}&y={y}&l={z}&tk=' + TDT_KEY
-        });
+        })));
 
         // 有 Key 时启用天地图底图按钮
         btnMap.tdtImg.disabled = false;
@@ -206,9 +266,24 @@
 
     viewer.cesiumWidget.creditContainer.style.display = 'none';
 
-    // 降低 LOD 容差：让 Cesium 更早加载高一级瓦片，避免把低清瓦片拉伸导致地名发糊。
-    // 默认是 2.0，改成 1.0 后瓦片请求量会明显增加，但文字更锐利。
-    viewer.scene.maximumScreenSpaceError = 1.0;
+    // LOD 容差改成「按高度自适应」：整球 / 中远距离用 Cesium 默认的 2.0，
+    // 只有贴近地面看城市细节时才收紧到 1.0 保证文字锐利。
+    // 阈值每减半，屏幕上的瓦片数大约翻两番（1.0 时是 2.0 的约 4 倍请求量）——
+    // 天地图每天只有一万次额度，这笔账必须省。
+    const GLOBE_SSE_FAR = 2.0;
+    const GLOBE_SSE_NEAR = 1.0;
+    const GLOBE_SSE_NEAR_HEIGHT = 2500000;   // 相机低于此高度算「贴近」
+    function applyScreenSpaceError() {
+        const h = viewer.camera.positionCartographic.height;
+        const next = h < GLOBE_SSE_NEAR_HEIGHT ? GLOBE_SSE_NEAR : GLOBE_SSE_FAR;
+        if (viewer.scene.maximumScreenSpaceError !== next) viewer.scene.maximumScreenSpaceError = next;
+    }
+    viewer.camera.moveEnd.addEventListener(applyScreenSpaceError);
+    applyScreenSpaceError();
+
+    // 预取保持 Cesium 默认（preloadAncestors 打开），转动/平移时瓦片衔接才顺；
+    // 只把内存里的瓦片缓存加大，减少重复请求
+    viewer.scene.globe.tileCacheSize = 800;
 
     // ================= 相机交互（鼠标滚轮缩放） =================
     // zoomFactor 在 Cesium 1.121 才作为公开属性暴露（更新日志 #12099），
@@ -399,6 +474,8 @@
         // 程序化“飞往城市”期间先不按高度切换，落地瞬间由 finishCityFlight 统一展开。
         if (!cityFlightActive) {
             const modeH = viewer.camera.positionCartographic.height;
+            // LOD 容差也跟着高度走（moveEnd 之外再兜一层：瞬时 setView 不会触发 moveEnd）
+            applyScreenSpaceError();
             if (cityMode && modeH < CITY_EXPAND_HEIGHT) {
                 applyMarkerMode(false);
             } else if (!cityMode && modeH > CITY_COLLAPSE_HEIGHT) {
@@ -946,9 +1023,13 @@
     function updateStatusText() {
         const item = currentBaseKey ? baseProviders[currentBaseKey] : null;
         const coordName = item && item.gcj ? 'GCJ-02' : 'CGCS2000/WGS84';
+        // 天地图有每日额度：把当天已经发出的瓦片数摆在状态栏，不用凭感觉估
+        const usage = item && item.needKey
+            ? ` · 今日天地图瓦片约 ${tdtTodayUsage()} 张（每日额度约 1 万）`
+            : '';
         statusText.textContent =
             (item ? item.label + '底图' : '底图') + `（${coordName}）${terrainNote}` +
-            ` · ${FOOTPRINTS.length} 个足迹标记 · 地图数据 © 高德 / 天地图`;
+            ` · ${FOOTPRINTS.length} 个足迹标记` + usage + ' · 地图数据 © 高德 / 天地图';
     }
 
     // 把一条足迹从它自己的坐标系转换到当前底图坐标系：
