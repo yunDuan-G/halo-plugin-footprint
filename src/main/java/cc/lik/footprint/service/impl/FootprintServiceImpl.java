@@ -87,7 +87,8 @@ public class FootprintServiceImpl implements FootprintService {
                     globe.path("enableTicketSeasonLight").asBoolean(false),
                     globe.path("enableTicketOracle").asBoolean(false),
                     globe.path("enableTicketLetter").asBoolean(false),
-                    globe.path("enableTicketPassport").asBoolean(false)
+                    globe.path("enableTicketPassport").asBoolean(false),
+                    globe.path("globeLabels").asText("all")
                 ));
             })
             .flatMap(config -> config);

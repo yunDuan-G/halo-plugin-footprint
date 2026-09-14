@@ -5,6 +5,10 @@
     const TDT_KEY = (window.FOOTPRINT_CONFIG && window.FOOTPRINT_CONFIG.tiandituKey) || '';
     const hasTDTKey = TDT_KEY && TDT_KEY !== 'YOUR_TIANDITU_KEY';
 
+    // 触屏设备判定：标记命中区尺寸与 3D 渲染倍率上限都要用
+    // （手机/平板放宽可点区域，同时降低渲染倍率，保证拖动、捏合跟手）
+    const COARSE_POINTER = window.matchMedia('(pointer: coarse)').matches;
+
     const statusText = document.getElementById('statusText');
     const statusRetry = document.getElementById('statusRetry');
 
@@ -260,11 +264,16 @@
         navigationHelpButton: false, // 隐藏右上角导航帮助按钮
         infoBox: false,            // 隐藏点击实体后的信息框
         selectionIndicator: false, // 隐藏点击实体后的四角选中框
-        useBrowserRecommendedResolution: false // 高分屏按设备像素渲染，文字更清晰
+        useBrowserRecommendedResolution: true // 渲染倍率交给下面的 resolutionScale 统一控制
         // 已移除 Cesium.Terrain.fromWorldTerrain()（依赖海外 Ion 服务），地形改由天地图提供
     });
 
     viewer.cesiumWidget.creditContainer.style.display = 'none';
+
+    // 高分屏渲染倍率封顶：useBrowserRecommendedResolution=false 时有效倍率会直接等于
+    // window.devicePixelRatio，3 倍屏手机等于按 9 倍像素渲染，拖动和捏合会明显掉帧。
+    // 这里改成显式指定：桌面最多 2 倍，触屏 1.5 倍（清晰度几乎无损，帧率更稳）。
+    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, COARSE_POINTER ? 1.5 : 2);
 
     // LOD 容差改成「按高度自适应」：整球 / 中远距离用 Cesium 默认的 2.0，
     // 只有贴近地面看城市细节时才收紧到 1.0 保证文字锐利。
@@ -330,19 +339,25 @@
     const backGlobeBtn = document.getElementById('backGlobeBtn');   // 放大后显示，一键回球
     const cityFillFloatBtn = document.getElementById('cityFillFloatBtn');   // 放大后显示，城市高亮开关
     // 相机高度（米）：高于 SHOW 时显示（能看到整个地球），低于 HIDE 时隐藏；
-    // 中间区间保持原状态，避免在阈值附近来回闪烁。
-    const INTRO_SHOW_HEIGHT = 9500000;
+    // 两个值必须拉开一段（回滞区间），否则在阈值附近轻微缩放就会来回闪烁。
+    const INTRO_SHOW_HEIGHT = 10500000;
     const INTRO_HIDE_HEIGHT = 9500000;
     let introVisible = false;
     let amapMode = false;   // 当前是否处于 2D 高德地图视图（切换按钮逻辑与导航栏显隐共用）
     let entranceActive = false;   // 开场动画进行中（暂缓标题卡显示）
 
     // 中国边界线：仅在放大到国内范围时显示，首屏整球视图保持干净。
-    // 低于 SHOW 高度显示，高于 HIDE 高度隐藏，中间区间保持原状态防闪烁。
+    // 低于 SHOW 高度显示，高于 HIDE 高度隐藏；同样留出回滞区间防闪烁。
     const BOUNDARY_SHOW_HEIGHT = 9500000;
-    const BOUNDARY_HIDE_HEIGHT = 9500000;
+    const BOUNDARY_HIDE_HEIGHT = 11000000;
     let chinaBoundarySource = null;
     let boundaryVisible = false;
+    let cityFillVisible = false;   // 城市淡色填充当前是否可见（与边界共用一套阈值状态）
+    // 城市名的显示层级比中国轮廓更深一档：轮廓刚出现时（整球仍占大半屏）不铺名字，
+    // 再放大到区域尺度才标注城市。想让它更早/更晚出现，改这两个常量即可。
+    const CITY_LABEL_SHOW_HEIGHT = 4000000;
+    const CITY_LABEL_HIDE_HEIGHT = 5000000;
+    let cityLabelVisible = false;
     // 标记详情卡：整球视图（标题卡出现）时自动收起；初始化完成前不触发
     let markerCardReady = false;
     // 城市聚合状态（提前声明，updateIntroVisibility 会读取）
@@ -350,7 +365,7 @@
     let cityMarkerEntities = [];  // 城市标记实体
     const CITY_EXPAND_HEIGHT = 1500000;    // 相机低于此高度时展开为单个足迹
     const CITY_COLLAPSE_HEIGHT = 1800000;  // 高于此高度时聚合为城市标记
-    const CITY_VIEW_HEIGHT = 1200000;      // 点击城市后的落地高度：低于展开阈值，保持城市整体视野
+    const CITY_VIEW_HEIGHT = 600000;       // 点击城市后的落地高度：低于展开阈值，落到城市尺度（足够近，同城足迹点也能拉开）
     let cityMode = true;
     // 程序化“飞往城市”的飞行状态：飞行期间抑制高度阈值自动切换，
     // 落地后再统一把聚合标记展开为该城市的足迹点，避免用户手动补一次缩放。
@@ -364,6 +379,14 @@
     let cityFillBuildId = 0;
     let cityOutlinePolylines = [];   // 城市轮廓描边折线（悬停聚焦时统一调透明度）
     let focusedMarker = null;        // 当前聚焦（悬停/键盘选中）的标记，null 表示无
+    let markerOcclusionDirty = true; // 标记遮挡需要重算（相机或标记位置变化时置位）
+    let markerLabelDirty = true;     // 地名标签需要重排（标记或标签显隐变化时置位）
+    let pendingMarkerAudit = false;  // 需要在真实渲染结果上体检一次标记（展开/重建后）
+    // 地名标签的布局状态（提前声明：buildMarkers / buildCityMarkers 会和标记一起重建）
+    const labelLayoutState = new Map();       // ent -> { show, x, y }，避免重复写 Cesium 属性
+    const slotBlockRects = [];                // 本帧已占用的矩形（标记 + 已放下的标签），逐帧清空复用
+    const labelScreen = new Cesium.Cartesian2();
+    const markerLift = new Map();             // 下标 -> 渲染抬高米数（自愈用，不影响数据坐标）
     const cityBoundaryCache = new Map();   // 城市边界数据缓存：同一会话内按 adcode 只请求一次
     // 城市填充主题：amber 琥珀橙 / gold 柔金 / mint 薄荷青 / ice 冰蓝
     const CITY_FILL_THEME = 'amber';
@@ -453,22 +476,29 @@
             cityFillFloatBtn.classList.toggle('show', !introVisible);
         }
 
-        // 中国边界：放大到国内范围才显示，拉远/整球视图隐藏
-        if (chinaBoundarySource) {
-            const h = viewer.camera.positionCartographic.height;
-            if (!boundaryVisible && h < BOUNDARY_SHOW_HEIGHT) {
-                boundaryVisible = true;
-                chinaBoundarySource.show = true;
-            } else if (boundaryVisible && h > BOUNDARY_HIDE_HEIGHT) {
-                boundaryVisible = false;
-                chinaBoundarySource.show = false;
-            }
+        // 中国边界：放大到国内范围才显示，拉远/整球视图隐藏；带 SHOW/HIDE 回滞区间
+        const boundaryH = viewer.camera.positionCartographic.height;
+        if (!boundaryVisible && boundaryH < BOUNDARY_SHOW_HEIGHT) {
+            boundaryVisible = true;
+        } else if (boundaryVisible && boundaryH > BOUNDARY_HIDE_HEIGHT) {
+            boundaryVisible = false;
+        }
+        if (chinaBoundarySource) chinaBoundarySource.show = boundaryVisible;
+
+        // 城市名层级：与轮廓共用同一份高度读数，再深一档才出现（带回滞防闪）
+        if (!cityLabelVisible && boundaryH < CITY_LABEL_SHOW_HEIGHT) {
+            cityLabelVisible = true;
+        } else if (cityLabelVisible && boundaryH > CITY_LABEL_HIDE_HEIGHT) {
+            cityLabelVisible = false;
         }
 
-        // 城市淡色填充：与边界同阈值显隐
-        cityFillDataSources.forEach(ds => {
-            ds.show = viewer.camera.positionCartographic.height < BOUNDARY_SHOW_HEIGHT;
-        });
+        // 城市淡色填充：与边界共用同一份可见状态（边界数据加载失败时也照常工作），
+        // 并且只在状态真正翻转时才写 DataSource.show —— 逐帧赋值会反复触发
+        // Cesium 的属性变更，白白消耗在每帧的渲染回调里。
+        if (cityFillVisible !== boundaryVisible) {
+            cityFillVisible = boundaryVisible;
+            cityFillDataSources.forEach(ds => { ds.show = cityFillVisible; });
+        }
 
         // 城市聚合切换：放大到城市范围展开为单个足迹，拉远聚合回城市标记。
         // 程序化“飞往城市”期间先不按高度切换，落地瞬间由 finishCityFlight 统一展开。
@@ -603,6 +633,10 @@
             }
         });
         document.body.classList.remove('card-open');
+        // 这些浮层是直接摘掉类名关掉的（没走 hideMarkerCard/hideCityCard），
+        // 对应的自动旋转暂停也要一起解除，否则会一直停在暂停状态
+        resumeAutoRotate('card');
+        resumeAutoRotate('city-card');
     }
 
     function finishSwitchTo2D() {
@@ -614,7 +648,7 @@
         document.body.classList.add('mode-2d');
         sceneModeBtn.textContent = '3D 地球';
         sceneModeBtn.title = '切换到 3D 地球';
-        setAutoRotate(false);              // 进入 2D 后停止地球自转
+        pauseAutoRotate('2d');             // 进入 2D 后暂停地球自转（退出 2D 会自动恢复）
         viewer.clock.shouldAnimate = false;   // 地球隐藏时冻结昼夜光照，降低开销
         saveViewMode('2d');
         if (window.Footprint2D && typeof window.Footprint2D.show === 'function') {
@@ -668,6 +702,7 @@
         sceneModeBtn.textContent = '2D 地图';
         sceneModeBtn.title = '切换到 2D 平面地图';
         viewer.clock.shouldAnimate = true;
+        resumeAutoRotate('2d');   // 回到 3D 按用户偏好恢复自转（不再无条件开启）
         saveViewMode('3d');
         if (window.Footprint2D && typeof window.Footprint2D.hide === 'function') {
             window.Footprint2D.hide();
@@ -680,6 +715,7 @@
     function switchTo2D() {
         if (amapMode || morphing) return;
         closeGlobeOverlays();
+        pauseAutoRotate('2d');   // 立刻停转，别让展开动画和自转抢镜头
         if (reduceMotion) {   // 无障碍：关闭动画，直接切换
             finishSwitchTo2D();
             return;
@@ -739,11 +775,9 @@
                 // 视角归位：morph 从平面回到球体后相机常贴近地表，地球会显得“扁”。
                 // 不用 flyTo（飞行状态可能挂起导致无法拖拽），直接 setView 回到整球视角。
                 viewer.camera.cancelFlight();   // 兜底：清理可能残留的飞行状态
-                setAutoRotate(false);
                 viewer.camera.setView({
                     destination: Cesium.Cartesian3.fromDegrees(104.0, 35.0, 21000000),
                 });
-                if (!reduceMotion) setAutoRotate(true);
             } else {
                 morphing = false;
             }
@@ -773,7 +807,53 @@
     // ================= 自动旋转 =================
     const rotateBtn = document.getElementById('rotateBtn');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // 自动旋转拆成两层，避免「打开卡片就永久关掉」「切回 3D 又自己转起来」这类不一致：
+    // - autoRotatePref：用户偏好，只由用户动作（点按钮 / 拖动地球）改变，写 localStorage；
+    // - autoRotatePauses：临时暂停原因（卡片、票根页、2D、入场动画…），对应状态退出即自动恢复。
+    // autoRotate 是「此刻是否真的在转」，只由 refreshAutoRotate() 写入。
+    const AUTO_ROTATE_STORAGE_KEY = 'travelMemoryAutoRotate';
+    function getSavedAutoRotate() {
+        try {
+            const saved = localStorage.getItem(AUTO_ROTATE_STORAGE_KEY);
+            return saved === null ? true : saved === '1';   // 默认开启：首次访问跟随入场动画
+        } catch (e) { return true; }
+    }
+    function saveAutoRotate(on) {
+        try { localStorage.setItem(AUTO_ROTATE_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* 忽略 */ }
+    }
+    let autoRotatePref = getSavedAutoRotate();
+    const autoRotatePauses = new Set();
     let autoRotate = false;
+
+    // 注意：Cesium 1.120 的 Clock 没有 deltaTime 属性（旧版本才有），
+    // 这里用 performance.now() 自己计算真实时间差，避免得到 NaN 卡死页面。
+    let lastRotateTime = null;
+
+    function refreshAutoRotate() {
+        const allowed = autoRotatePref && !reduceMotion;
+        const want = allowed && autoRotatePauses.size === 0;
+        // 按钮反映「用户偏好」而不是「此刻是否在转」：卡片 / 票根页 / 2D 只是临时让镜头停住，
+        // 停的不是设置本身，退出后会自动接着转。
+        rotateBtn.textContent = '自动旋转';   // 标签固定，状态用高亮表达，避免按钮宽度跳动
+        rotateBtn.title = allowed ? '暂停自动旋转' : '开启自动旋转';
+        rotateBtn.classList.toggle('active', allowed);
+        rotateBtn.setAttribute('aria-pressed', String(allowed));
+        if (want === autoRotate) return;
+        autoRotate = want;
+        lastRotateTime = null;               // 状态切换后从零计步，避免瞬移
+    }
+
+    // 临时暂停 / 恢复：同一原因重复调用是幂等的
+    function pauseAutoRotate(reason) {
+        if (autoRotatePauses.has(reason)) return;
+        autoRotatePauses.add(reason);
+        refreshAutoRotate();
+    }
+    function resumeAutoRotate(reason) {
+        if (!autoRotatePauses.delete(reason)) return;
+        refreshAutoRotate();
+    }
 
     // 拖动地球（位移超过 5px）后自动取消自动旋转；单纯点击不取消
     const cesiumCanvas = viewer.scene.canvas;
@@ -781,13 +861,32 @@
     let dragStartX = 0;
     let dragStartY = 0;
 
+    // 光标反馈：画布默认是「抓手」（可拖着转，见 CSS），按下变「抓取中」，
+    // 悬停到标记上变手型 —— 明确告诉用户这里能拖、那里能点。
+    let hoveredMarker = false;
+    let canvasHeld = false;
+    function applyCanvasCursor() {
+        const next = canvasHeld ? 'grabbing' : (hoveredMarker ? 'pointer' : '');
+        if (cesiumCanvas.style.cursor !== next) cesiumCanvas.style.cursor = next;
+    }
+
     cesiumCanvas.addEventListener('pointerdown', (e) => {
         dragActive = true;
+        canvasHeld = true;
+        applyCanvasCursor();
         dragStartX = e.clientX;
         dragStartY = e.clientY;
     });
-    window.addEventListener('pointerup', () => { dragActive = false; });
-    window.addEventListener('pointercancel', () => { dragActive = false; });
+    window.addEventListener('pointerup', () => {
+        dragActive = false;
+        canvasHeld = false;
+        applyCanvasCursor();
+    });
+    window.addEventListener('pointercancel', () => {
+        dragActive = false;
+        canvasHeld = false;
+        applyCanvasCursor();
+    });
     window.addEventListener('pointermove', (e) => {
         if (!dragActive || !autoRotate) return;
         const dx = e.clientX - dragStartX;
@@ -821,20 +920,23 @@
             : undefined;
         hoverPaused = interval !== undefined;
     });
-    cesiumCanvas.addEventListener('mouseleave', () => { hoverPaused = false; });
+    cesiumCanvas.addEventListener('mouseleave', () => {
+        hoverPaused = false;
+        hoveredMarker = false;
+        applyCanvasCursor();
+    });
 
+    // 用户动作（点按钮）改变的是「偏好」：即使此刻正被卡片暂停，按钮也该如实反映设置本身
     function setAutoRotate(on) {
-        autoRotate = on;
-        lastRotateTime = null;               // 重新开启时从零计步，避免瞬移
-        rotateBtn.textContent = '自动旋转';   // 标签固定，状态用高亮表达，避免按钮宽度跳动
-        rotateBtn.title = on ? '暂停自动旋转' : '开启自动旋转';
-        rotateBtn.classList.toggle('active', on);
-        rotateBtn.setAttribute('aria-pressed', String(on));
+        autoRotatePref = on;
+        saveAutoRotate(on);
+        refreshAutoRotate();
     }
+    refreshAutoRotate();
 
     rotateBtn.addEventListener('click', () => {
         if (reduceMotion) return;            // 系统减弱动效时不启用
-        setAutoRotate(!autoRotate);
+        setAutoRotate(!autoRotatePref);
     });
 
     // ================= 城市高亮开关 =================
@@ -870,10 +972,6 @@
     applyCityFillBtnState();
     cityFillBtn.addEventListener('click', () => setCityFillEnabled(!cityFillEnabled));
     cityFillFloatBtn.addEventListener('click', () => setCityFillEnabled(!cityFillEnabled));
-
-    // 注意：Cesium 1.120 的 Clock 没有 deltaTime 属性（旧版本才有），
-    // 这里用 performance.now() 自己计算真实时间差，避免得到 NaN 卡死页面。
-    let lastRotateTime = null;
 
     viewer.clock.onTick.addEventListener(() => {
         if (!autoRotate) return;
@@ -998,13 +1096,8 @@
     // ================= 城市聚合（整球显示城市标记，放大后展开为单个足迹） =================
     // 城市标记图标：白色圆环 + 中心数量
     function cityMarkerUrl(count) {
-        const svg =
-            '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">' +
-            '<circle cx="28" cy="28" r="22" fill="#ffffff" opacity="0.01"/>' +
-            '<circle cx="28" cy="28" r="22" fill="none" stroke="#ffffff" stroke-width="2.5" opacity="0.9"/>' +
-            '<text x="28" y="31" fill="#f7f5f1" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" text-anchor="middle">' + count + '</text>' +
-            '</svg>';
-        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        // 绘制统一走 markerIconUrl（与足迹标记共用同一套命中层，见文件下方标记点一节）
+        return markerIconUrl('city', CITY_MARKER_REF_SIZE / CITY_MARKER_SIZE, count);
     }
 
     // 城市中心 = 该城市所有足迹在“当前底图坐标系”下的平均位置
@@ -1019,17 +1112,25 @@
 
     let terrainNote = hasTDTKey ? '，未启用三维地形' : '，未配置天地图 Key（无地形）';
 
-    // 状态栏文案：当前底图 + 坐标系 + 地形状态 + 足迹数
+    // 状态栏文案：当前底图 + 坐标系 + 地形状态 + 足迹数 + 数据来源。
+    // 天地图每日额度属于运维数据，只在调试模式下显示（地址栏加 ?debug，
+    // 或 localStorage.footprintDebug = '1'），不把后台指标丢给读者看。
+    const DEBUG_STATUS = (() => {
+        try {
+            return new URLSearchParams(window.location.search).has('debug') ||
+                localStorage.getItem('footprintDebug') === '1';
+        } catch (e) { return false; }
+    })();
+
     function updateStatusText() {
         const item = currentBaseKey ? baseProviders[currentBaseKey] : null;
         const coordName = item && item.gcj ? 'GCJ-02' : 'CGCS2000/WGS84';
-        // 天地图有每日额度：把当天已经发出的瓦片数摆在状态栏，不用凭感觉估
-        const usage = item && item.needKey
-            ? ` · 今日天地图瓦片约 ${tdtTodayUsage()} 张（每日额度约 1 万）`
+        const usage = DEBUG_STATUS && item && item.needKey
+            ? ` · 今日天地图瓦片 ${tdtTodayUsage()} 张 / 额度约 1 万`
             : '';
         statusText.textContent =
             (item ? item.label + '底图' : '底图') + `（${coordName}）${terrainNote}` +
-            ` · ${FOOTPRINTS.length} 个足迹标记` + usage + ' · 地图数据 © 高德 / 天地图';
+            ` · ${FOOTPRINTS.length} 个足迹标记` + usage + ' · 地图数据 © 高德 / 天地图 · 渲染 CesiumJS';
     }
 
     // 把一条足迹从它自己的坐标系转换到当前底图坐标系：
@@ -1055,7 +1156,8 @@
         markerEntities.forEach((ent, i) => {
             const pos = currentPositions[i];
             if (ent && pos) {
-                ent.position = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat);
+                // 带上自愈抬高量：换底图不该把已经抬起来的点又按回椭球面
+                ent.position = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, markerLift.get(i) || 0);
             }
         });
         // 城市标记同步到新的平均位置
@@ -1065,6 +1167,8 @@
                 ent.position = Cesium.Cartesian3.fromDegrees(center.lng, center.lat);
             }
         });
+        markerOcclusionDirty = true;   // 标记位置变了，遮挡关系要跟着重算
+        pendingMarkerAudit = true;     // 位置变了，渲染结果也复检一次
         return currentPositions;
     }
 
@@ -1346,10 +1450,11 @@
             viewer.camera.setView({
                 destination: Cesium.Cartesian3.fromDegrees(104.0, 35.0, 21000000)
             });
+            resumeAutoRotate('entrance');   // 没播动画也要解除暂停，按偏好决定是否自转
         };
 
         // 已看过一次入场（首次进入/历史访问）：刷新后直接停在中国整球视图，
-        // 不再跨太平洋重播动画，也不自动开启旋转，减少重复加载带来的卡顿。
+        // 不再跨太平洋重播动画（自转与否由 autoRotatePref 决定）。
         if (entranceSeen()) {
             settleAtChina();
             return;
@@ -1407,7 +1512,7 @@
             if (!entranceActive) return;
             entranceActive = false;
             viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(endLng, endLat, endH) });
-            if (!reduceMotion) setAutoRotate(true);
+            resumeAutoRotate('entrance');
         };
         // 用户拖动/滚轮交互时立即结束入场动画，避免相机被“抢”
         cesiumCanvas.addEventListener('pointerdown', cancelEntrance);
@@ -1429,7 +1534,7 @@
                 requestAnimationFrame(tick);
             } else {
                 entranceActive = false;
-                if (!reduceMotion) setAutoRotate(true);   // 入场完成后再开始自转
+                resumeAutoRotate('entrance');   // 入场结束才解除暂停，避免和动画抢相机
             }
         }
         requestAnimationFrame(tick);
@@ -1437,41 +1542,112 @@
 
     if (reduceMotion || getSavedViewMode() === '2d') {
         markEntranceSeen();
+        if (getSavedViewMode() === '2d') pauseAutoRotate('2d');   // 恢复成 2D 时地球在后台，保持停转
         viewer.camera.setView({
             destination: Cesium.Cartesian3.fromDegrees(104.0, 35.0, 21000000) // 中国大致中心，整球可见
         });
+        refreshAutoRotate();
     } else {
+        pauseAutoRotate('entrance');   // 入场动画期间不自转
         scheduleEntranceAnimation();
     }
 
     // ================= 足迹标记点 =================
-    // 样式：中间白色实心圆点 + 外围白色圆环，圆环与圆点之间留空隙（内联 SVG data URI）。
+    // 图标统一画在 56×56 的 viewBox 里，拆成「命中层」和「可见图形」两部分，
+    // 这样可以把可点击区域做大，而视觉上的圆点/圆环保持原样：
+    // - 命中层：r=27 的圆，填充 1% 透明度。Cesium 拾取会丢弃 alpha 为 0 的像素，
+    //   因此用几乎看不见的填充把命中区撑满整块图（旧版只有中间 r=22 能点到，
+    //   25px 的图标实际可点直径不到 20px，触屏很难点中）。
+    // - 可见图形：按 k 缩放。图块尺寸变大时图形画得更小，视觉大小保持不变。
     // 初始底图已在 switchBase 中确定，currentPositions 已按底图坐标系转换好。
+    const MARKER_BOX = 56;
+    const MARKER_HIT_R = 27;
+    const MARKER_REF_SIZE = 26;          // 视觉基准：图块 26px 时圆环直径约 20px（与旧版一致）
+    const CITY_MARKER_REF_SIZE = 30;     // 城市标记视觉基准
+    // 触屏设备整体放大命中区：视觉大小不变，只让手指更容易点中
+    const MARKER_SIZE = COARSE_POINTER ? 38 : MARKER_REF_SIZE;
+    const CITY_MARKER_SIZE = COARSE_POINTER ? 42 : CITY_MARKER_REF_SIZE;
+    const MARKER_SIZE_SELECTED = Math.round(MARKER_SIZE * 34 / MARKER_REF_SIZE);   // 选中态沿用 34/26 的比例
 
-    const MARKER_SVG =
-        '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">' +
-        // 透明填充（opacity 0.01）：让圆点与圆环之间的空白也能被拾取，
-        // 视觉上不可见；Cesium 拾取时 alpha 为 0 的像素会被丢弃。
-        '<circle cx="28" cy="28" r="22" fill="#ffffff" opacity="0.01"/>' +
-        '<circle cx="28" cy="28" r="22" fill="none" stroke="#ffffff" stroke-width="2.5" opacity="0.9"/>' +
-        '<circle cx="28" cy="28" r="8" fill="#ffffff" stroke="#1a2029" stroke-width="2"/>' +
-        '</svg>';
-    const MARKER_URL = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(MARKER_SVG);
+    function markerIconUrl(kind, k, count) {
+        const parts = [
+            '<svg xmlns="http://www.w3.org/2000/svg" width="' + MARKER_BOX + '" height="' + MARKER_BOX + '" viewBox="0 0 56 56">',
+            '<circle cx="28" cy="28" r="' + MARKER_HIT_R + '" fill="#ffffff" opacity="0.01"/>',
+            '<circle cx="28" cy="28" r="' + (22 * k) + '" fill="none" stroke="#ffffff" stroke-width="' + (2.5 * k) + '" opacity="0.9"/>'
+        ];
+        if (kind === 'city') {
+            parts.push('<text x="28" y="' + (28 + 3 * k) + '" fill="#f7f5f1" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="' + (15 * k) + '" text-anchor="middle">' + count + '</text>');
+        } else {
+            parts.push('<circle cx="28" cy="28" r="' + (8 * k) + '" fill="#ffffff" stroke="#1a2029" stroke-width="' + (2 * k) + '"/>');
+        }
+        parts.push('</svg>');
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(parts.join(''));
+    }
+    const MARKER_URL = markerIconUrl('footprint', MARKER_REF_SIZE / MARKER_SIZE);
+
+    // ================= 常驻地名（标注层） =================
+    // 底图选「无字」时画面上没有任何地名，只靠悬停显示名称：触屏根本没有 hover，
+    // 桌面上也要逐个去碰运气。这里给已有的标记实体挂一个 label ——
+    // 实体本身已经处理好了「模式切换 / 转到背面隐藏」，标签跟着实体走即可，
+    // 既不新增实体，也不影响点击拾取。层级与标记一致：聚合态标城市，展开态标足迹。
+    const GLOBE_LABEL_MODE = (() => {
+        const raw = String(footprintCfg.globeLabels || 'all').trim().toLowerCase();
+        return (raw === 'off' || raw === 'city' || raw === 'all') ? raw : 'all';
+    })();
+    const SHOW_CITY_LABELS = GLOBE_LABEL_MODE !== 'off';
+    const SHOW_FOOTPRINT_LABELS = GLOBE_LABEL_MODE === 'all';
+    const LABEL_FONT = '500 12px "PingFang SC", "Microsoft YaHei", sans-serif';
+    const LABEL_FONT_PX = 12;        // 与上面的字号保持一致：避让时按它估算文字宽度
+    const LABEL_LINE_HEIGHT = 17;    // 一行文字占的高度（含行距），用于屏幕空间避让
+    const LABEL_PAD = 3;             // 避让时给每个标签留的余量
+    const LABEL_GAP = 4;             // 标签与标记之间的间隙（贴着圆点写，字小的时候更自然）
+    const LABEL_MARGIN = 4;          // 与视口边缘的最小距离
+    const LABEL_MAX = 160;           // 单帧参与避让的标签上限（按离视口中心由近到远取）
+    const LABEL_OUTLINE_COLOR = Cesium.Color.fromCssColorString('#0b0e14').withAlpha(0.85);
+    // 标签候选位：8 个方向 × 2 圈（先试第一圈，放不下再整体外推一档）
+    const LABEL_SLOT_DIRS = [
+        { x: 0, y: 1 }, { x: 0, y: -1 }, { x: 1, y: 0 }, { x: -1, y: 0 },
+        { x: 0.7, y: 1 }, { x: -0.7, y: 1 }, { x: 0.7, y: -1 }, { x: -0.7, y: -1 }
+    ];
+    // 三圈：前两圈贴标记，第三圈兜底。同城足迹点挨得近时（窄视口尤其明显），
+    // 名字宁可放得远一点，也不能整个消失——消失会让人以为"这个点没显示出来"。
+    const LABEL_SLOT_RINGS = [1, 1.9, 2.6];
+    // 悬停命中半径系数：覆盖到标记图块，但够不到紧挨着的标签文字
+    // （文字距圆心的距离是 图块半径×0.42 + 间隙，这里取 0.55 留出安全余量）
+    const MARKER_HIT_SLOP = 0.55;
+
+    function markerLabelGraphics(text, markerSize) {
+        return {
+            text: text,
+            font: LABEL_FONT,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: LABEL_OUTLINE_COLOR,
+            outlineWidth: 2.5,        // 等价于原来的 text-shadow 描边，压在影像底图上也能读清
+            horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+            verticalOrigin: Cesium.VerticalOrigin.TOP,
+            pixelOffset: new Cesium.Cartesian2(0, Math.round(markerSize * 0.42) + LABEL_GAP),
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            show: false               // 由 applyMarkerMode 打开，再由避让布局逐帧去重
+        };
+    }
 
     // 创建全部标记（数据加载完成后会重建）
     function buildMarkers() {
+        labelLayoutState.clear();
         markerEntities = FOOTPRINTS.map((fp, i) => {
             const pos = currentPositions[i] || { lng: fp.lng, lat: fp.lat };
             return viewer.entities.add({
                 name: fp.name,
-                position: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat),
+                position: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, markerLift.get(i) || 0),
                 billboard: {
                     image: MARKER_URL,
-                    width: 25,
-                    height: 25,
+                    width: MARKER_SIZE,
+                    height: MARKER_SIZE,
                     verticalOrigin: Cesium.VerticalOrigin.CENTER,
                     disableDepthTestDistance: Number.POSITIVE_INFINITY   // 背面隐藏由 updateMarkerOcclusion 处理
-                }
+                },
+                label: markerLabelGraphics(fp.name || '', MARKER_SIZE)
             });
         });
     }
@@ -1507,6 +1683,7 @@
             return { city: best, key: group.key, indices: group.indices };
         });
         cityMarkerEntities.forEach(ent => viewer.entities.remove(ent));
+        labelLayoutState.clear();
         cityMarkerEntities = cityList.map(city => {
             const center = cityCenter(city);
             return viewer.entities.add({
@@ -1514,11 +1691,12 @@
                 position: center ? Cesium.Cartesian3.fromDegrees(center.lng, center.lat) : undefined,
                 billboard: {
                     image: cityMarkerUrl(city.indices.length),
-                    width: 30,
-                    height: 30,
+                    width: CITY_MARKER_SIZE,
+                    height: CITY_MARKER_SIZE,
                     verticalOrigin: Cesium.VerticalOrigin.CENTER,
                     disableDepthTestDistance: Number.POSITIVE_INFINITY   // 背面隐藏由 updateMarkerOcclusion 处理
-                }
+                },
+                label: markerLabelGraphics(city.city, CITY_MARKER_SIZE)
             });
         });
     }
@@ -1530,14 +1708,20 @@
             cityRevealRaf = null;
             markerEntities.forEach(ent => {
                 if (ent && ent.billboard) {
-                    ent.billboard.width = 25;
-                    ent.billboard.height = 25;
+                    ent.billboard.width = MARKER_SIZE;
+                    ent.billboard.height = MARKER_SIZE;
                 }
             });
         }
         cityMode = city;
         cityMarkerEntities.forEach(ent => { ent.show = city; });
         markerEntities.forEach(ent => { ent.show = !city; });
+        // 标签显隐统一交给避让布局处理（它同时判断"这个模式下该不该有标签"）。
+        // 两处各写一份 label.show 会让布局的状态缓存与实际值失同步，
+        // 出现"该收的没收回"（例如缩回整球后还留着城市名）。
+        markerLabelDirty = true;   // 换了一批标签，下一帧重排避让
+        pendingMarkerAudit = true;  // 模式切换后复检一次渲染结果（漏画的点趁早抬高）
+        markerOcclusionDirty = true;   // 换了一组标记，遮挡关系重算
         buildMarkerFocusButtons();
         hideMarkerTip();
         const card = document.getElementById('cityCard');
@@ -1582,15 +1766,15 @@
         }
         markerEntities.forEach((ent, i) => {
             const sel = i === index;
-            ent.billboard.width = sel ? 34 : 25;
-            ent.billboard.height = sel ? 34 : 25;
+            ent.billboard.width = sel ? MARKER_SIZE_SELECTED : MARKER_SIZE;
+            ent.billboard.height = sel ? MARKER_SIZE_SELECTED : MARKER_SIZE;
             ent.billboard.color = sel ? Cesium.Color.WHITE : Cesium.Color.WHITE.withAlpha(0.42);
         });
     }
 
     // 关闭卡片时，标记圆点/光圈与卡片淡出同节奏复原。
     // 注意：billboard.width/color 读回的是 Property 包装对象，不能直接当数值用，
-    // 所以起点状态用代码里记录的选中项（34px/全亮，其他 25px/42% 透明度）。
+    // 所以起点状态用代码里记录的选中项（选中/全亮，其他基准尺寸/42% 透明度）。
     function restoreMarkers(duration, selIndex) {
         if (markerRestoreRaf) {
             cancelAnimationFrame(markerRestoreRaf);
@@ -1601,10 +1785,10 @@
             const t = Math.min((now - start) / duration, 1);
             const k = t * t * (3 - 2 * t);   // smoothstep 缓动
             markerEntities.forEach((ent, i) => {
-                const fromW = (i === selIndex) ? 34 : 25;
+                const fromW = (i === selIndex) ? MARKER_SIZE_SELECTED : MARKER_SIZE;
                 const fromA = (i === selIndex) ? 1.0 : 0.42;
-                ent.billboard.width = fromW + (25 - fromW) * k;
-                ent.billboard.height = fromW + (25 - fromW) * k;
+                ent.billboard.width = fromW + (MARKER_SIZE - fromW) * k;
+                ent.billboard.height = fromW + (MARKER_SIZE - fromW) * k;
                 ent.billboard.color = Cesium.Color.WHITE.withAlpha(fromA + (1 - fromA) * k);
             });
             if (t < 1) {
@@ -1633,6 +1817,7 @@
 
     function hideMarkerCard() {
         document.body.classList.remove('card-open');   // 恢复右下角浮动按钮
+        resumeAutoRotate('card');                      // 详情卡关掉：按用户偏好恢复自转
         if (!markerCard.classList.contains('visible')) return;
         markerCard.classList.remove('visible');
         // 注意：这里要的是「那个按钮」，不是判断结果 —— 直接写 && 链会得到布尔值，
@@ -1648,8 +1833,8 @@
         activeFootprintIndex = -1;
         if (reduceMotion) {
             markerEntities.forEach(ent => {
-                ent.billboard.width = 25;
-                ent.billboard.height = 25;
+                ent.billboard.width = MARKER_SIZE;
+                ent.billboard.height = MARKER_SIZE;
                 ent.billboard.color = Cesium.Color.WHITE;
             });
         } else {
@@ -1718,7 +1903,7 @@
 
     function showMarkerCard(fp, index) {
         hideCityCard(false);
-        if (autoRotate) setAutoRotate(false);   // 打开足迹详情卡后停止地球自动旋转
+        pauseAutoRotate('card');   // 打开足迹详情卡：临时停转（关掉卡片按用户偏好自动恢复）
         activeFootprintIndex = index;
         markerCardTitle.textContent = fp.name;
         markerCardAddr.textContent = fp.address || '';
@@ -1817,7 +2002,10 @@
         applyMarkerMode(false);
         const card = document.getElementById('cityCard');
         if (card) card.classList.add('is-revealed');
-        if (alreadyExpanded || reduceMotion) return;
+        if (alreadyExpanded || reduceMotion) {
+            pendingMarkerAudit = true;   // 没播动画也要体检一次渲染结果
+            return;
+        }
         if (cityRevealRaf) cancelAnimationFrame(cityRevealRaf);
         const indices = city.indices.slice();
         indices.forEach(fi => {
@@ -1837,8 +2025,8 @@
         const restoreSize = (fi) => {
             const ent = markerEntities[fi];
             if (ent && ent.billboard) {
-                ent.billboard.width = 25;
-                ent.billboard.height = 25;
+                ent.billboard.width = MARKER_SIZE;
+                ent.billboard.height = MARKER_SIZE;
             }
         };
         const tick = (now) => {
@@ -1856,8 +2044,8 @@
                     pending = true;
                     if (t <= 0) return;
                     const eased = 1 - Math.pow(1 - t, 3);
-                    ent.billboard.width = Math.max(1, Math.round(25 * eased));
-                    ent.billboard.height = Math.max(1, Math.round(25 * eased));
+                    ent.billboard.width = Math.max(1, Math.round(MARKER_SIZE * eased));
+                    ent.billboard.height = Math.max(1, Math.round(MARKER_SIZE * eased));
                 }
             });
             if (pending && !cityMode) {
@@ -1865,11 +2053,95 @@
             } else {
                 cityRevealRaf = null;
                 // 兜底：动画结束时还没长到正常尺寸的（包括上面那种一帧就退出、以及
-                // 中途被切回聚合模式的情况），直接补回 25，绝不让标记停在看不见的尺寸
+                // 中途被切回聚合模式的情况），直接补回基准尺寸，绝不让标记停在看不见的尺寸
                 indices.forEach(restoreSize);
+                indices.forEach(fi => {
+                    const ent = markerEntities[fi];
+                    if (ent) ent.show = true;   // 落地就该看到的点，先点亮；下一帧遮挡判定会按真实几何再校正
+                });
+                // 收尾后再按当前相机重算一次可见性与标签：落地瞬间的时序差异
+                // 不该让某个点/名字停在上一帧状态，等用户拖动才恢复
+                markerOcclusionDirty = true;
+                markerLabelDirty = true;
+                pendingMarkerAudit = true;   // 动画结束后在真实渲染结果上体检一次
             }
         };
         cityRevealRaf = requestAnimationFrame(tick);
+    }
+
+    // ============ 标记自愈：实体状态正常、但画笔没上（点与名字一起消失）============
+    // 症状：show=true、width/height 正常、位置合法、label.show=true，可 scene.pick 在它自己的
+    // 屏幕位置上拾到的是地球 —— 也就是 Cesium 这一帧根本没画它，拖动/缩放后才恢复。
+    // 做法：展开或重建后，用 pick 在真实渲染结果上逐个体检；确认"没被画出来"的实体重建一次
+    // （remove + add，让位置/图标/标签全部由 Cesium 重新走一遍可视化流程）。
+    // ⚠ 根因（2026-09-14 现场探测确认）：Cesium 的 disableDepthTestDistance 是靠顶点着色器里
+    //   gl_Position.z = -gl_Position.w 把深度顶到近平面实现的，且只在顶点未被裁剪时执行；
+    //   当标记**正好落在椭球面（h=0）**上时这个组合会失效 —— 同一坐标只要抬高一点点就正常。
+    //   所以"总是画在最前"保留（地形也挡不住），改为一档档抬高直到能画出来：
+    //   只动被这条边界情况命中的少数点，其余点保持 h=0，避免无谓的视差偏移。
+    const MARKER_LIFT_STEPS = [120, 600, 2500];    // 自愈抬高档位（米）
+    function auditMarkerRendering() {
+        if (cityMode) return;                       // 聚合态下足迹点本来就是隐藏的
+        if (cityRevealRaf) {                        // 正在播"聚合点散开"动画：等它播完再体检，避免误判
+            pendingMarkerAudit = true;
+            return;
+        }
+        const now = Cesium.JulianDate.now();
+        let rebuilt = 0;
+        let retry = false;
+        let waiting = false;
+        markerEntities.forEach((ent, i) => {
+            if (!ent || !ent.show) return;
+            const fp = FOOTPRINTS[i];
+            if (!fp) return;
+            const lifted = markerLift.get(i) || 0;
+            const nextStep = MARKER_LIFT_STEPS.find(v => v > lifted);
+            if (nextStep === undefined) return;     // 已经抬到最高一档仍画不出来，不再折腾
+            const widthProp = ent.billboard && ent.billboard.width;
+            const width = widthProp && widthProp.getValue ? widthProp.getValue(now) : widthProp;
+            if (typeof width === 'number' && width < MARKER_SIZE * 0.6) {
+                waiting = true;                     // 尺寸还在动画里，先不算它
+                return;
+            }
+            const pos = ent.position && ent.position.getValue(now);
+            if (!pos) return;
+            const sp = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, pos, labelScreen);
+            if (!sp || sp.x < 0 || sp.y < 0 || sp.x > window.innerWidth || sp.y > window.innerHeight) return;
+            const picked = viewer.scene.pick(new Cesium.Cartesian2(sp.x, sp.y));
+            if (picked && picked.id === ent) return;   // 画出来了，正常
+            if (picked && (markerEntities.indexOf(picked.id) >= 0 || cityMarkerEntities.indexOf(picked.id) >= 0)) {
+                return;                                // 被另一个标记压住：属正常遮挡，不动它
+            }
+            // 没被画出来 → 抬高一点重建这个实体（下一次体检会再确认）
+            markerLift.set(i, nextStep);
+            const center = currentPositions[i] || { lng: fp.lng, lat: fp.lat };
+            const fresh = viewer.entities.add({
+                name: fp.name,
+                position: Cesium.Cartesian3.fromDegrees(center.lng, center.lat, nextStep),
+                billboard: {
+                    image: MARKER_URL,
+                    width: MARKER_SIZE,
+                    height: MARKER_SIZE,
+                    verticalOrigin: Cesium.VerticalOrigin.CENTER,
+                    disableDepthTestDistance: Number.POSITIVE_INFINITY
+                },
+                label: markerLabelGraphics(fp.name || '', MARKER_SIZE)
+            });
+            fresh.show = true;
+            labelLayoutState.delete(ent);
+            viewer.entities.remove(ent);
+            markerEntities[i] = fresh;
+            rebuilt++;
+            retry = true;
+        });
+        if (rebuilt) {
+            markerOcclusionDirty = true;
+            markerLabelDirty = true;
+            if (retry) pendingMarkerAudit = true;   // 下一帧再体检一次，必要时继续抬高
+            console.warn('[footprint] 检测到 ' + rebuilt + ' 个足迹标记未被渲染，已抬高重建');
+        } else if (waiting) {
+            pendingMarkerAudit = true;              // 还有点在动，等停下来再看
+        }
     }
 
     // 飞往城市：终点按足迹分布计算，落地瞬间自动展开该城市的足迹点。
@@ -1903,7 +2175,7 @@
     function showCityCard(ci, triggerBtn) {
         const city = cityList[ci];
         if (!city) return;
-        if (autoRotate) setAutoRotate(false);   // 打开城市聚合卡后停止地球自动旋转
+        pauseAutoRotate('city-card');   // 打开城市聚合卡：临时停转（关掉卡片按用户偏好自动恢复）
         if (markerCard.classList.contains('visible')) hideMarkerCard();
         if (cityView.classList.contains('show')) closeCityView(false);
         hideMarkerTip();
@@ -1929,6 +2201,7 @@
     }
 
     function hideCityCard(returnFocus = true) {
+        resumeAutoRotate('city-card');   // 城市卡关掉：按用户偏好恢复自转
         if (!cityCard.classList.contains('visible')) return;
         cityCard.classList.remove('visible');
         cityCard.classList.remove('is-revealed');
@@ -1953,10 +2226,15 @@
 
     // ================= 悬停名称（标注式引导线，跟随标记） =================
 
-    // 悬停/键盘聚焦时：其他标记变暗、城市轮廓透明度降低，只有当前标记保持全亮
+    // 悬停/键盘聚焦时：其他标记变暗、城市轮廓透明度降低，只有当前标记保持全亮，
+    // 同时把聚焦的标记放大一点点。放大走 billboard.scale（Cesium 会把它乘到
+    // 图块宽高上），与选中态 / 复原动画改的 width 互不覆盖，两个效果可以叠加。
+    const MARKER_HOVER_SCALE = 1.16;
     function setMarkerFocus(entity) {
         if (focusedMarker === entity) return;
+        if (focusedMarker && focusedMarker.billboard) focusedMarker.billboard.scale = 1;
         focusedMarker = entity;
+        if (entity && entity.billboard) entity.billboard.scale = MARKER_HOVER_SCALE;
         const outlineMat = Cesium.Color.WHITE.withAlpha(entity ? 0.2 : 0.4);
         cityOutlinePolylines.forEach(p => { if (p) p.material = outlineMat; });
         const dim = Cesium.Color.WHITE.withAlpha(0.35);
@@ -2023,11 +2301,25 @@
 
     // 标记可见性：转到地球背面（越过地平线）立即隐藏，转回正面再出现。
     // 与悬停标注同一套半球算法，行为可控且不依赖深度缓冲。
+    // 判定只取决于「相机 ↔ 标记」的相对位置，所以相机没动就直接跳过：
+    // postRender 每帧都跑（自转、昼夜光照需要连续渲染），静止浏览时这一层不必
+    // 每帧做一遍 O(标记数) 的点乘与属性写入。
     const occNormal = new Cesium.Cartesian3();
     const occToCam = new Cesium.Cartesian3();
+    const occCamPos = new Cesium.Cartesian3();
+    const occCamDir = new Cesium.Cartesian3();
     function updateMarkerOcclusion() {
+        const camera = viewer.camera;
+        if (!markerOcclusionDirty &&
+            Cesium.Cartesian3.equalsEpsilon(camera.positionWC, occCamPos, Cesium.Math.EPSILON6) &&
+            Cesium.Cartesian3.equalsEpsilon(camera.directionWC, occCamDir, Cesium.Math.EPSILON6)) {
+            return false;   // 相机与标记都没动：这一帧不需要重算（返回值供标签布局共用）
+        }
+        Cesium.Cartesian3.clone(camera.positionWC, occCamPos);
+        Cesium.Cartesian3.clone(camera.directionWC, occCamDir);
+        markerOcclusionDirty = false;
         const mode3D = viewer.scene.mode === Cesium.SceneMode.SCENE3D;
-        const cam = viewer.camera.positionWC;
+        const cam = camera.positionWC;
         function setVisible(ent, want) {
             if (!want) { ent.show = false; return; }
             const p = ent.position && ent.position.getValue(Cesium.JulianDate.now());
@@ -2039,8 +2331,165 @@
         }
         cityMarkerEntities.forEach(ent => setVisible(ent, cityMode));
         markerEntities.forEach(ent => setVisible(ent, !cityMode));
+        return true;
     }
-    viewer.scene.postRender.addEventListener(updateMarkerOcclusion);
+
+    // ================= 地名标签的屏幕空间避让 =================
+    // Cesium 的 Entity label 不做任何自动避让，重叠就是叠字。这里自己做一次贪心布局：
+    // 每个标签先试「标记下方」，放不下就按 8 个方向逐个换位（第一圈贴标记，第二圈再外推一档），
+    // 两圈都放不下才隐藏。优先级按「离视口中心近」—— 用户正在看的地方先保住标签。
+    function estimateLabelWidth(text) {
+        let w = 0;
+        for (let i = 0; i < text.length; i++) {
+            w += text.charCodeAt(i) > 0xff ? LABEL_FONT_PX : LABEL_FONT_PX * 0.56;
+        }
+        return w;
+    }
+    // 标签属性只在状态真的变化时写：pixelOffset 每次赋值都会走一遍 Cesium 的属性变更
+    function hideEntityLabel(ent) {
+        if (!ent || !ent.label) return;
+        const st = labelLayoutState.get(ent);
+        if (st && !st.show) return;
+        labelLayoutState.set(ent, { show: false, x: 0, y: 0 });
+        ent.label.show = false;
+    }
+    function placeEntityLabel(ent, x, y) {
+        if (!ent || !ent.label) return;
+        const st = labelLayoutState.get(ent);
+        if (st && st.show && st.x === x && st.y === y) return;
+        labelLayoutState.set(ent, { show: true, x: x, y: y });
+        ent.label.pixelOffset = new Cesium.Cartesian2(x, y);
+        ent.label.show = true;
+    }
+    function layoutMarkerLabels() {
+        if (!SHOW_CITY_LABELS && !SHOW_FOOTPRINT_LABELS) return;
+        // 谁该有标签：城市名只在「聚合态 + 自动显示中国轮廓」的层级出现
+        // （整球视图画面保持干净），足迹名只在展开态出现。
+        // 这里也是唯一"收回"标签的地方：条件不满足就把对应的标签全部收掉——
+        // 缩放回整球时轮廓先在 updateIntroVisibility 里收起，接着由这里收名字。
+        const cityLabelsOn = SHOW_CITY_LABELS && cityMode && boundaryVisible && cityLabelVisible;
+        const footprintLabelsOn = SHOW_FOOTPRINT_LABELS && !cityMode;
+        if (!cityLabelsOn) cityMarkerEntities.forEach(hideEntityLabel);
+        if (!footprintLabelsOn) markerEntities.forEach(hideEntityLabel);
+        if (!cityLabelsOn && !footprintLabelsOn) return;
+        const viewW = window.innerWidth;
+        const viewH = window.innerHeight;
+        const centerX = viewW / 2;
+        const centerY = viewH / 2;
+        const now = Cesium.JulianDate.now();
+        const items = [];
+
+        function collect(entities, size, textOf, weightOf) {
+            entities.forEach((ent, i) => {
+                if (!ent || !ent.show || !ent.label) return;
+                const text = textOf(i);
+                if (!text) return;
+                const pos = ent.position && ent.position.getValue(now);
+                if (!pos) { hideEntityLabel(ent); return; }
+                // 用返回值而不是复用对象：不同 Cesium 版本对 result 参数的支持不完全一致
+                const sp = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, pos, labelScreen);
+                if (!sp || typeof sp.x !== 'number' || typeof sp.y !== 'number') {
+                    hideEntityLabel(ent);
+                    return;
+                }
+                const sx = sp.x;
+                const sy = sp.y;
+                // 明显在视口外的标记直接跳过，既不做避让也不改它的标签状态
+                if (sx < -80 || sy < -80 || sx > viewW + 80 || sy > viewH + 80) return;
+                items.push({
+                    ent: ent,
+                    size: size,
+                    weight: weightOf ? weightOf(i) : 1,
+                    x: sx,
+                    y: sy,
+                    dist: Math.abs(sx - centerX) + Math.abs(sy - centerY),
+                    w: estimateLabelWidth(text) + LABEL_PAD * 2,
+                    h: LABEL_LINE_HEIGHT + LABEL_PAD
+                });
+            });
+        }
+        if (cityLabelsOn) {
+            collect(cityMarkerEntities, CITY_MARKER_SIZE,
+                i => (cityList[i] ? cityList[i].city : ''),
+                i => (cityList[i] && cityList[i].indices ? cityList[i].indices.length : 1));
+        } else if (footprintLabelsOn) {
+            collect(markerEntities, MARKER_SIZE, i => (FOOTPRINTS[i] ? FOOTPRINTS[i].name : ''), null);
+        }
+
+        // 标记本身也是障碍：文字不压在圆点上（既挡住点，也让人分不清文字属于哪个点）。
+        // 做法就是把标记矩形直接当作"已占用"塞进同一个池子 ——
+        // 候选位的碰撞检测一行都不用改，一处覆盖标记与标签两类障碍。
+        const markerRects = items.map(item => {
+            const r = item.size * 0.42 + 2;   // 视觉圆环半径 + 一点呼吸余量
+            // own 记下这个圆点属于哪条 item：检测时要跳过自己的圆点，
+            // 否则"贴着圆点写"会被自己的障碍物判成碰撞，标签只能越推越远
+            return { own: item, x0: item.x - r, y0: item.y - r, x1: item.x + r, y1: item.y + r };
+        });
+        items.sort((a, b) => (a.dist - b.dist) || (b.weight - a.weight));
+        if (items.length > LABEL_MAX) items.length = LABEL_MAX;   // 只排离视口中心最近的一批
+        slotBlockRects.length = 0;
+        markerRects.forEach(rect => slotBlockRects.push(rect));
+        // 两级放置：
+        // 第一遍严格避让「其它文字 + 其它圆点」；
+        // 第一遍放不下的，第二遍退一步——只避让其它文字，允许压到别的圆点边上。
+        // 理由：名字被挤掉等于这个点在画面上直接"消失"，而文字压住别人圆点的一角，
+        // 两条信息都还在（被压的那个点自己也有名字）。
+        function tryPlace(item, avoidMarkers) {
+            const half = item.size * 0.42 + LABEL_GAP;
+            // 候选位：8 个方向 × 3 圈。
+            // 第一圈紧贴标记（下方优先，最接近"标签跟在点后面"的默认观感），
+            // 后面两圈把同一组方向整体外推 —— 点挤在一起时宁可标签离点远一点，
+            // 也不要整片点都变成没有名字的圆点。
+            const stepX = item.w / 2 + half;
+            const stepY = item.h / 2 + half;
+            for (let t = 0; t < LABEL_SLOT_RINGS.length; t++) {
+                const ring = LABEL_SLOT_RINGS[t];
+                for (let d = 0; d < LABEL_SLOT_DIRS.length; d++) {
+                    const dir = LABEL_SLOT_DIRS[d];
+                    const cx = item.x + dir.x * stepX * ring;
+                    const cy = item.y + dir.y * stepY * ring;
+                    const left = cx - item.w / 2;
+                    const top = cy - item.h / 2;
+                    const x0 = left - LABEL_PAD;
+                    const y0 = top - LABEL_PAD;
+                    const x1 = left + item.w + LABEL_PAD;
+                    const y1 = top + item.h + LABEL_PAD;
+                    if (x0 < LABEL_MARGIN || y0 < LABEL_MARGIN || x1 > viewW - LABEL_MARGIN || y1 > viewH - LABEL_MARGIN) continue;
+                    let clash = false;
+                    for (let k = 0; k < slotBlockRects.length; k++) {
+                        const o = slotBlockRects[k];
+                        if (o.own === item) continue;   // 自己的圆点不算障碍
+                        if (!avoidMarkers && o.own !== undefined) continue;   // 放宽：允许压到别的圆点
+                        if (x0 < o.x1 && x1 > o.x0 && y0 < o.y1 && y1 > o.y0) { clash = true; break; }
+                    }
+                    if (clash) continue;
+                    slotBlockRects.push({ x0: x0, y0: y0, x1: x1, y1: y1 });
+                    placeEntityLabel(item.ent, dir.x * stepX * ring, dir.y * stepY * ring - item.h / 2);
+                    return true;
+                }
+            }
+            return false;
+        }
+        const deferredLabels = [];
+        items.forEach(item => { if (!tryPlace(item, true)) deferredLabels.push(item); });
+        deferredLabels.forEach(item => { if (!tryPlace(item, false)) hideEntityLabel(item.ent); });
+    }
+
+    // 遮挡判定与标签避让共用一个每帧入口：遮挡函数顺带回答「相机是否动过」，
+    // 相机静止又没有模式变化时整段跳过。
+    function updateMarkerOverlays() {
+        const cameraMoved = updateMarkerOcclusion();
+        if (!cameraMoved && !markerLabelDirty) return;
+        markerLabelDirty = false;
+        layoutMarkerLabels();
+        if (pendingMarkerAudit) {
+            pendingMarkerAudit = false;
+            auditMarkerRendering();
+        }
+    }
+    viewer.scene.postRender.addEventListener(updateMarkerOverlays);
+    // 窗口尺寸变化后标签要重排（视口边界变了，但相机没动，光靠相机变化判定不会触发）
+    window.addEventListener('resize', () => { markerLabelDirty = true; });
 
     const markerPickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 
@@ -2060,8 +2509,30 @@
     }
 
     // 悬停：足迹显示名称，城市显示「城市 · N 个足迹」
+    // 只认「圆点本身」：标签文字与圆点同属一个实体，Cesium 拾取会把文字也算命中，
+    // 于是光标划过文字也会弹提示 + 放大。这里按屏幕距离再过滤一次 ——
+    // 文字总是排在圆点之外，所以只要避开图块周围这一小圈就能把它们排除掉。
+    // （点击不过滤：文字是手指更容易点中的目标，点它的效果和点圆点一致。）
+    const markerHitScreen = new Cesium.Cartesian2();
+    function pickMarkerUnderPointer(screenPos) {
+        const found = findPickedMarker(viewer.scene.pick(screenPos));
+        if (!found) return null;
+        const ent = found.type === 'footprint' ? markerEntities[found.index] : cityMarkerEntities[found.index];
+        const world = ent && ent.position && ent.position.getValue(Cesium.JulianDate.now());
+        if (!world) return null;
+        const sp = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, world, markerHitScreen);
+        if (!sp) return null;
+        const radius = (found.type === 'footprint' ? MARKER_SIZE : CITY_MARKER_SIZE) * MARKER_HIT_SLOP;
+        const dx = screenPos.x - sp.x;
+        const dy = screenPos.y - sp.y;
+        return (dx * dx + dy * dy <= radius * radius) ? found : null;
+    }
+
     markerPickHandler.setInputAction((movement) => {
-        const found = findPickedMarker(viewer.scene.pick(movement.endPosition));
+        const found = pickMarkerUnderPointer(movement.endPosition);
+        // 光标是标记「可点」的第一层暗示（尺寸放大由 setMarkerFocus 负责）
+        hoveredMarker = !!found;
+        applyCanvasCursor();
         if (found && found.type === 'footprint') {
             showMarkerTip(markerEntities[found.index], footprintTipText(FOOTPRINTS[found.index]));
         } else if (found && found.type === 'city') {
@@ -2073,7 +2544,11 @@
     }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
     // 鼠标离开画布时收起名称气泡
-    viewer.scene.canvas.addEventListener('mouseleave', hideMarkerTip);
+    viewer.scene.canvas.addEventListener('mouseleave', () => {
+        hideMarkerTip();
+        hoveredMarker = false;
+        applyCanvasCursor();
+    });
 
     // 点击足迹打开详情卡；点击城市标记显示城市聚合卡；点击空白处关闭
     markerPickHandler.setInputAction((movement) => {
@@ -5096,6 +5571,7 @@
             // 按当前视角恢复城市/展开模式（整球视图默认城市聚合）
             const h = viewer.camera.positionCartographic.height;
             applyMarkerMode(h > CITY_COLLAPSE_HEIGHT);
+            pendingMarkerAudit = true;   // 重建后在真实渲染结果上体检一次
             if (cityFillEnabled) buildCityFills();   // 城市高亮开关开启时才随新数据重建
         }
         footprintsDataReady = true;
@@ -5160,6 +5636,7 @@
         cityFillDataSources.forEach(ds => viewer.dataSources.remove(ds));
         cityFillDataSources = [];
         cityOutlinePolylines = [];
+        cityFillVisible = false;   // 下次构建时按当前相机高度重新决定显隐
     }
 
     function buildCityFills() {
@@ -5188,7 +5665,9 @@
                     viewer.dataSources.remove(ds);
                     return;
                 }
-                ds.show = false;   // 默认隐藏，放大到国内范围后显示
+                // 按当前高度决定显隐：用户已经放大到国内范围时，边界加载完成应立即出现，
+                // 不必等他再缩放一次
+                ds.show = cityFillVisible;
 
                 // 边界轮廓：从多边形层级中提取外环与孔洞环，闭合后画成贴合地面的折线
                 const now = Cesium.JulianDate.now();
@@ -5349,7 +5828,6 @@
     let ticketReplayFlying = false;
     let ticketReplayTimer = null;
     let ticketReplayGeneration = 0;
-    let ticketReplayPrevAutoRotate = false;
     let ticketReplayEntryIndex = 0;              // 进入放映时的票根，退出后回到这一张
     let ticketReplayResumeIndex = -1;            // 切回票夹后，重走再进来接着播的位置
     let ticketReplayPausedByOverlay = false;     // 浮层（护照/抽票/明信片）暂停放映的标记
@@ -6490,7 +6968,7 @@
             ticketReplayView.classList.remove('is-focused', 'is-flying', 'is-paused', 'is-ended');
         }
         ticketReplaySetZoom(false);
-        if (autoRotate) setAutoRotate(false);
+        pauseAutoRotate('replay');   // 放映期间暂停自转，退出放映时按用户偏好恢复
         ticketReplayShowStop(start, true);
         if (ticketHasCoordinate(ticketReplayPoints[start])) {
             ticketReplayFlyTo(ticketReplayPoints[start], 0.001, null);
@@ -6510,8 +6988,7 @@
         ticketReplayPoints = ticketReplayItems;
         if (!canEnterTicketReplay()) return;
         updateTicketReplaySpeedButton();
-        // 只在真正进入放映时记录一次：自动旋转状态与当前票根，退出时复位
-        ticketReplayPrevAutoRotate = autoRotate;
+        // 只在真正进入放映时记录一次当前票根，退出时复位
         ticketReplayEntryIndex = ticketIndex;
         ticketGallery.classList.add('is-replay-mode');
         ticketReplayView.hidden = false;
@@ -6542,8 +7019,7 @@
             if (ticketItems[ticketReplayEntryIndex]) ticketIndex = ticketReplayEntryIndex;
         }
         ticketReplayPausedByOverlay = false;
-        if (ticketReplayPrevAutoRotate && !autoRotate) setAutoRotate(true);
-        ticketReplayPrevAutoRotate = false;
+        resumeAutoRotate('replay');   // 退出放映：按用户偏好恢复自转
         updateTicketReplayPlayButton();
     }
 
@@ -6676,8 +7152,10 @@
             document.body.classList.add('ticket-gallery-open');
             // 打开票根页时把地址同步为 ?view=tickets，便于分享/直达
             if (!isTicketsView()) history.pushState({ ticketGallery: true }, '', window.location.pathname + '?view=tickets');
-            // 打开票根页：地球作为背景，若未开启自转则自动开启（从足迹卡进入时不开启）
-            if (startRotation !== false && !autoRotate) setAutoRotate(true);
+            // 打开票根页：地球作为背景。从足迹卡进入时（startRotation === false）明确要求不自转；
+            // 其余入口跟随用户偏好 —— 不再无条件打开，否则用户手动关掉的自转会被这个入口重新打开。
+            if (startRotation === false) pauseAutoRotate('ticket-view');
+            else resumeAutoRotate('ticket-view');
             if (ticketItems.length) {
                 ticketIndex = targetIndex == null
                     ? 0
@@ -6702,6 +7180,7 @@
         } else {
             // 关闭票根页时浮层会跟着关闭，这时不要再去恢复放映
             ticketReplayPausedByOverlay = false;
+            resumeAutoRotate('ticket-view');   // 票根页的临时停转到此结束
             if (ticketPassport && ticketPassport.classList.contains('show')) closeTicketPassport(false);
             if (ticketOracle && ticketOracle.classList.contains('show')) closeTicketOracle(false);
             if (ticketLetter && ticketLetter.classList.contains('show')) closeTicketLetter(false);

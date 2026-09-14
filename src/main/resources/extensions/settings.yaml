@@ -166,6 +166,19 @@ spec:
           name: globeDesc
           value: '把每一次出发，收藏成地球上的坐标；让走过的城市，成为星空下的故事。'
           help: "3D 地球首页标题卡的描述文字（不读取基本设置中的足迹描述）"
+        - $formkit: select
+          label: 地球地名标注
+          name: globeLabels
+          value: all
+          options:
+            - label: 关闭（仅悬停显示）
+              value: off
+            - label: 只显示城市名
+              value: city
+            - label: 城市名 + 足迹名
+              value: all
+          help: "地名的常驻显示方式：整球视图标注去过的城市，放大到城市后标注各条足迹（同名城市下按到访顺序编号）。
+                 使用「无字」底图（高德卫星·无字 / 天地图无标注）时尤其建议开启，否则画面上没有任何地名参照"
         - $formkit: text
           label: 天地图 Key
           name: tiandituKey

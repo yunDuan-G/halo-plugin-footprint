@@ -46,4 +46,6 @@ public class BaseConfig {
     private Boolean enableTicketOracle;
     private Boolean enableTicketLetter;
     private Boolean enableTicketPassport;
+    /** 3D 地球常驻地名标注：off 关闭 / city 只显示城市名 / all 城市名 + 足迹名 */
+    private String globeLabels;
 }

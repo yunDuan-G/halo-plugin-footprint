@@ -25,6 +25,16 @@
             padding: 0;
             overflow: hidden;
         }
+        /* 光标反馈：地球可以拖着转（开手），按住时是「抓取中」；
+           悬停到标记上时由 JS 覆盖成 pointer（手型），提示这里能点。
+           内联样式优先级更高，所以 JS 只在标记 / 拖拽状态下覆盖这里的默认值。 */
+        body.mode-3d #cesiumContainer canvas {
+            cursor: grab;
+        }
+        body.mode-3d #cesiumContainer canvas:active {
+            cursor: grabbing;
+        }
+
         /* 视图层级：3D 在上（交叉淡化时覆盖下方的高德页），2D 在下 */
         #view-3d {
             position: relative;
