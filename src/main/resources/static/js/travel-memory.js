@@ -358,8 +358,8 @@
     const CITY_LABEL_SHOW_HEIGHT = 4000000;
     const CITY_LABEL_HIDE_HEIGHT = 5000000;
     let cityLabelVisible = false;
-    // 标记详情卡：整球视图（标题卡出现）时自动收起；初始化完成前不触发
-    let markerCardReady = false;
+    // 详情卡（足迹卡 / 城市聚合卡）：整球视图（标题卡出现）时自动收起；初始化完成前不触发
+    let detailCardsReady = false;
     // 城市聚合状态（提前声明，updateIntroVisibility 会读取）
     let cityList = [];            // [{ city, indices: [足迹下标] }]，按数据顺序
     let cityMarkerEntities = [];  // 城市标记实体
@@ -460,8 +460,11 @@
                 navTools.classList.remove('open');
                 topNav.classList.remove('tools-open');
                 navMoreBtn.setAttribute('aria-expanded', 'false');
-                if (markerCardReady && markerCard.classList.contains('visible')) {
-                    hideMarkerCard();   // 回到整球视图时自动关闭详情卡
+                if (detailCardsReady) {
+                    // 回到整球视图时自动关闭详情卡：标题卡就在左下角，卡片不收会和它叠在一起；
+                    // 城市聚合卡同样会挡住标题卡，所以不能只收足迹卡。
+                    if (markerCard.classList.contains('visible')) hideMarkerCard();
+                    if (cityCard.classList.contains('visible')) hideCityCard(false);
                 }
             } else if (introVisible && h < INTRO_HIDE_HEIGHT) {
                 introVisible = false;
@@ -560,6 +563,12 @@
     function saveViewMode(mode) {
         try { localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode); } catch (e) { /* 忽略 */ }
     }
+    // 是否以 2D 视图启动。票根页只属于 3D 地球：带 ?view=tickets 直接进来时固定走 3D，
+    // 否则票根页会被一起隐藏的 #view-3d 吞掉（详细原因见 forceGlobeForTickets）。
+    // 这里只影响本次打开，用户记住的 2D 偏好仍然保留，下次普通访问照旧回到 2D。
+    function startIn2D() {
+        return getSavedViewMode() === '2d' && !isTicketsView();
+    }
 
     function armMorphTimeout() {
         clearTimeout(morphTimeoutId);
@@ -598,6 +607,8 @@
         const startTime = performance.now();
 
         function tick(now) {
+            // 缩放到中国的途中目标变了（例如从 2D 直接进票根页），立刻让出相机控制权
+            if (pendingMode !== '2d') return;
             const t = Math.min((now - startTime) / (duration * 1000), 1);
             const k = t * t * (3 - 2 * t); // smoothstep 缓动
             viewer.camera.setView({
@@ -692,7 +703,8 @@
         }
     }
 
-    function finishSwitchTo3D() {
+    // persist=false 用于「只是为了让票根页有个 3D 背景」的强制切换：显隐要改，用户偏好不改
+    function finishSwitchTo3D(persist = true) {
         clearTimeout(morphTimeoutId);
         amapMode = false;
         if (view2d) view2d.hidden = true;
@@ -703,7 +715,7 @@
         sceneModeBtn.title = '切换到 2D 平面地图';
         viewer.clock.shouldAnimate = true;
         resumeAutoRotate('2d');   // 回到 3D 按用户偏好恢复自转（不再无条件开启）
-        saveViewMode('3d');
+        if (persist) saveViewMode('3d');
         if (window.Footprint2D && typeof window.Footprint2D.hide === 'function') {
             window.Footprint2D.hide();
         }
@@ -736,6 +748,12 @@
             finishSwitchTo3D();
             return;
         }
+        if (viewer.scene.mode !== Cesium.SceneMode.SCENE2D) {
+            // 场景不在 2D 平面（正常不该出现，见下面恢复 2D 时的说明）：Cesium 会直接跳过 morph，
+            // morphComplete 也就不会触发，只能立刻落地，否则要干等 2.3 秒兜底超时才收尾。
+            finishSwitchTo3D();
+            return;
+        }
         // 提前把视图换回地球（此时它处于上次 morphTo2D 后的平面状态），作为合并动画起点
         if (view2d) view2d.hidden = true;
         if (view3d) view3d.hidden = false;
@@ -746,6 +764,30 @@
         pendingMode = '3d';
         armMorphTimeout();
         viewer.scene.morphTo3D(MORPH_DURATION);
+    }
+
+    // 票根页只属于 3D 地球（挂载在 #view-3d 里，2D 下整个容器是隐藏的），
+    // 所以当前在 2D 时打开票根页要先切回 3D：不播合并动画，也不写 localStorage，
+    // 免得用户只是点开一次票根链接，记住的 2D 偏好就被改掉了。
+    function forceGlobeForTickets() {
+        if (!amapMode && !morphing && viewer.scene.mode === Cesium.SceneMode.SCENE3D) return;
+        clearTimeout(morphTimeoutId);
+        morphing = false;
+        pendingMode = null;
+        try {
+            // 展开动画途中就切票根页的话，先让它立即落地；否则动画结束时仍会按 pendingMode 切去 2D
+            viewer.scene.completeMorph();
+            if (viewer.scene.mode !== Cesium.SceneMode.SCENE3D) viewer.scene.morphTo3D(0);
+        } catch (e) {
+            console.warn('票根页切回 3D 失败：', e);
+        }
+        finishSwitchTo3D(false);
+        viewer.resize();   // 容器刚从隐藏恢复，先校正画布尺寸
+        viewer.camera.cancelFlight();
+        // 平面合并回球体后相机常贴近地表（地球看着是“扁”的），直接归位到整球视角
+        viewer.camera.setView({
+            destination: Cesium.Cartesian3.fromDegrees(104.0, 35.0, 21000000)
+        });
     }
 
     // morph 动画结束：按目标模式完成视图交换
@@ -1540,9 +1582,10 @@
         requestAnimationFrame(tick);
     }
 
-    if (reduceMotion || getSavedViewMode() === '2d') {
+    const restoring2D = startIn2D();   // ?view=tickets 固定按 3D 启动，不恢复上次的 2D
+    if (reduceMotion || restoring2D) {
         markEntranceSeen();
-        if (getSavedViewMode() === '2d') pauseAutoRotate('2d');   // 恢复成 2D 时地球在后台，保持停转
+        if (restoring2D) pauseAutoRotate('2d');   // 恢复成 2D 时地球在后台，保持停转
         viewer.camera.setView({
             destination: Cesium.Cartesian3.fromDegrees(104.0, 35.0, 21000000) // 中国大致中心，整球可见
         });
@@ -1751,7 +1794,7 @@
     const cityCardLocate = document.getElementById('cityCardLocate');
     let activeCityIndex = -1;
     let cityCardTriggerBtn = null;
-    markerCardReady = true;   // 标记卡已就绪，可响应整球视图自动关闭
+    detailCardsReady = true;   // 详情卡已就绪，可响应整球视图自动关闭
     let activeFootprintIndex = -1;
     let markerRestoreRaf = null;
 
@@ -7128,6 +7171,8 @@
     function setTicketView(open, targetIndex, startRotation) {
         if (!ticketGallery) return;
         if (open) {
+            // 票根页只属于 3D 地球：2D 下进来（直接访问、前进后退等）先切回 3D 再开
+            forceGlobeForTickets();
             if (ticketViewMode !== 'archive') {
                 clearTicketReplay();
                 ticketViewMode = 'archive';
@@ -7856,9 +7901,21 @@
     if (cityFillEnabled) buildCityFills();
 
     // ================= 恢复上次视图状态 =================
-    // 刷新后保持上次的 2D/3D 模式（直接恢复，不做展开动画，避免 3D 闪一下）
+    // 刷新后保持上次的 2D/3D 模式（直接恢复，不做展开动画，避免 3D 闪一下）；
+    // 带 ?view=tickets 进来时 startIn2D() 为 false，即保持 3D 并把票根页正常显示出来
     try {
-        if (getSavedViewMode() === '2d' && !amapMode) {
+        if (startIn2D() && !amapMode) {
+            // 恢复 2D 时只换页面显隐是不够的：Cesium 场景本身还停在 3D 球体上，
+            // 之后点“3D 地球”时 morphTo3D 会因为“本来就在 3D”被 Cesium 跳过、不触发 morphComplete，
+            // 表现就是瞬间切页、没有合并动画，还要等 2.3 秒兜底超时才收尾。
+            // 所以这里用 0 秒 morph 把场景状态补齐（不播动画，用户看不到），
+            // 起点用当前相机投影到平面，落点约等于整球视角下的中国，和手动切换 2D 的落点基本一致。
+            try {
+                viewer.resize();   // 此刻 #view-3d 仍可见，先保证宽高比有效（morph 内部要用画布宽高）
+                if (viewer.scene.mode !== Cesium.SceneMode.SCENE2D) viewer.scene.morphTo2D(0);
+            } catch (e) {
+                console.warn('2D 场景状态初始化失败（切回 3D 时可能没有动画）：', e);
+            }
             finishSwitchTo2D();
         }
     } catch (e) {
