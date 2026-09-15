@@ -397,6 +397,20 @@
         ice:   { fill: 'rgba(110, 160, 255, 0.18)' }
     };
 
+    // 逐帧要读的三个浮层元素：第一次取到后缓存，省掉每帧三次 getElementById。
+    // 这里用惰性取值而不是直接引用变量 —— 这几个元素是在本函数之后才声明的（避免 TDZ）。
+    let introOverlayEls = null;
+    function introOverlayElements() {
+        if (!introOverlayEls) {
+            introOverlayEls = [
+                document.getElementById('cityView'),
+                document.getElementById('cityWall'),
+                document.getElementById('ticketGallery')
+            ];
+        }
+        return introOverlayEls;
+    }
+
     function updateIntroVisibility() {
         // 开场动画期间：标题卡暂缓显示，动画结束后由下一帧的相机高度逻辑自动显示
         if (entranceActive) {
@@ -412,9 +426,7 @@
         }
         // 全屏覆盖层（城市卡片墙 / 城市足迹 / 票根）打开时隐藏顶部导航栏与标题卡，避免遮挡；
         // 这里用 getElementById 动态判断，避免引用后置声明的变量（TDZ）。
-        const cityViewEl = document.getElementById('cityView');
-        const cityWallEl = document.getElementById('cityWall');
-        const ticketGalleryEl = document.getElementById('ticketGallery');
+        const [cityViewEl, cityWallEl, ticketGalleryEl] = introOverlayElements();
         const overlayOpen = !!(cityViewEl && cityViewEl.classList.contains('show')) ||
             !!(cityWallEl && cityWallEl.classList.contains('show')) ||
             !!(ticketGalleryEl && ticketGalleryEl.classList.contains('show'));
@@ -441,6 +453,9 @@
             cityFillFloatBtn.classList.remove('show');
             return;
         }
+        // 相机高度每帧只取一次：positionCartographic 每次调用都会新建 Cartographic 并做坐标换算，
+        // 而下面三处判断（标题卡分层、边界与城市名分层、聚合切换）用的是同一个值。
+        const cameraHeight = viewer.camera.positionCartographic.height;
         // 2D / Columbus / 变形过程中标题一律隐藏；导航栏保留（否则 2D 下无法切回 3D）
         if (viewer.scene.mode !== Cesium.SceneMode.SCENE3D) {
             if (introVisible) {
@@ -452,7 +467,7 @@
             backGlobeBtn.classList.remove('show');
             cityFillFloatBtn.classList.remove('show');
         } else {
-            const h = viewer.camera.positionCartographic.height;
+            const h = cameraHeight;
             if (!introVisible && h > INTRO_SHOW_HEIGHT) {
                 introVisible = true;
                 pageIntro.classList.add('visible');
@@ -480,7 +495,7 @@
         }
 
         // 中国边界：放大到国内范围才显示，拉远/整球视图隐藏；带 SHOW/HIDE 回滞区间
-        const boundaryH = viewer.camera.positionCartographic.height;
+        const boundaryH = cameraHeight;
         if (!boundaryVisible && boundaryH < BOUNDARY_SHOW_HEIGHT) {
             boundaryVisible = true;
         } else if (boundaryVisible && boundaryH > BOUNDARY_HIDE_HEIGHT) {
@@ -506,7 +521,7 @@
         // 城市聚合切换：放大到城市范围展开为单个足迹，拉远聚合回城市标记。
         // 程序化“飞往城市”期间先不按高度切换，落地瞬间由 finishCityFlight 统一展开。
         if (!cityFlightActive) {
-            const modeH = viewer.camera.positionCartographic.height;
+            const modeH = cameraHeight;
             // LOD 容差也跟着高度走（moveEnd 之外再兜一层：瞬时 setView 不会触发 moveEnd）
             applyScreenSpaceError();
             if (cityMode && modeH < CITY_EXPAND_HEIGHT) {
@@ -1134,6 +1149,7 @@
     const markerFocusLayer = document.getElementById('markerFocusLayer');
     let markerTipEntity = null;
     let lastKeyboardMarkerBtn = null;
+    let hoveredMarkerKey = '';   // 当前气泡对应的标记（类型:下标），用于跳过同一标记上的重复设置
 
     // ================= 城市聚合（整球显示城市标记，放大后展开为单个足迹） =================
     // 城市标记图标：白色圆环 + 中心数量
@@ -1785,11 +1801,14 @@
     const markerCardActions = markerCard.querySelector('.marker-card-actions');
     const markerCardTicket = document.getElementById('markerCardTicket');
     const markerCardGallery = document.getElementById('markerCardGallery');
+    const markerCardGalleryLabel = document.getElementById('markerCardGalleryLabel');
+    const markerCardStamp = document.getElementById('markerCardStamp');
     const cityCard = document.getElementById('cityCard');
     const cityCardMedia = document.getElementById('cityCardMedia');
     const cityCardTitle = document.getElementById('cityCardTitle');
-    const cityCardMeta = document.getElementById('cityCardMeta');
     const cityCardDesc = document.getElementById('cityCardDesc');
+    const cityStatFootprints = document.getElementById('cityStatFootprints');
+    const cityStatPhotos = document.getElementById('cityStatPhotos');
     const cityCardGallery = document.getElementById('cityCardGallery');
     const cityCardLocate = document.getElementById('cityCardLocate');
     let activeCityIndex = -1;
@@ -1892,27 +1911,12 @@
     // ================= 详情卡主图：加载成功显示图片，失败回退首字占位 + 重试 =================
     let cardImgLoadId = 0;   // 防止快速切换卡片时旧请求覆盖新图
 
-    // 主图右下角的“共 N 张”角标：纯展示，图片加载状态变化后重新挂载；
-    // 进图片墙的入口统一交给卡片里的「打开图片墙」按钮，避免同一去处挂两个可点入口
-    function refreshCardMediaGallery(fp) {
-        const old = document.getElementById('markerCardMediaGallery');
-        if (old) old.remove();
-        const imgs = fp ? cityWallImages(fp) : [];
-        if (!imgs.length) return;
-        const chip = document.createElement('span');
-        chip.id = 'markerCardMediaGallery';
-        chip.className = 'marker-card-media-gallery';
-        chip.textContent = '共 ' + imgs.length + ' 张';
-        markerCardMedia.appendChild(chip);
-    }
-
     function showCardMonogram(fp, showRetry) {
         markerCardMedia.classList.add('no-image');
         markerCardMedia.style.backgroundImage = 'none';
         markerCardMedia.innerHTML =
             '<span class="marker-card-monogram">' + (fp.name ? fp.name.charAt(0) : '?') + '</span>' +
             (showRetry ? '<button class="marker-card-retry" type="button">重试</button>' : '');
-        refreshCardMediaGallery(fp);
         if (showRetry) {
             markerCardMedia.querySelector('.marker-card-retry').addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1928,20 +1932,95 @@
         markerCardMedia.style.backgroundImage = 'none';
         markerCardMedia.innerHTML =
             '<span class="marker-card-monogram">' + (fp.name ? fp.name.charAt(0) : '?') + '</span>';
-        refreshCardMediaGallery(fp);
         const img = new Image();
         img.onload = () => {
             if (myId !== cardImgLoadId) return;   // 已被更新的卡片取代
             markerCardMedia.classList.remove('no-image');
             markerCardMedia.style.backgroundImage = 'url("' + fp.image + '")';
             markerCardMedia.innerHTML = '';
-            refreshCardMediaGallery(fp);
         };
         img.onerror = () => {
             if (myId !== cardImgLoadId) return;
             showCardMonogram(fp, true);   // 图片失败：首字占位 + 重试
         };
         img.src = fp.image;
+    }
+
+    // ================= 足迹卡入场方向：从被点的标记那一侧长出来 =================
+    // 足迹卡是「这一条记录」的展开，所以位移方向与缩放原点都指向标记点，
+    // 城市卡则是侧边容器、固定从右侧滑入。这样不用读文字也能看出这张卡属于哪个点。
+    const CARD_ENTER_DISTANCE = 22;    // 入场起点离静止位的距离（像素）
+    const CARD_ENTER_MIN_DIST = 40;    // 标记离卡片太近时不硬凑方向，退回默认的右侧滑入
+
+    // 卡片的「静止布局盒」：只按定位属性和布局尺寸推算，绝不碰 transform。
+    // 一旦临时改 transform，浏览器会从被改动的那一帧重新开始一段过渡，
+    // 把真正的入场动画搅乱（实测会把「从标记方向展开」变成「从上往下掉」）。
+    // offsetWidth/offsetHeight 本身不受 transform 影响，left/right/top/bottom
+    // 是 position:fixed 相对视口的计算值，桌面（right+top）与窄屏（left+bottom）都覆盖。
+    function cardLayoutRect(card) {
+        if (!card) return null;
+        const width = card.offsetWidth;
+        const height = card.offsetHeight;
+        if (!width || !height) return null;
+        const cs = getComputedStyle(card);
+        const px = (value) => (value === 'auto' ? null : parseFloat(value));
+        const left = px(cs.left) ?? (px(cs.right) === null ? null : window.innerWidth - px(cs.right) - width);
+        const top = px(cs.top) ?? (px(cs.bottom) === null ? null : window.innerHeight - px(cs.bottom) - height);
+        if (left === null || top === null) return null;
+        return { left, top, width, height };
+    }
+
+    // 标记点的屏幕坐标；聚合态 / 地球背面 / 数据缺失时返回 null，调用方走默认方向
+    function markerScreenPosition(index) {
+        const ent = markerEntities[index];
+        if (!ent || ent.show === false) return null;
+        if (!ent.billboard || ent.billboard.show === false) return null;
+        const pos = ent.position && ent.position.getValue(Cesium.JulianDate.now());
+        if (!pos) return null;
+        // 与悬停标注同一套半球判定：转到地球背面的标记没有可参照的屏幕位置
+        const normal = Cesium.Cartesian3.normalize(pos, new Cesium.Cartesian3());
+        const toCamera = Cesium.Cartesian3.subtract(viewer.camera.positionWC, pos, new Cesium.Cartesian3());
+        if (Cesium.Cartesian3.dot(normal, toCamera) < 0) return null;
+        const screen = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, pos);
+        return screen && Number.isFinite(screen.x) && Number.isFinite(screen.y) ? screen : null;
+    }
+
+    function applyCardEnterDirection(index) {
+        const rect = cardLayoutRect(markerCard);
+        const screen = rect ? markerScreenPosition(index) : null;
+        if (!screen) {
+            markerCard.style.removeProperty('--card-enter-x');
+            markerCard.style.removeProperty('--card-enter-y');
+            markerCard.style.removeProperty('--card-origin-x');
+            markerCard.style.removeProperty('--card-origin-y');
+            return;
+        }
+        const dx = screen.x - (rect.left + rect.width / 2);
+        const dy = screen.y - (rect.top + rect.height / 2);
+        const len = Math.hypot(dx, dy);
+        if (len < CARD_ENTER_MIN_DIST) {
+            markerCard.style.setProperty('--card-enter-x', '0px');
+            markerCard.style.setProperty('--card-enter-y', '0px');
+        } else {
+            markerCard.style.setProperty('--card-enter-x', Math.round(dx / len * CARD_ENTER_DISTANCE) + 'px');
+            markerCard.style.setProperty('--card-enter-y', Math.round(dy / len * CARD_ENTER_DISTANCE) + 'px');
+        }
+        // 缩放原点落在离标记最近的那条边上：卡片看起来是从标记这一侧张开的
+        const pct = (value) => Math.max(0, Math.min(100, value)).toFixed(1) + '%';
+        markerCard.style.setProperty('--card-origin-x', pct((screen.x - rect.left) / rect.width * 100));
+        markerCard.style.setProperty('--card-origin-y', pct((screen.y - rect.top) / rect.height * 100));
+    }
+
+    // 开场时序：带方向的「隐藏态」必须先落到样式上，再切到可见态。
+    // 否则浏览器会把这次变化当成「上一次的静止值 → 可见值」，过渡起点变成默认的右侧位置，
+    // 表现为第一张卡片总是从右边滑进来、只有第二次打开才从标记方向展开。
+    function openMarkerCardFrom(index) {
+        const savedTransition = markerCard.style.transition;
+        markerCard.style.transition = 'none';   // 让隐藏态立即生效（卡片此刻不可见，不会有闪烁）
+        applyCardEnterDirection(index);
+        void markerCard.offsetWidth;            // 强制一次样式计算，把带方向的隐藏态定为过渡起点
+        markerCard.style.transition = savedTransition;
+        markerCard.classList.add('visible');
     }
 
     function showMarkerCard(fp, index) {
@@ -1955,16 +2034,25 @@
         const metaParts = [];
         if (fp.footprintType) metaParts.push(fp.footprintType);
         if (fp.city) metaParts.push(fp.city);
-        if (fp.createTime) metaParts.push(fp.createTime);
         markerCardMeta.textContent = metaParts.join(' / ');
         markerCardMeta.hidden = metaParts.length === 0;
 
+        // 日期单独做成印章（纸票据的识别符号），不再和信息行挤在一行
+        const stampText = ticketDate(fp.createTime || fp.ticketDate);
+        markerCardStamp.textContent = stampText;
+        markerCardStamp.hidden = !stampText;
+
         // 足迹详情卡动作：只有配置了票根的足迹才提供“打开票根”，无票根时整行隐藏。
+        // 主次分开：有票根时票根是主操作，否则图片墙顶上，避免所有按钮看起来一样重要。
         const hasTicket = !!ticketImageUrl(fp.ticketImage);
-        const hasGallery = cityWallImages(fp).length > 0;
+        const galleryCount = cityWallImages(fp).length;
+        const hasGallery = galleryCount > 0;
         markerCardGallery.hidden = !hasGallery;
         markerCardTicket.hidden = !hasTicket;
         markerCardActions.hidden = !hasGallery && !hasTicket;
+        markerCardTicket.classList.toggle('is-primary', hasTicket);
+        markerCardGallery.classList.toggle('is-primary', hasGallery && !hasTicket);
+        markerCardGalleryLabel.textContent = galleryCount > 1 ? '打开图片墙 · ' + galleryCount : '打开图片墙';
 
         if (fp.image) {
             loadCardImage(fp);
@@ -1973,7 +2061,7 @@
         }
 
         setMarkerSelected(index);
-        markerCard.classList.add('visible');
+        openMarkerCardFrom(index);   // 从被点的标记方向展开（标记不可用时保持默认的右侧滑入）
         document.body.classList.add('card-open');   // 隐藏右下角浮动按钮，避免遮挡
         setOverlayHidden(markerCard, false);
     }
@@ -2230,11 +2318,18 @@
         const latest = fps.map(fp => fp.createTime).filter(Boolean).sort().pop();
         const types = [...new Set(fps.map(fp => fp.footprintType).filter(Boolean))];
         cityCardTitle.textContent = city.city;
-        cityCardMeta.textContent = fps.length + ' 个足迹 · ' + photos.length + ' 张照片' +
-            (latest ? ' · 最近 ' + formatCityDate(latest) : '');
-        cityCardDesc.textContent = types.length
-            ? '记录类型：' + types.join('、')
-            : '这座城市的旅行足迹与照片收藏';
+        // 容器层要回答的是「这里有多少」：两个数字比一句话更好扫读
+        cityStatFootprints.textContent = String(fps.length);
+        cityStatPhotos.textContent = String(photos.length);
+        // 最近到访带上年份（旅行记录里年份是有意义的，之前挤进统计格被截掉了），
+        // 和记录类型合成一行次级信息
+        const descParts = [];
+        if (latest) descParts.push('最近到访 ' + formatCityDate(latest).replace(/\s*\/\s*/, '.'));
+        if (types.length) descParts.push(types.join('、'));
+        cityCardDesc.textContent = descParts.join(' · ') || '这座城市的旅行足迹与照片收藏';
+        // 封面按需加载，不做任何预取：曾试过「悬停城市标记即预热 + 预解码」，
+        // 实测拖动一次扫过标记区就会打出 7 个封面图请求（和底图瓦片抢带宽/主线程），
+        // 拖动明显变卡，所以退回按需加载。没有封面时才用首字占位。
         cityCardMedia.classList.toggle('no-image', !photos.length);
         cityCardMedia.style.backgroundImage = photos.length ? 'url("' + photos[0].url + '")' : 'none';
         cityCardMedia.textContent = photos.length ? '' : (city.city ? city.city.charAt(0) : '?');
@@ -2303,6 +2398,7 @@
 
     function hideMarkerTip() {
         markerTipEntity = null;
+        hoveredMarkerKey = '';   // 气泡被别的入口收起后，指针再动一次可以重新弹出来
         markerTip.classList.remove('show');
         setMarkerFocus(null);
     }
@@ -2363,14 +2459,27 @@
         markerOcclusionDirty = false;
         const mode3D = viewer.scene.mode === Cesium.SceneMode.SCENE3D;
         const cam = camera.positionWC;
+        const now = Cesium.JulianDate.now();   // 每帧一个时间对象，别在实体循环里反复取
+        // 只在「值真的变了」时写 ent.show：Cesium 里这是属性变更，会走 definitionChanged。
+        // 聚合态下所有足迹实体本来就被隐藏，逐帧重写等于每帧几十次无谓的属性变更。
         function setVisible(ent, want) {
-            if (!want) { ent.show = false; return; }
-            const p = ent.position && ent.position.getValue(Cesium.JulianDate.now());
-            if (!p) { ent.show = false; return; }
-            if (!mode3D) { ent.show = true; return; }
+            if (!want) {
+                if (ent.show !== false) ent.show = false;
+                return;
+            }
+            const p = ent.position && ent.position.getValue(now);
+            if (!p) {
+                if (ent.show !== false) ent.show = false;
+                return;
+            }
+            if (!mode3D) {
+                if (ent.show !== true) ent.show = true;
+                return;
+            }
             Cesium.Cartesian3.normalize(p, occNormal);
             Cesium.Cartesian3.subtract(cam, p, occToCam);
-            ent.show = Cesium.Cartesian3.dot(occNormal, occToCam) > 0;   // 越过地平线即隐藏
+            const visible = Cesium.Cartesian3.dot(occNormal, occToCam) > 0;   // 越过地平线即隐藏
+            if (ent.show !== visible) ent.show = visible;
         }
         cityMarkerEntities.forEach(ent => setVisible(ent, cityMode));
         markerEntities.forEach(ent => setVisible(ent, !cityMode));
@@ -2576,6 +2685,11 @@
         // 光标是标记「可点」的第一层暗示（尺寸放大由 setMarkerFocus 负责）
         hoveredMarker = !!found;
         applyCanvasCursor();
+        // 在同一个标记上滑动不必反复重设气泡：写文本 + 一次坐标换算 + 两次样式写，
+        // 单次都很便宜，但指针事件每秒能来上百次。只有「指向的标记变了」才动 DOM。
+        const hoverKey = found ? (found.type + ':' + found.index) : '';
+        if (hoverKey === hoveredMarkerKey) return;
+        hoveredMarkerKey = hoverKey;
         if (found && found.type === 'footprint') {
             showMarkerTip(markerEntities[found.index], footprintTipText(FOOTPRINTS[found.index]));
         } else if (found && found.type === 'city') {
