@@ -16,6 +16,7 @@ import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
 import run.halo.app.theme.TemplateNameResolver;
+import run.halo.app.theme.router.ModelConst;
 import run.halo.app.plugin.ReactiveSettingFetcher;
 import run.halo.app.extension.ReactiveExtensionClient;
 import lombok.AllArgsConstructor;
@@ -278,6 +279,9 @@ public class FootprintRouter {
                         Map<String, Object> model = new HashMap<>();
                         model.put("settings", settings);
                         model.put("footprints", footprints.getItems());
+                        // 给 Head 处理器等渲染扩展一个稳定的页面标识（Halo 约定）：
+                        // FootprintHeadProcessor 靠它判断"这是足迹页"，才注入 3D 地球那套资源。
+                        model.put(ModelConst.TEMPLATE_ID, "plugin:footprint:footprints");
 
                         return templateNameResolver.resolveTemplateNameOrDefault(
                                 request.exchange(), 

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -20,11 +20,10 @@
     <script src="/plugins/footprint/assets/static/cesium/Cesium.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/pako.min.js"></script>
     <script src="/plugins/footprint/assets/static/vendor/tdtplug.umd.min.js"></script>
-    <link href="/plugins/footprint/assets/static/css/travel-memory.css?v=footprint-reveal-v136" rel="stylesheet">
+    <!-- travel-memory.css / district-pinyin.js / travel-memory.js 由 FootprintHeadProcessor
+         按插件版本号注入（?version=${version}），这里不再写死版本 -->
 
 
-<!--    <link rel="stylesheet" href="../static/css/footprint.css" type="text/css">-->
-<!--    <script type="text/javascript" src="../static/js/footprint.js"></script>-->
     <style>
     </style>
     <!-- 注入配置信息 -->
@@ -87,6 +86,8 @@
             <button id="cityWallBtn" type="button" title="打开城记：按最近到访排列的城市卡片墙">城记</button>
             <span class="nav-sep"></span>
             <button id="ticketGalleryBtn" type="button" title="打开票根册：按时间收好的旅途票根">票根册</button>
+            <span class="nav-sep"></span>
+            <button id="provinceAllBtn" type="button" aria-pressed="false" title="在 3D 地球上展开所有去过的城市卡片与连线">全部城市</button>
             <span class="nav-sep nav-sep-back"></span>
             <button id="navBackGlobeBtn" type="button" title="回到整球视图">回到整球</button>
         </div>
@@ -127,6 +128,11 @@
 <div id="view-3d">
     <!-- 承载地球的 div 容器 -->
     <div id="cesiumContainer"></div>
+
+    <!-- 省份城市卡片：屏幕空间抛物线连线层（在卡片之下、地球之上）+ 省名标签 + 卡片层 -->
+    <svg id="leaderOverlay" aria-hidden="true"></svg>
+    <div id="provinceLabel" aria-hidden="true"></div>
+    <div id="provinceCardLayer" aria-hidden="true"></div>
 
     <div id="status">
         <span id="statusText">正在加载地图…</span>
@@ -781,7 +787,5 @@
 </div>
 </div>
 
-<script src="/plugins/footprint/assets/static/data/district-pinyin.js?v=footprint-reveal-v61"></script>
-<script src="/plugins/footprint/assets/static/js/travel-memory.js?v=footprint-reveal-v136"></script>
 </body>
 </html>
