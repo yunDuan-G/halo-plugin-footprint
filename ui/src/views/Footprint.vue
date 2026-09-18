@@ -322,9 +322,20 @@ const handleManualInput = async () => {
     Toast.error("更新经纬度失败");
   }
 };
+const refreshing = ref(false);
 const handleRefreshAll = async () => {
-  await refetch();
-  await fetchStats();
+  if (refreshing.value) return;
+  refreshing.value = true;
+  try {
+    await refetch();
+    await fetchStats();
+    Toast.success("已刷新足迹列表与统计");
+  } catch (error) {
+    console.error("刷新足迹列表失败:", error);
+    Toast.error("刷新失败，请稍后重试");
+  } finally {
+    refreshing.value = false;
+  }
 };
 const handleEdit = (footprint: Footprint) => {
   selectedFootprint.value = footprint;
@@ -639,13 +650,17 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
                 删除选中
               </VButton>
             </VSpace>
-            <div
-              class="cursor-pointer rounded p-1 text-gray-600 transition-all hover:text-gray-900"
-              :class="{ 'rolling': isFetching }"
-              @click="handleRefreshAll()"
+            <button
+              type="button"
+              class="fp-refresh"
+              :class="{ 'is-rolling': refreshing || isFetching }"
+              :disabled="refreshing"
+              aria-label="刷新足迹列表与统计"
+              title="刷新"
+              @click="handleRefreshAll"
             >
               <IconRefreshLine />
-            </div>
+            </button>
           </div>
         </div>
         <div class="table-container relative min-h-[200px]">
@@ -805,6 +820,42 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
   white-space: nowrap;
 }
 
+/* 列表右上角的刷新按钮：原来是个 div，`rolling` 类也没有对应样式，
+   点了之后数据没变化就等于零反馈。现在做成真按钮 + 旋转动画 + 完成后 Toast。 */
+.fp-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #4b5563;
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+.fp-refresh:hover:not(:disabled) {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+.fp-refresh:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+.fp-refresh:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.fp-refresh.is-rolling svg {
+  animation: fp-refresh-spin 0.9s linear infinite;
+}
+
+@keyframes fp-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .stats-progress {
   height: 8px;
   overflow: hidden;
@@ -853,6 +904,9 @@ const handleGeocodeFootprint = async (footprint: Footprint) => {
 @media (prefers-reduced-motion: reduce) {
   .stats-progress__bar {
     transition: none;
+  }
+  .fp-refresh.is-rolling svg {
+    animation: none;
   }
 }
 </style>

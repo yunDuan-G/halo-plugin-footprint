@@ -456,50 +456,20 @@ onMounted(async () => {
 </script>
 
 <template>
-  <!-- 手动输入经纬度的对话框 -->
-  <Teleport to="body">
-    <VModal
-      v-model:visible="showManualInput"
-      :width="500"
-      title="手动输入经纬度"
-      :mask-closable="false"
-    >
-      <div class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700">经度</label>
-          <input
-            v-model="manualLongitude"
-            type="number"
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            placeholder="请输入经度（-180到180）"
-            step="0.000001"
-          />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700">纬度</label>
-          <input
-            v-model="manualLatitude"
-            type="number"
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            placeholder="请输入纬度（-90到90）"
-            step="0.000001"
-          />
-        </div>
-      </div>
-      <template #footer>
-        <VSpace>
-          <VButton type="secondary" @click="showManualInput = false">取消</VButton>
-          <VButton type="primary" @click="handleManualInput"> 确定</VButton>
-        </VSpace>
-      </template>
-    </VModal>
-  </Teleport>
-
+  <!--
+    编辑／新建窗必须 `mount-to-body`：Halo 控制台的内容区带 transform / 布局包含（contain），
+    会替 `position: fixed` 重新指定包含块。留在原地渲染时，.modal-wrapper 的 top:0 + height:100%
+    是相对"整页内容高度"算的，弹窗就跑到当前视口下面去了（页面越长越明显）。
+    teleport 到 body 之后包含块回到视口，才会稳稳地出现在当前屏幕正中间。
+    注意：它和下面那个"手动输入经纬度"小窗都在 body 上、z-index 都是 2000，
+    同层同值时谁在后面谁在上 —— 所以小窗必须排在后面（改动顺序会让小窗被压在编辑窗之下）。
+  -->
   <VModal
     :visible="visible"
     :width="850"
     :title="modalTitle"
     :mask-closable="false"
+    mount-to-body
     @update:visible="onVisibleChange"
   >
     <FormKit
@@ -782,4 +752,43 @@ onMounted(async () => {
       </VSpace>
     </template>
   </VModal>
+
+  <!-- 手动输入经纬度的对话框（排在编辑窗之后，才会盖在它上面） -->
+  <Teleport to="body">
+    <VModal
+      v-model:visible="showManualInput"
+      :width="500"
+      title="手动输入经纬度"
+      :mask-closable="false"
+    >
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">经度</label>
+          <input
+            v-model="manualLongitude"
+            type="number"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            placeholder="请输入经度（-180到180）"
+            step="0.000001"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">纬度</label>
+          <input
+            v-model="manualLatitude"
+            type="number"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            placeholder="请输入纬度（-90到90）"
+            step="0.000001"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <VSpace>
+          <VButton type="secondary" @click="showManualInput = false">取消</VButton>
+          <VButton type="primary" @click="handleManualInput"> 确定</VButton>
+        </VSpace>
+      </template>
+    </VModal>
+  </Teleport>
 </template>
