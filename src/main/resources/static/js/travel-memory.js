@@ -420,14 +420,21 @@
     // 自动排版时离屏幕左右边缘的距离：不贴边，随视口宽度加大
     const PROVINCE_SIDE_INSET_MIN = 76;
     const PROVINCE_SIDE_INSET_RATIO = 0.07;
-    const PROVINCE_HL_FILL = 'rgba(127, 231, 255, 0.10)';
-    const PROVINCE_HL_STROKE = '#7FE7FF';
+    // 与「城市高亮」同源的琥珀金：整套选中态只有一种颜色
+    const PROVINCE_HL_FILL = 'rgba(255, 176, 103, 0.12)';
+    const PROVINCE_HL_STROKE = '#FFB067';
     const PROVINCE_HL_STROKE_WIDTH = 1.4;
-    // 悬停卡片时，对应城市的「城市高亮」填充从主题金色换成省份同款青蓝
-    const PROVINCE_CITY_HL_FILL = 'rgba(127, 231, 255, 0.30)';
-    const PROVINCE_LINE_FROM = '#8FE9FF';
-    const PROVINCE_LINE_TO = 'rgba(143, 233, 255, 0.72)';
-    const PROVINCE_LINE_FAN = [0.22, 0.38];     // 同侧多条线的弧度区间，做成扇面
+    // 悬停卡片时，对应城市的「城市高亮」填充加亮一档（比默认的 rgba(255,149,66,.22) 更实）
+    const PROVINCE_CITY_HL_FILL = 'rgba(255, 196, 120, 0.42)';
+    // 连线走「地图标注引线」那套材质：细线 + 底下压一层很淡的深色描边（浅色底图上保底）。
+    // 颜色取象牙白：中性暖白，和卡片文字同族、最不抢戏。
+    // 注意这一版和最早那版"暖米白"的区别：那时深色描边是 3px/0.6，在卫星影像上会拖出一圈暗边；
+    // 现在描边已压到 2.8px/0.42，观感会干净得多。
+    const PROVINCE_LINE_FROM = '#FFF3E0';
+    const PROVINCE_LINE_TO = 'rgba(255, 243, 224, 0.86)';
+    const PROVINCE_LINE_FAN = [0.10, 0.18];     // 弧度收敛：更像标注引线，不再像数据流
+    const PROVINCE_LINE_DOT_R = 3.6;            // 起点圆点：暖白实心 + 深色描边
+    const PROVINCE_LINE_DOT_R_ACTIVE = 5;
     const PROVINCE_MARKER_DIM_ALPHA = 0.35;     // 非选中省份的标记压暗到这一档
     // ---- 展开动画：线到、卡到 ----
     const PROVINCE_LINE_GROW_MS = 500;    // 线从标记铺到卡片的时长
@@ -9045,12 +9052,16 @@
 
             const group = document.createElementNS(SVG_NS, 'g');
             group.setAttribute('class', 'prop-leader-group');
+            // 深色描边打底：浅色底图上靠它把线"垫"出来，深色底图上几乎看不见
+            const pathBase = document.createElementNS(SVG_NS, 'path');
+            pathBase.setAttribute('class', 'prop-leader-base');
             const path = document.createElementNS(SVG_NS, 'path');
             path.setAttribute('class', 'prop-leader');
             path.setAttribute('stroke', 'url(#' + gradId + ')');
             const dot = document.createElementNS(SVG_NS, 'circle');
             dot.setAttribute('class', 'prop-leader-dot');
-            dot.setAttribute('r', '3');
+            dot.setAttribute('r', String(PROVINCE_LINE_DOT_R));
+            group.appendChild(pathBase);
             group.appendChild(path);
             group.appendChild(dot);
             els.svg.appendChild(group);
@@ -9059,6 +9070,7 @@
                 ci: ci,
                 el: el,
                 group: group,
+                pathBase: pathBase,
                 path: path,
                 dot: dot,
                 grad: grad,
@@ -9098,7 +9110,7 @@
         if (item.path) item.path.classList.toggle('is-active', on);
         if (item.dot) {
             item.dot.classList.toggle('is-active', on);
-            item.dot.setAttribute('r', on ? '4.5' : '3');
+            item.dot.setAttribute('r', String(on ? PROVINCE_LINE_DOT_R_ACTIVE : PROVINCE_LINE_DOT_R));
         }
         if (els.svg) els.svg.classList.toggle('has-focus', on);
         const marker = cityMarkerEntities[item.ci];
@@ -9373,6 +9385,7 @@
             // 之前只给 <g> 加了类，但没有任何规则匹配 g.is-hidden，所以卡片转到地球背面
             // 之后线会孤零零留在屏幕上 —— 现在三条规则一起生效，谁也漏不掉。
             item.group.classList.toggle('is-hidden', !visible);
+            item.pathBase.classList.toggle('is-hidden', !visible);
             item.path.classList.toggle('is-hidden', !visible);
             item.dot.classList.toggle('is-hidden', !visible);
             item.el.classList.toggle('is-hidden', !visible);
@@ -9419,10 +9432,11 @@
             const ctrlX = midX + px * len * fan;
             const ctrlY = midY + py * len * fan;
 
-            item.path.setAttribute('d',
-                'M' + round1(startX) + ' ' + round1(startY) +
+            const d = 'M' + round1(startX) + ' ' + round1(startY) +
                 ' Q' + round1(ctrlX) + ' ' + round1(ctrlY) +
-                ' ' + round1(endX) + ' ' + round1(endY));
+                ' ' + round1(endX) + ' ' + round1(endY);
+            item.pathBase.setAttribute('d', d);   // 深色底与亮线共用同一条路径
+            item.path.setAttribute('d', d);
             item.dot.setAttribute('cx', round1(startX));
             item.dot.setAttribute('cy', round1(startY));
             item.grad.setAttribute('x1', round1(startX));
@@ -9503,23 +9517,32 @@
     function startProvinceLinesGrow() {
         if (reduceMotion) return;
         provinceCardsItems.forEach(item => {
+            // 深色底描边必须和亮线一起铺开：只给亮线做 dash 动画的话，
+            // 底层会整条先出现（就是"先看到一条纯黑的线"），亮线再慢慢盖上去。
+            const paths = [item.pathBase, item.path].filter(Boolean);
             const path = item.path;
-            if (!path || typeof path.getTotalLength !== 'function') return;
+            if (!path || typeof path.getTotalLength !== 'function' || !paths.length) return;
             let length = 0;
             try { length = path.getTotalLength(); } catch (e) { length = 0; }
             if (!length || !Number.isFinite(length)) return;
             const delay = Math.round(item.lineDelay || 0);
-            path.style.transition = 'none';
-            path.style.strokeDasharray = length + 'px';
-            path.style.strokeDashoffset = length + 'px';
+            paths.forEach(p => {
+                p.style.transition = 'none';
+                p.style.strokeDasharray = length + 'px';
+                p.style.strokeDashoffset = length + 'px';
+            });
             requestAnimationFrame(() => {
-                path.style.transition = 'stroke-dashoffset ' + (PROVINCE_LINE_GROW_MS / 1000) +
-                    's cubic-bezier(0.16, 1, 0.3, 1) ' + delay + 'ms';
-                path.style.strokeDashoffset = '0px';
+                paths.forEach(p => {
+                    p.style.transition = 'stroke-dashoffset ' + (PROVINCE_LINE_GROW_MS / 1000) +
+                        's cubic-bezier(0.16, 1, 0.3, 1) ' + delay + 'ms';
+                    p.style.strokeDashoffset = '0px';
+                });
                 window.setTimeout(() => {
-                    path.style.transition = '';
-                    path.style.strokeDasharray = '';
-                    path.style.strokeDashoffset = '';
+                    paths.forEach(p => {
+                        p.style.transition = '';
+                        p.style.strokeDasharray = '';
+                        p.style.strokeDashoffset = '';
+                    });
                 }, PROVINCE_LINE_GROW_MS + delay + 120);
             });
         });

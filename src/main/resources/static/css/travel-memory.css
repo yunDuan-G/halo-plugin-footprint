@@ -1318,33 +1318,47 @@
         }
         .prop-leader {
             fill: none;
-            stroke-width: 1.2;
+            stroke-width: 1.6;
             stroke-linecap: round;
-            filter: drop-shadow(0 0 6px rgba(72, 196, 255, 0.45));
-            transition: stroke-width 0.15s ease, filter 0.15s ease;
+            transition: stroke-width 0.15s ease;
         }
-        .prop-leader-group { transition: opacity 0.25s ease; }
-        .prop-leader-dot {
-            fill: #bff3ff;
-            fill-opacity: 0.95;
+        .prop-leader-base {
+            fill: none;
+            /* 只作为浅色底图上的保底：压到 0.42 就没有"铅笔描边"的脏感了 */
+            stroke: rgba(8, 12, 20, 0.42);
+            stroke-width: 2.8;
+            stroke-linecap: round;
+            transition: stroke-width 0.15s ease;
+        }
+        .prop-leader-group {
+            /* 默认就接近全亮：线是"引线"，太淡就失去意义；
+               靠深色底描边和悬停时的对比来避免糊，而不是靠整体压暗 */
+            opacity: 0.92;
             transition: opacity 0.25s ease;
         }
-        .prop-leader-dot { filter: drop-shadow(0 0 5px rgba(72, 196, 255, 0.5)); }
+        .prop-leader-dot {
+            fill: #fff7e8;
+            stroke: rgba(8, 12, 20, 0.45);
+            stroke-width: 1.1;
+            transition: opacity 0.25s ease;
+        }
         /* 悬停某张卡片：自己那条整组拉满（更粗、更亮、线头在流动），其余整条压暗一档。
            对比才是"显眼"的关键 —— 只加粗 0.4px，人眼基本看不出来。 */
         #leaderOverlay.has-focus .prop-leader-group {
-            opacity: 0.32;
-        }
-        #leaderOverlay.has-focus .prop-leader-group:not(.is-active) .prop-leader {
-            stroke-width: 1;
+            opacity: 0.30;
         }
         #leaderOverlay.has-focus .prop-leader-group.is-active {
             opacity: 1;
         }
         #leaderOverlay.has-focus .prop-leader-group.is-active .prop-leader {
-            stroke-width: 2;
-            stroke-dasharray: 12 6;
-            filter: brightness(1.45) drop-shadow(0 0 9px rgba(143, 233, 255, 0.75));
+            stroke-width: 2.4;
+        }
+        #leaderOverlay.has-focus .prop-leader-group.is-active .prop-leader-base {
+            stroke-width: 3.8;
+        }
+        #leaderOverlay.has-focus .prop-leader-group.is-active .prop-leader,
+        #leaderOverlay.has-focus .prop-leader-group.is-active .prop-leader-base {
+            stroke-dasharray: 10 7;
             animation: propLeaderFlow 1.1s linear infinite;
         }
         #leaderOverlay.has-focus .prop-leader-group.is-active .prop-leader-dot {
@@ -1354,16 +1368,17 @@
         #leaderOverlay .prop-leader-group.is-active.is-hidden,
         #leaderOverlay .prop-leader-group.is-hidden,
         #leaderOverlay .prop-leader.is-hidden,
+        #leaderOverlay .prop-leader-base.is-hidden,
         #leaderOverlay .prop-leader-dot.is-hidden {
             opacity: 0;
         }
         /* 线头从标记端流向卡片端：dash 周期 18px，位移一个周期正好无缝循环 */
         @keyframes propLeaderFlow {
-            to { stroke-dashoffset: -18; }
+            to { stroke-dashoffset: -17; }
         }
         @keyframes propLeaderPulse {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.45; }
+            50% { opacity: 0.5; }
         }
         #provinceCardLayer {
             position: absolute;
@@ -1453,8 +1468,9 @@
         .prop-city-card:hover,
         .prop-city-card:focus-visible {
             outline: none;
-            border-color: rgba(143, 233, 255, 0.55);
-            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(143, 233, 255, 0.28);
+            /* 悬停描边跟连线同为象牙白 */
+            border-color: rgba(255, 243, 224, 0.5);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 243, 224, 0.22);
         }
         .prop-card-media {
             grid-area: 1 / 1 / 2 / 2;
