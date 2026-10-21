@@ -1,12 +1,12 @@
 plugins {
     id 'java'
-    id "com.github.node-gradle.node" version "7.0.2"
     id "io.freefair.lombok" version "8.13"
-    id "run.halo.plugin.devtools" version "0.6.0"
+    id "run.halo.plugin.devtools" version "0.6.1"
+    // 前台 js/css 的压缩步骤要用（ui 子项目也用同一个插件管 node）
+    id "com.github.node-gradle.node" version "7.1.0"
 }
 
 group 'cc.lik.footprint'
-sourceCompatibility = JavaVersion.VERSION_21
 
 repositories {
     // 国内镜像放最前面：本机到 repo.maven.apache.org / s01.oss.sonatype.org 是超时的
@@ -28,39 +28,75 @@ dependencies {
 
     testImplementation 'run.halo.app:api'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 test {
     useJUnitPlatform()
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.encoding = "UTF-8"
+    options.release = 21
 }
 
-node {
-    nodeProjectDir = file("${project.projectDir}/ui")
+tasks.register('processUiResources', Copy) {
+    from project(':ui').layout.buildDirectory.dir('dist')
+    into layout.buildDirectory.dir('resources/main/console')
+    dependsOn project(':ui').tasks.named('assemble')
+    shouldRunAfter tasks.named('processResources')
 }
 
-tasks.register('buildFrontend', PnpmTask) {
-    args = ['build']
-    dependsOn('installDepsForUI')
+/*
+ * 前台静态资源压缩。
+ *
+ * 源文件原地不动，只压缩 processResources 拷进 build/resources/main 的那一份，
+ * 所以必须排在 processResources 之后。详见 frontend-build/esbuild.config.mjs。
+ *
+ * 用 node-gradle 插件跑：ui 子项目本来就靠它管 node/pnpm，node 早已是硬依赖，
+ * 这里不引入新的环境要求。
+ */
+// 这里刻意用 npm 而不是 ui 子项目那套 pnpm：
+// 仓库根有 pnpm-workspace.yaml，pnpm 会把 frontend-build 当成 workspace 的一部分、
+// 因其不在 packages 里而「已是最新」却什么都不装；加 --ignore-workspace 又会连带
+// 忽略 onlyBuiltDependencies，于是 pnpm 因 esbuild 的 postinstall 被拦而报错退出。
+// 这个目录只有一个依赖，用 npm 直接绕开整套纠缠。
+tasks.register('minifyFrontendInstall', com.github.gradle.node.npm.task.NpmTask) {
+    workingDir = file('frontend-build')
+    args = ['install', '--no-audit', '--no-fund']
+    inputs.file('frontend-build/package.json')
+    outputs.dir('frontend-build/node_modules')
 }
 
-tasks.register('installDepsForUI', PnpmTask) {
-    args = ['install']
+tasks.register('minifyFrontend', com.github.gradle.node.npm.task.NpmTask) {
+    group = 'build'
+    description = '压缩前台 js/css（源文件不动，只改构建产物）'
+    workingDir = file('frontend-build')
+    args = ['run', 'minify']
+
+    dependsOn tasks.named('minifyFrontendInstall')
+    dependsOn tasks.named('processResources')
+
+    inputs.dir('src/main/frontend')
+    inputs.dir('src/main/resources/static/js')
+    inputs.dir('src/main/resources/static/css')
+    inputs.files('frontend-build/esbuild.config.mjs', 'frontend-build/package.json')
+    outputs.dir(layout.buildDirectory.dir('resources/main/static/js'))
+    outputs.dir(layout.buildDirectory.dir('resources/main/static/css'))
 }
 
-build {
-    // build frontend before build
-    tasks.named('compileJava').configure {
-        dependsOn('buildFrontend')
-    }
+tasks.named('classes') {
+    dependsOn tasks.named('processUiResources')
+    dependsOn tasks.named('minifyFrontend')
 }
 
 halo {
     version = '2.26.0'
-    superAdminUsername = 'yunduan'
-    superAdminPassword = '123456'
     debug = true
 }

@@ -1,3 +1,25 @@
+/**
+ * 前台主逻辑。
+ *
+ * 这个文件正在逐块拆成 modules/ 下的模块。拆的顺序是「叶子优先」：
+ * 先搬没有外部依赖的纯逻辑，每搬一块就构建、上站点点一遍、单独提交，
+ * 确认无回归再动下一块。下面的 import 清单就是已经搬完的部分。
+ *
+ * 还没搬的代码仍是一整片顶层语句（当年从 <script> 里抠出来的，
+ * 所以整体带着 4 格缩进）。别被缩进误导：它们都在模块顶层，互相可见。
+ */
+
+import { wgs84ToGcj02, gcj02ToWgs84 } from './modules/coordinate.js';
+import { countTdtProvider, tdtTodayUsage, setTileBatchHandler } from './modules/tianditu-usage.js';
+import { amapVec, amapImg, amapImgLabel } from './modules/amap-basemap.js';
+import { compareTicketByTime, ticketHasCoordinate, isSameTicketCity } from './modules/ticket-utils.js';
+import { startCityWallWarmQueue, stopCityWallWarmQueue } from './modules/city-wall-prewarm.js';
+import { lightbox, openLightbox, closeLightbox, switchLightbox, setLightboxDeps } from './modules/lightbox.js';
+
+// updateStatusText 是函数声明，会提升，这里可以安全地先注入
+setTileBatchHandler(updateStatusText);
+// 同理，下面三个也都是函数声明
+setLightboxDeps({ cityWallImages, formatLightboxDate, setOverlayHidden });
     // ================= 配置 =================
     // 天地图 Key：在 https://lbs.tianditu.gov.cn 注册后申请（浏览器端应用）
     // 不填则自动降级：只显示高德底图，无天地图影像/注记，也无三维地形
@@ -74,131 +96,6 @@
     const btnMap = Object.fromEntries(
         [...document.querySelectorAll('#layerButtons button')].map(b => [b.dataset.key, b])
     );
-
-    // ================= 坐标转换（WGS84 <-> GCJ-02） =================
-    // 高德瓦片基于 GCJ-02（火星坐标），天地图基于 CGCS2000（≈WGS84）。
-    // 在 WGS84 地球上叠加高德瓦片时，标记必须转成 GCJ-02 才能对准地图内容。
-    // 算法为公开的 eviltransform / coordtransform 同款；海外坐标不加密，原样返回。
-    const GCJ_A = 6378245.0;
-    const GCJ_EE = 0.00669342162296594323;
-
-    function gcjOutOfChina(lng, lat) {
-        return lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271;
-    }
-
-    function gcjTransformLat(x, y) {
-        let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
-        ret += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
-        ret += (20.0 * Math.sin(y * Math.PI) + 40.0 * Math.sin(y / 3.0 * Math.PI)) * 2.0 / 3.0;
-        ret += (160.0 * Math.sin(y / 12.0 * Math.PI) + 320.0 * Math.sin(y * Math.PI / 30.0)) * 2.0 / 3.0;
-        return ret;
-    }
-
-    function gcjTransformLng(x, y) {
-        let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
-        ret += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
-        ret += (20.0 * Math.sin(x * Math.PI) + 40.0 * Math.sin(x / 3.0 * Math.PI)) * 2.0 / 3.0;
-        ret += (150.0 * Math.sin(x / 12.0 * Math.PI) + 300.0 * Math.sin(x / 30.0 * Math.PI)) * 2.0 / 3.0;
-        return ret;
-    }
-
-    // WGS84 -> GCJ-02（高德底图下放置标记用）
-    function wgs84ToGcj02(lng, lat) {
-        if (gcjOutOfChina(lng, lat)) {
-            return { lng, lat };
-        }
-        const dLat = gcjTransformLat(lng - 105.0, lat - 35.0);
-        const dLng = gcjTransformLng(lng - 105.0, lat - 35.0);
-        const radLat = (lat / 180.0) * Math.PI;
-        let magic = Math.sin(radLat);
-        magic = 1 - GCJ_EE * magic * magic;
-        const sqrtMagic = Math.sqrt(magic);
-        const mgLat = (dLat * 180.0) / ((GCJ_A * (1 - GCJ_EE)) / (magic * sqrtMagic) * Math.PI);
-        const mgLng = (dLng * 180.0) / ((GCJ_A / sqrtMagic) * Math.cos(radLat) * Math.PI);
-        return { lng: lng + mgLng, lat: lat + mgLat };
-    }
-
-    // GCJ-02 -> WGS84（天地图底图下用；迭代逼近，误差亚米级）
-    function gcj02ToWgs84(lng, lat) {
-        if (gcjOutOfChina(lng, lat)) {
-            return { lng, lat };
-        }
-        let lng2 = lng;
-        let lat2 = lat;
-        for (let i = 0; i < 3; i++) {
-            const g = wgs84ToGcj02(lng2, lat2);
-            lng2 = lng2 - (g.lng - lng);
-            lat2 = lat2 - (g.lat - lat);
-        }
-        return { lng: lng2, lat: lat2 };
-    }
-
-    // ================= 高德底图（无需 Key） =================
-    // 高德矢量路网图（含地名标注）
-    const amapVec = new Cesium.UrlTemplateImageryProvider({
-        url: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-        subdomains: ['1', '2', '3', '4'],
-        maximumLevel: 18
-    });
-
-    // 高德卫星影像
-    const amapImg = new Cesium.UrlTemplateImageryProvider({
-        url: 'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
-        subdomains: ['1', '2', '3', '4'],
-        maximumLevel: 18
-    });
-
-    // 高德卫星影像上的中文标注（style=8，透明标注层，叠加在影像上）
-    const amapImgLabel = new Cesium.UrlTemplateImageryProvider({
-        url: 'https://webst0{s}.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}',
-        subdomains: ['1', '2', '3', '4'],
-        maximumLevel: 18
-    });
-
-    // ================= 天地图用量统计 =================
-    // 天地图按 Key 计额度（个人 Key 每天约一万次），这里只做"看得见"：
-    // 把当天发出的瓦片数记在 localStorage，状态栏直接显示。
-    // 注意：不要再在客户端做令牌桶限速/排队/透明瓦片兜底——那会让瓦片迟到或留空，
-    // 转动地球时看起来就是"卡住"（观感远比省几额度重要）。要省量请走缓存方案。
-    const TILE_USAGE_KEY = 'footprint-tile-usage';
-    let tdtTilesSinceStatus = 0;
-
-    function tdtCountTile() {
-        // 攒够 25 张刷一次状态栏，别每来一张瓦片就重写一次 DOM
-        tdtTilesSinceStatus += 1;
-        if (tdtTilesSinceStatus >= 25) {
-            tdtTilesSinceStatus = 0;
-            try { updateStatusText(); } catch (e) { /* 初始化未完成时忽略 */ }
-        }
-        try {
-            const today = new Date().toISOString().slice(0, 10);
-            const raw = JSON.parse(localStorage.getItem(TILE_USAGE_KEY) || '{}');
-            const count = raw.date === today ? (Number(raw.count) || 0) : 0;
-            localStorage.setItem(TILE_USAGE_KEY, JSON.stringify({ date: today, count: count + 1 }));
-        } catch (e) {
-            // 隐私模式下 localStorage 可能不可用，忽略
-        }
-    }
-
-    function tdtTodayUsage() {
-        try {
-            const today = new Date().toISOString().slice(0, 10);
-            const raw = JSON.parse(localStorage.getItem(TILE_USAGE_KEY) || '{}');
-            return raw.date === today ? (Number(raw.count) || 0) : 0;
-        } catch (e) {
-            return 0;
-        }
-    }
-
-    // 给天地图的 provider 包一层：只计数，不改请求节奏
-    function countTdtProvider(provider) {
-        const original = provider.requestImage.bind(provider);
-        provider.requestImage = function (x, y, level, request) {
-            tdtCountTile();
-            return original(x, y, level, request);
-        };
-        return provider;
-    }
 
     // ================= 天地图影像（需要 Key） =================
     // 天地图 _w（Web 墨卡托）瓦片：第 L 级为 2^L × 2^L 张（第 1 级即 2×2），
@@ -325,6 +222,37 @@
     viewer.scene.globe.enableLighting = true;
     // 让时间自动推进，明暗分界线随时间缓缓移动
     viewer.clock.shouldAnimate = true;
+
+    // ---------- 「地球可用」信号 ----------
+    // 底图第一批瓦片铺完的时刻。此时用户已经看到地球，带宽也空出来了，
+    // 那些"迟一点到也不影响"的资源都挂在这个信号后面，不跟底图抢首屏。
+    //
+    // 兜一个 4 秒定时器：底图服务异常时 tileLoadProgressEvent 可能一直不归零，
+    // 没有兜底的话后面挂的东西就永远不加载了。
+    const globeReady = new Promise(resolve => {
+        const onTileProgress = queued => {
+            if (queued === 0) {
+                viewer.scene.globe.tileLoadProgressEvent.removeEventListener(onTileProgress);
+                resolve();
+            }
+        };
+        viewer.scene.globe.tileLoadProgressEvent.addEventListener(onTileProgress);
+        setTimeout(resolve, 4000);
+    });
+
+    // ---------- 星空盒延后加载 ----------
+    // 6 张 Tycho 星表贴图合计 849 KB，占首屏近三成，而地球本身一点不依赖它。
+    // Cesium 的 SkyBox 是在 update() 里才去取贴图的，且 show 为 false 时直接返回，
+    // 所以首帧之前先关掉就能把这 849 KB 整个挪出关键路径。
+    //
+    // 不能改用 Viewer 的 skyBox:false —— 那个选项会连太阳和月亮一起不创建，
+    // 而上面的 enableLighting 依赖太阳，昼夜晨昏线会直接消失。
+    if (viewer.scene.skyBox) {
+        viewer.scene.skyBox.show = false;
+        globeReady.then(() => {
+            if (viewer.scene.skyBox) viewer.scene.skyBox.show = true;
+        });
+    }
 
     // 3D 地球品牌文案：标题/描述使用“3D 地球”Tab 的独立配置（globeTitle/globeDesc），
     // 导航栏英文名保持默认 "Travel Memory"，不再从基本设置读取。
@@ -468,6 +396,7 @@
     let provinceMaterialSnapshot = null;// Map<Entity, { fill, stroke, width }>，用于还原
     let provinceIndex = null;           // Map<adcode, { name, center, bbox, polygons }>
     let provinceIndexPromise = null;
+    let provinceGeoJsonPromise = null;  // china-full.json 的共享请求，见 loadProvinceGeoJson
     let provinceLayoutDirty = true;
     let provinceRestorePending = null;  // 从城市相册返回后要恢复的省份
     let provinceDragState = null;
@@ -3049,114 +2978,7 @@
         if (fp) openFootprintAlbum(fp, markerCardGallery);
     });
 
-    // ================= 图片灯箱 =================
-    const lightbox = document.getElementById('lightbox');
-    const lightboxImg = document.getElementById('lightboxImg');
-    const lightboxCount = document.getElementById('lightboxCount');
-    const lightboxCaption = document.getElementById('lightboxCaption');
-    const lightboxPrev = document.getElementById('lightboxPrev');
-    const lightboxNext = document.getElementById('lightboxNext');
-    const lightboxStage = document.getElementById('lightboxStage');
-    const lightboxSkeleton = document.getElementById('lightboxSkeleton');
-    const lightboxError = document.getElementById('lightboxError');
-    const lightboxRetry = document.getElementById('lightboxRetry');
-    let lightboxFp = null;
-    let lightboxIndex = 0;
-    let lightboxTriggerBtn = null;
-
-    function lightboxImages() {
-        return lightboxFp ? cityWallImages(lightboxFp) : [];
-    }
-
-    function loadLightboxImage(url) {
-        lightboxSkeleton.hidden = false;
-        lightboxError.hidden = true;
-        lightboxImg.hidden = false;
-        lightboxImg.onload = () => { lightboxSkeleton.hidden = true; };
-        lightboxImg.onerror = () => {
-            lightboxSkeleton.hidden = true;
-            lightboxImg.hidden = true;
-            lightboxError.hidden = false;
-        };
-        lightboxImg.src = url;
-    }
-
-    function preloadLightboxNeighbors() {
-        const imgs = lightboxImages();
-        [lightboxIndex - 1, lightboxIndex + 1].forEach(i => {
-            if (i >= 0 && i < imgs.length) {
-                const pre = new Image();
-                pre.src = imgs[i].url;
-            }
-        });
-    }
-
-    function renderLightboxImage() {
-        const imgs = lightboxImages();
-        const img = imgs[lightboxIndex];
-        const single = imgs.length <= 1;
-        lightboxPrev.hidden = single;
-        lightboxNext.hidden = single;
-        lightboxCount.textContent = (lightboxIndex + 1) + ' / ' + imgs.length;
-        lightboxCaption.textContent = img.caption ||
-            (lightboxFp.name + (lightboxFp.createTime ? ' · ' + formatLightboxDate(lightboxFp.createTime) : ''));
-        loadLightboxImage(img.url);
-        preloadLightboxNeighbors();
-    }
-
-    function openLightbox(fp, index, triggerBtn) {
-        lightboxFp = fp;
-        lightboxIndex = index;
-        lightboxTriggerBtn = triggerBtn || null;
-        lightbox.classList.add('show');
-        setOverlayHidden(lightbox, false);
-        document.getElementById('lightboxClose').focus();
-        renderLightboxImage();
-    }
-
-    function closeLightbox(returnFocus = true) {
-        lightbox.classList.remove('show');
-        setOverlayHidden(lightbox, true);
-        lightboxImg.onload = null;
-        lightboxImg.onerror = null;
-        lightboxImg.removeAttribute('src');
-        if (returnFocus && lightboxTriggerBtn) {
-            lightboxTriggerBtn.focus();   // 焦点还给触发它的图片按钮
-        }
-        lightboxTriggerBtn = null;
-        lightboxFp = null;
-    }
-
-    function switchLightbox(delta) {
-        const imgs = lightboxImages();
-        if (imgs.length < 2) return;
-        lightboxIndex = (lightboxIndex + delta + imgs.length) % imgs.length;
-        renderLightboxImage();
-    }
-
-    lightboxPrev.addEventListener('click', () => switchLightbox(-1));
-    lightboxNext.addEventListener('click', () => switchLightbox(1));
-    document.getElementById('lightboxClose').addEventListener('click', closeLightbox);
-    lightboxRetry.addEventListener('click', () => {
-        const imgs = lightboxImages();
-        if (imgs[lightboxIndex]) loadLightboxImage(imgs[lightboxIndex].url);
-    });
-    // 点击灯箱背景（图片之外）关闭
-    lightbox.addEventListener('click', (e) => {
-        if (e.target === lightbox || e.target === lightboxStage) closeLightbox();
-    });
-    // 触屏左右滑动切换
-    let lightboxTouchX = null;
-    lightbox.addEventListener('touchstart', (e) => {
-        lightboxTouchX = e.touches[0].clientX;
-    }, { passive: true });
-    lightbox.addEventListener('touchend', (e) => {
-        if (lightboxTouchX === null) return;
-        const dx = e.changedTouches[0].clientX - lightboxTouchX;
-        if (Math.abs(dx) > 40) switchLightbox(dx < 0 ? 1 : -1);
-        lightboxTouchX = null;
-    }, { passive: true });
-
+    // 图片灯箱在 modules/lightbox.js
     // ================= 城市足迹全屏视图（左侧足迹 Tab 卡片 + 右侧详情） =================
     const cityView = document.getElementById('cityView');
     const cityViewBack = document.getElementById('cityViewBack');
@@ -4123,52 +3945,7 @@
         pending.forEach(media => cityWallCoverObserver.observe(media));
     }
 
-    // ============ 卡片墙图片空闲预热 ============
-    // 刷新后磁盘缓存里的图片仍要重新解码；滚动时再解码就会造成帧断。
-    // 打开卡片墙后以低并发在后台把封面与轮播图全部解码，滚动时不再等待。
-    const CITY_WALL_WARM_CONCURRENCY = 2;
-    const CITY_WALL_WARM_MAX_IMAGES = 60;   // 防止超大城市列表过度预热
-    const cityWallWarmQueue = [];
-    let cityWallWarmLoading = 0;
-    let cityWallWarmTimer = null;
-
-    function drainCityWallWarmQueue() {
-        cityWallWarmTimer = null;
-        while (cityWallWarmLoading < CITY_WALL_WARM_CONCURRENCY && cityWallWarmQueue.length) {
-            const img = cityWallWarmQueue.shift();
-            if (!img || !img.isConnected || img.getAttribute('src')) continue;
-            cityWallWarmLoading++;
-            const done = () => {
-                cityWallWarmLoading = Math.max(0, cityWallWarmLoading - 1);
-                if (!cityWallWarmTimer) {
-                    cityWallWarmTimer = setTimeout(drainCityWallWarmQueue, 0);
-                }
-            };
-            img.addEventListener('load', done, { once: true });
-            img.addEventListener('error', done, { once: true });
-            img.src = img.dataset.src;
-        }
-    }
-
-    function stopCityWallWarmQueue() {
-        if (cityWallWarmTimer) {
-            clearTimeout(cityWallWarmTimer);
-            cityWallWarmTimer = null;
-        }
-        cityWallWarmQueue.length = 0;
-        cityWallWarmLoading = 0;
-    }
-
-    function startCityWallWarmQueue() {
-        stopCityWallWarmQueue();
-        const imgs = [...cityWallGrid.querySelectorAll(
-            'img.city-wall-card-cover, img.city-wall-card-preview')]
-            .filter(img => img.dataset.src && !img.getAttribute('src'));
-        if (!imgs.length || imgs.length > CITY_WALL_WARM_MAX_IMAGES) return;
-        cityWallWarmQueue.push(...imgs);
-        drainCityWallWarmQueue();
-    }
-
+    // 卡片墙图片空闲预热在 modules/city-wall-prewarm.js
     // ============ PC 城市卡片悬停轮播（最多 3 张） ============
     const CITY_CARD_CAROUSEL_DELAY = 600;      // 悬停后多久开始
     const CITY_CARD_CAROUSEL_INTERVAL = 1800;  // 每张停留时长
@@ -4470,7 +4247,7 @@
         });
         refreshCityWallFeatureActions();
         startCityWallCoverLoader();
-        startCityWallWarmQueue();
+        startCityWallWarmQueue(cityWallGrid);
     }
 
     function openCityWall() {
@@ -8018,59 +7795,11 @@
         }
     }
 
-    // ================= 票根排序与坐标工具（重走 / 护照共用） =================
+    // 票根排序/坐标校验的纯逻辑在 modules/ticket-utils.js；
+    // 这里只留一个薄包装，因为它要闭包引用主文件里的 ticketItems。
     function sortedTicketItems() {
         return ticketItems.slice().sort(compareTicketByTime);
     }
-
-    function ticketTimeKey(fp) {
-        return String((fp && (fp.ticketDate || fp.createTime)) || '');
-    }
-
-    function ticketNameKey(fp) {
-        return String((fp && (fp.name || fp.ticketTitle)) || '');
-    }
-
-    // 全局统一的时间线排序：ticketDate || createTime 升序；
-    // 两个字段都缺失的票排到最后（空串 localeCompare 最小，直接字符串比较会把它排到最前）；
-    // 同值按名称、key 兜底，保证重走/护照各功能顺序一致。
-    function compareTicketByTime(a, b) {
-        const ka = ticketTimeKey(a);
-        const kb = ticketTimeKey(b);
-        if (!ka && kb) return 1;
-        if (ka && !kb) return -1;
-        const byDate = ka.localeCompare(kb);
-        if (byDate) return byDate;
-        const byName = ticketNameKey(a).localeCompare(ticketNameKey(b), 'zh-Hans-CN');
-        if (byName) return byName;
-        return String((a && a.key) || '').localeCompare(String((b && b.key) || ''));
-    }
-
-    function ticketHasCoordinate(fp) {
-        if (!fp) return false;
-        const rawLng = fp.lng;
-        const rawLat = fp.lat;
-        // 空值不能走 Number()：Number(null) / Number('') 都是 0，会被误判成有效坐标
-        if (rawLng === '' || rawLng == null || rawLat === '' || rawLat == null) return false;
-        const lng = Number(rawLng);
-        const lat = Number(rawLat);
-        if (!Number.isFinite(lng) || !Number.isFinite(lat)) return false;
-        if (lng < -180 || lng > 180 || lat < -90 || lat > 90) return false;
-        // (0, 0) 是后台表单未填写坐标时的默认值，视为没有定位
-        return !(lng === 0 && lat === 0);
-    }
-
-    // 同城判定：优先比 adcode，没有 adcode 才比城市名；
-    // 两边都得有值，否则城市为空的票根会被误判成“同一城市”，整场放映一次都不飞。
-    function isSameTicketCity(a, b) {
-        const codeA = String((a && a.cityAdcode) || '').trim();
-        const codeB = String((b && b.cityAdcode) || '').trim();
-        if (codeA && codeB) return codeA === codeB;
-        const cityA = String((a && a.city) || '').trim();
-        const cityB = String((b && b.city) || '').trim();
-        return !!cityA && cityA === cityB;
-    }
-
     // ================= 重走一遍（阶段 D） =================
     function updateTicketReplayPlayButton() {
         if (ticketReplayPlay) {
@@ -9318,12 +9047,20 @@
         }, { once: true });
     }
 
-    const chinaDataSource = Cesium.GeoJsonDataSource.load(
-        '/plugins/footprint/assets/static/data/china-full.json',
-        {
-            fill: Cesium.Color.PALETURQUOISE.withAlpha(0) // 填充颜色（设为透明）
-        }
-    );
+    // 省界轮廓同样挂在 globeReady 之后：它只在放大到国内范围才显示
+    // （见下面 boundaryVisible 的高度判定），整球视图下这 208 KB 纯属白占首屏带宽。
+    // 挂在瓦片铺完之后而不是等到真正放大时才拉，是为了让用户放大时已经准备好，
+    // 不会看到轮廓迟到。
+    //
+    // 传已解析的 GeoJSON 对象而不是 URL：GeoJsonDataSource.load 两者都收，
+    // 传对象就不会再发一次请求，与几何索引共用 loadProvinceGeoJson 那一次下载。
+    const chinaDataSource = globeReady
+        .then(loadProvinceGeoJson)
+        .then(geojson =>
+            Cesium.GeoJsonDataSource.load(geojson, {
+                fill: Cesium.Color.PALETURQUOISE.withAlpha(0) // 填充颜色（设为透明）
+            })
+        );
 
     chinaDataSource.then(dataSource => {
         chinaBoundarySource = dataSource;
@@ -9407,14 +9144,30 @@
         return cityCardsEnabled() && boundaryVisible;
     }
 
-    // ---------- 省份边界索引（几何判定用） ----------
-    function loadProvinceIndex() {
-        if (!provinceIndexPromise) {
-            provinceIndexPromise = fetch(PROVINCE_GEOJSON_URL, { referrerPolicy: 'no-referrer' })
+    // ---------- 省份边界 GeoJSON（共享请求） ----------
+    // 这份 208 KB 的 china-full.json 有两个消费方：画轮廓的 GeoJsonDataSource，
+    // 和点省份时做几何判定的索引。两边原来各自发一次请求，且一个走 Cesium 的
+    // Resource、一个走 fetch，几乎同时发出谁也命中不了对方的缓存，
+    // 结果同一份文件在首屏下载两次（实测 208 KB × 2）。这里收敛成一次。
+    function loadProvinceGeoJson() {
+        if (!provinceGeoJsonPromise) {
+            provinceGeoJsonPromise = fetch(PROVINCE_GEOJSON_URL, { referrerPolicy: 'no-referrer' })
                 .then(res => {
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     return res.json();
                 })
+                .catch(e => {
+                    provinceGeoJsonPromise = null;   // 失败允许下次重试
+                    throw e;
+                });
+        }
+        return provinceGeoJsonPromise;
+    }
+
+    // ---------- 省份边界索引（几何判定用） ----------
+    function loadProvinceIndex() {
+        if (!provinceIndexPromise) {
+            provinceIndexPromise = loadProvinceGeoJson()
                 .then(geojson => {
                     provinceIndex = buildProvinceIndex(geojson);
                     return provinceIndex;
@@ -10923,9 +10676,9 @@
         saveViewMode('3d');
         document.body.classList.remove('mode-2d');
         document.body.classList.add('mode-3d');
-       if (view3d) view3d.hidden = false;
-       if (view2d) view2d.hidden = true;
-   }
+        if (view3d) view3d.hidden = false;
+        if (view2d) view2d.hidden = true;
+    }
 
     // ================= 对外只读接口（供「世界这本书」memory-shelf.js 使用） =================
     // 书架是独立脚本（static/js/memory-shelf.js），拿不到本文件的闭包变量，

@@ -76,6 +76,13 @@ application-local.properties
 /workplace/
 /src/main/resources/console/
 /ui/plugin-douban-main/
+# Svelte 前台组件包
+packages/*/node_modules/
+packages/*/.svelte-kit/
+
+# 前台压缩步骤的依赖
+frontend-build/node_modules/
+
 docs
 
 ### 视觉自检脚本的输出（tools/shelf-visual-check.mjs 生成的截图）
