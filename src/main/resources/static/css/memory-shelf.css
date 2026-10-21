@@ -943,7 +943,10 @@ body.memory-shelf-open #pageIntro {
     transition: --ms-room-wall 0.45s ease, --ms-room-floor 0.45s ease;
     perspective: 1600px;
     perspective-origin: 48% 46%;
-    touch-action: pan-y;
+    /* 触摸设备上这个舞台要自己吃掉所有手势：单指翻页 / 绕书旋转、双指捏合缩放。
+       留 pan-y 的话手机上横向拖拽会被判成滚动、整页跟着晃，手势就废了。
+       （章节页 / 相册页是另一个根节点 .ms-view，不受这条影响。） */
+    touch-action: none;
     cursor: grab;
     user-select: none;
     -webkit-user-select: none;
@@ -1521,6 +1524,106 @@ body.memory-shelf-open #pageIntro {
     .ms-head h2 { font-size: 22px; }
     .ms-fbook { width: 132px; height: 198px; }
     .ms-fbook-face b { font-size: 19px; }
+}
+
+/* ---------------- 触摸设备（手机 / 平板）：紧凑顶栏 + 收起信息卡 ---------------- */
+
+/* 用 (hover: none) and (pointer: coarse) 判定触摸设备，和 JS 的 isTouch() 同一套条件，
+   这样竖屏、横屏、大平板都走同一份规则（原来只按 ≤820px 宽度写，横屏手机 844px
+   就漏掉了：顶栏还是三行、音量还在，标题照样被压）。 */
+
+@media (hover: none) and (pointer: coarse) {
+    /* 三列从 1fr auto 1fr 换成 auto 1fr auto：桌面那套是「左右等宽 → 标题居中」，
+       但窄屏上左右两侧的自然宽（关闭键 + 静音/箭头）加起来就超过屏宽，中间那列
+       又是 auto，结果右侧按钮组往左溢出去、直接压住标题。
+       换成「两侧按内容、中间吃剩余」后标题自己省略号收尾，不会再叠。 */
+    .ms-top {
+        padding: 10px 12px 8px;
+        gap: 8px;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+    .ms-head .ms-eyebrow { display: none; }
+    #memoryShelfIntro { display: none; }
+    .ms-head { min-width: 0; }
+    #memoryShelfTitle {
+        font-size: 17px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #memoryShelf.book-mode #memoryShelfTitle { font-size: 14px; }
+    /* 面包屑每段再收窄一档：手机上顶栏只有一条窄位置，
+       JS 那边已经只留"上级 + 当前"两段，这里再把每段压到 5.5em */
+    .ms-crumb-current,
+    .ms-crumb-link { max-width: 5.5em; }
+    .ms-back span { display: none; }        /* 「关闭」只留 × 图标 */
+    .ms-back { padding: 0 11px; }
+    .ms-nav { min-height: 32px; min-width: 32px; padding: 0 10px; }
+    /* 音量滑条收掉：手机顶栏放不下，留着静音键（音量本身有记住的默认值） */
+    .ms-volume { display: none; }
+
+    /* 左缘竖排词标 + 书脊轨：触摸设备上占掉整条左缘，收掉；换本走顶栏 ‹ › */
+    .ms-rail { display: none; }
+    /* 省份信息卡整个收掉：屏幕就这么点，卡片压着的正是书和书架 —— 留出整屏给 3D
+       （省名在封面 / 书脊上本来就有，顶栏还有面包屑） */
+    .ms-info { display: none; }
+    #memoryShelf.has-rail .ms-info { margin-left: 0; }
+
+    /* 书摊开时：翻页箭头从顶栏挪到屏幕底部两角 ——
+       顶栏要留给「关闭 / 书名 / 静音」，再塞一对箭头必然和标题重叠。
+       底部浮动按钮也是拇指最顺手的位置。 */
+    #memoryShelf.book-mode .ms-nav#memoryShelfPrev,
+    #memoryShelf.book-mode .ms-nav#memoryShelfNext {
+        position: fixed;
+        bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+        z-index: 6;
+        width: 46px;
+        height: 46px;
+        min-height: 0;
+        padding: 0;
+        border-radius: 50%;
+        font-size: 20px;
+        line-height: 1;
+        background: rgba(255, 252, 244, 0.92);
+        box-shadow: 0 8px 20px -10px rgba(60, 45, 28, 0.6);
+        -webkit-backdrop-filter: blur(6px);
+        backdrop-filter: blur(6px);
+    }
+    #memoryShelf.book-mode .ms-nav#memoryShelfPrev { left: 14px; }
+    #memoryShelf.book-mode .ms-nav#memoryShelfNext { right: 14px; }
+
+    /* 舞台提示语抬到浮标上方：底下那两颗 46px 圆的翻页键正好压在原来的位置上 */
+    .ms-stage-hint { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+
+    /* 「复位视角」原本钉在右下角，会压住刚挪下来的 › 浮标 ——
+       触摸设备上挪到底部正中（两个浮标在左右两角，中间是空的） */
+    .ms-view-reset {
+        right: auto;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    }
+    .ms-view-reset:hover { transform: translateX(-50%) translateY(-1px); }
+}
+
+/* ---------------- 手机竖屏（≤820px）---------------- */
+
+/* 信息卡已经收掉，网格只剩舞台一个孩子；这里把列数也收成单列，
+   免得舞台落回第一列（372px）里、右边留一条空 */
+@media (max-width: 820px) and (orientation: portrait) {
+    .ms-scene { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* 手机横屏：顶栏更矮，浮标跟着收一点 */
+@media (orientation: landscape) and (max-height: 520px) {
+    .ms-top { padding: 6px 10px; }
+    #memoryShelf.book-mode .ms-nav#memoryShelfPrev,
+    #memoryShelf.book-mode .ms-nav#memoryShelfNext {
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+    }
 }
 
 /* ---------------- 动效偏好 ---------------- */

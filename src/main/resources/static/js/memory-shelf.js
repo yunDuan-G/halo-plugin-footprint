@@ -18,7 +18,12 @@
 
     // ---------------- 常量 ----------------
 
-    var ENTRY_MIN_WIDTH = 821;            // 与 PROVINCE_CARD_MIN_WIDTH / photo-ring 的门控一致
+    // 从 2.10.5 起手机端也放行（原来这里是「只有桌面端才给进」的门控）：
+    // 3D 书架 + 3D 书本在所有设备上都是同一套，触摸手势见 bindStageGestures()。
+    // 触摸设备只影响三件事：preheat 推迟到第一次触摸、hover 相关效果关掉、
+    // 相机与排版走窄屏那一档（见 isTouch()）。WebGL 起不来仍有 CSS 回退兜底。
+    var TOUCH_DEVICE = window.matchMedia('(pointer: coarse)').matches ||
+        ('ontouchstart' in window && window.matchMedia('(hover: none)').matches);
     var ALBUM_PER_PAGE = 1;               // 每页照片数（左右对开 => 一屏 2 张）
     var LONG_PRESS_MS = 180;              // 长按多久进入「旋转书本」模式
     var ROTATE_LIMIT = 65;                // 书本左右旋转上限（度）
@@ -152,6 +157,9 @@
         coverHover: false,
         coverDrag: null,
         orbit: null,
+        // 双指手势进行中（捏合缩放 / 双指平移）：这期间单指那套（翻页、绕书旋转、
+        // 拖封面）必须让路，否则两根手指会各自触发一次翻页 —— 见 bindStageGestures()
+        multiTouch: false,
         // 检视态的相机：绕书旋转 / 平移 / 缩放（规格要求背景可 orbit、pan、zoom）
         view: { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 },
         photoList: [],
@@ -311,10 +319,53 @@
         state.timers[key] = setTimeout(fn, ms);
     }
 
-    function enabled() {
-        if (window.matchMedia('(pointer: coarse)').matches) return false;
-        if ('ontouchstart' in window && window.matchMedia('(hover: none)').matches) return false;
-        return window.innerWidth >= ENTRY_MIN_WIDTH;
+    function isTouch() {
+        return TOUCH_DEVICE;
+    }
+
+    // 手机竖屏档（≤820px）：信息卡在 CSS 里整个收掉，书本按窄屏取景，
+    // 书架也不用再给卡片让位。桌面那套「左侧竖栏」的排版测量只在这档之外做。
+    function isMobilePortrait() {
+        return window.matchMedia('(max-width: 820px) and (orientation: portrait)').matches;
+    }
+
+    // 手机横屏（矮窗口）：可视高度只有 ~290px，纵向得再收一档，
+    // 否则摊开的书上下缘会被顶栏 / 底边切掉（实测书高 255 / 画布 289）。
+    function isShortViewport() {
+        return window.innerHeight <= 520;
+    }
+
+    // 检视态缩放上限：手机要能"单页阅读"（一页铺满屏宽），桌面 2.2 就够
+    var ZOOM_MAX = TOUCH_DEVICE ? 3 : 2.2;
+
+    // 检视态的默认机位：「复位视角」和「进入书本」都用它，别各写一份。
+    // **默认就是整跨页**（手机也一样，用户明确要求不要单页阅读）；
+    // 手机上字小的时候自己双指放大 —— ZOOM_MAX 给到 3，放大后一页能到 ~350px 宽。
+    function defaultView() {
+        return { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 };
+    }
+
+    // 手机后备缓冲倍率：先按屏幕 1:1（3x 屏就是 3），跑不动再退到 2
+    var TOUCH_PIXEL_RATIO = 3;
+    var TOUCH_PIXEL_RATIO_MIN = 2;
+    // ---------------- 贴图出图密度（按设备分档） ----------------
+    // 内页逻辑版面 400×564：桌面出 2.5 倍 = 1000×1410（单页 5.6MB），
+    // 触摸设备出 1.6 倍 = 640×902（单页 2.3MB）。书页在手机上最多 ~500 CSS px 高，
+    // 配上 1.25 的 pixelRatio，两者看不出差别，但常驻 10 页能省 ~33MB 显存。
+    // ⚠️ 手机也用 2.5 倍（1000×1410，和桌面同档）：不是"越大越好"，而是**要让
+    // mip 1 正好落在屏幕显示尺寸上** —— 一页在手机上是 ~494 物理像素宽，
+    // 1000px 贴图缩 2 倍后 mip 1 = 500px ≈ 显示尺寸，采样回到 1:1；
+    // 720px 时 mip 1 只有 360px（比屏幕细），GPU 要混 mip0/mip1，字就发虚。
+    // 实测墨迹边缘锐度：720px=58.2 → 1000px=63.4（+9%）。
+    var PAGE_TEX_SCALE = 2.5;
+    // 封面逻辑版面 384×576：**不做降档**。手机上书封是画面主角（约 300 CSS px
+    // 宽 = 600 物理像素），降到 512 就会看出糊 —— 这是用户报的「精选书本字很糊」。
+    var COVER_TEX_SCALE = 1;
+    // 书脊（布面 + 烫金两层，逻辑版面 96×576）：桌面 4× = 384×1152，
+    // 触摸设备 2.67× = 256×768 —— 书脊在手机上只有十几像素宽
+    var SPINE_TEX_SCALE = TOUCH_DEVICE ? (2 / 3) : 1;
+    function pageCanvas() {
+        return makeCanvas(Math.round(400 * PAGE_TEX_SCALE), Math.round(564 * PAGE_TEX_SCALE));
     }
 
     // ---------------- 数据聚合 ----------------
@@ -473,7 +524,16 @@
     function preloadCoverPhotos() {
         var d = api();
         if (!d || !d.cityCardImageUrl || !d.canvasSafeImageUrl) return;
-        (state.books || []).forEach(function (item) {
+        // 手机端只预热当前这本 ±1：11 本书的封面一起拉，在移动流量下是几十兆，
+        // 而且这些封面贴图在手机上本来就只画到当前这本（邻本是小书脊）
+        var books = state.books || [];
+        var from = 0;
+        var to = books.length - 1;
+        if (isTouch()) {
+            from = Math.max(0, state.active - 1);
+            to = Math.min(books.length - 1, state.active + 1);
+        }
+        books.slice(from, to + 1).forEach(function (item) {
             if (!item.cover) return;
             var url = d.cityCardImageUrl(item.cover) || item.cover;
             if (url) loadImage(url).catch(function () { /* 慢图床失败就在翻页时再试 */ });
@@ -632,6 +692,14 @@
     // 把内容让开这么宽之后，翻页之后正好被纸盖住 —— 露出来的只有空白纸边。
     // 0.186 世界单位 ≈ 页宽的 12.5% ≈ 400 逻辑 px × 0.125 ≈ 50，留到 60 更稳。
     var COVER_OUTER_SAFE = 60;
+    // 手机档正文字阶：一页在手机上只有 ~167 CSS px 宽，正文 17px 折算到屏上只剩
+    // 7.1 CSS px（em ≈21 物理像素）—— 分辨率（贴图 2.5× / 后备缓冲 3×）与对比度
+    // （墨色压深）都已经吃满了，再往下只能"把字本身做大"。
+    // 只放大**小字层**（正文/图注/页码/小标），标题层与行高、版心一律不动，
+    // 所以页面排布不重排，只是字在同样的行里更满一点。
+    var MOBILE_TYPE = TOUCH_DEVICE ? 1.3 : 1;
+    function tp(px) { return Math.round(px * MOBILE_TYPE * 2) / 2; }
+
     var TYPE = {
         book: '700 34px "Songti SC", "SimSun", serif',
         head: '600 21px "Songti SC", "SimSun", serif',
@@ -643,16 +711,16 @@
         // 正文宋体、图注/标签黑体的排法。
         // 字号保持原样（用户明确要求别再放大），只换字体 + 加粗：
         // 清晰度靠"黑体 + 更重的字重"，不靠字号。
-        body: '600 17px ' + SANS,
-        meta: '600 15px ' + SANS,
-        folio: '600 16px ' + SANS,
-        index: '700 18px ' + SANS,
-        eyebrow: '700 13px ' + SANS,
+        body: '600 ' + tp(17) + 'px ' + SANS,
+        meta: '600 ' + tp(15) + 'px ' + SANS,
+        folio: '600 ' + tp(16) + 'px ' + SANS,
+        index: '700 ' + tp(18) + 'px ' + SANS,
+        eyebrow: '700 ' + tp(13) + 'px ' + SANS,
         display: '600 42px "Songti SC", "SimSun", serif',
         subName: '600 28px "Songti SC", serif',
         // 最小一档保持 14px（上上轮定的大小），只加粗 + 换黑体
-        tiny: '600 14px ' + SANS,
-        label: '700 14px ' + SANS,
+        tiny: '600 ' + tp(14) + 'px ' + SANS,
+        label: '700 ' + tp(14) + 'px ' + SANS,
         // 封面底部那两行元信息（城市数/照片数、时间）。
         // ⚠️ 这里**不能**用 Georgia 之类的西文衬线打头：那会让数字命中西文字体、
         // 中文落到宋体，两套字体在**同一行**里的基线落点不同 —— 看起来就是
@@ -829,7 +897,7 @@
     }
 
     function coverTexture(THREE, book, index) {
-        var canvas = makeCanvas(768, 1152);
+        var canvas = makeCanvas(Math.round(768 * COVER_TEX_SCALE), Math.round(1152 * COVER_TEX_SCALE));
         paintCover(canvas, book, index);
         var texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
@@ -875,7 +943,7 @@
         // 同上：逻辑坐标 96×576，画布按倍率放大（参考实现书脊贴图是 384 宽）
         var w = 96;
         var h = 576;
-        var canvas = makeCanvas(384, 1152);
+        var canvas = makeCanvas(Math.round(384 * SPINE_TEX_SCALE), Math.round(1152 * SPINE_TEX_SCALE));
         var ctx = canvas.getContext('2d');
         ctx.setTransform(canvas.width / w, 0, 0, canvas.height / h, 0, 0);
         var colors = palette(index);
@@ -951,7 +1019,7 @@
     function spineFoilTexture(THREE, book, index) {
         var w = 96;
         var h = 576;
-        var canvas = makeCanvas(384, 1152);
+        var canvas = makeCanvas(Math.round(384 * SPINE_TEX_SCALE), Math.round(1152 * SPINE_TEX_SCALE));
         var ctx = canvas.getContext('2d');
         ctx.setTransform(canvas.width / w, 0, 0, canvas.height / h, 0, 0);
         ctx.clearRect(0, 0, w, h);
@@ -1766,7 +1834,7 @@
 
         // ---- 烫金独立层（照 complete-shelf：alphaMap + 高金属度 + polygonOffset）----
         // 画在贴图里的金色不会反光，只有做成独立金属网格才有压印烫金的感觉。
-        var foilCanvas = makeCanvas(768, 1152);
+        var foilCanvas = makeCanvas(Math.round(768 * COVER_TEX_SCALE), Math.round(1152 * COVER_TEX_SCALE));
         paintCover(foilCanvas, book, index, true);
         var foilTexture = new THREE.CanvasTexture(foilCanvas);
         foilTexture.colorSpace = THREE.SRGBColorSpace;
@@ -2037,6 +2105,7 @@
         // 信息板现在是**浮在舞台上**的，不能再把它当成舞台外的东西。
         // 精选书必须整体落在它的右边缘之外，否则会被面板盖住半个封面。
         var panelPx = 0;
+        // 手机端信息卡是 display:none（量出来是 0，天然不占位），只有桌面左栏要量
         if (!document.getElementById('memoryShelf').classList.contains('book-mode')) {
             // 左侧占用 = 信息卡与省份书脊轨**两条里更靠右的那条**的右边缘
             // （原来只量卡宽，加了书脊轨之后书就可能压到轨道上）
@@ -2121,14 +2190,21 @@
         if (!THREE || !els.stage) return false;
 
         var size = stageSize();
-        renderer3d = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-        renderer3d.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.8));
+        // 手机档：后备缓冲按屏幕 1:1（最多 3x）建，关 MSAA、阴影降到 PCF。
+        // ⚠️ 1.25 那版最糟（等于先画糊再放大）；2.0 也被浏览器放大 1.5 倍才上屏，
+        // 页面的小字就是这么糊掉的。现在 3x 起步、由 sampleRenderPerf() 在开书后
+        // 量一段帧率，撑不住才退回 2x（只降一次，不来回抖）。
+        renderer3d = new THREE.WebGLRenderer({
+            antialias: !TOUCH_DEVICE, alpha: true, powerPreference: 'high-performance'
+        });
+        renderer3d.setPixelRatio(Math.min(window.devicePixelRatio || 1,
+            TOUCH_DEVICE ? TOUCH_PIXEL_RATIO : 1.8));
         renderer3d.setSize(size.width, size.height, false);
         renderer3d.outputColorSpace = THREE.SRGBColorSpace;
         renderer3d.toneMapping = THREE.ACESFilmicToneMapping;
         renderer3d.toneMappingExposure = 1.16;
         renderer3d.shadowMap.enabled = true;
-        renderer3d.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer3d.shadowMap.type = TOUCH_DEVICE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
         maxAnisotropy = renderer3d.capabilities.getMaxAnisotropy() || 4;
 
         els.canvas = renderer3d.domElement;
@@ -2432,6 +2508,33 @@
         return true;
     }
 
+    // 自适应清晰度：手机档先按屏幕 1:1（3x）跑，只在**静止时**攒帧算平均间隔，
+    // 超过 40ms（≈25fps）才退到 2x。
+    // ⚠️ 这里踩过坑：原来不限状态、阈值 22ms（45fps）—— 建场 + 开书动画本身
+    // 就把平均值拉到 22ms 以上，真机一进来就被降成 2x（屏幕 3x 的 1.5 倍放大），
+    // 页面的字于是"怎么调都糊"。现在只统计"书摊开、没在翻页/拖动/旋转"的帧。
+    function sampleRenderPerf(delta) {
+        if (!TOUCH_DEVICE || !renderer3d || !shelf) return;
+        var p = shelf.perf;
+        if (p && p.done) return;
+        if (!p) p = shelf.perf = { n: 0, sum: 0, done: false };
+        // 只在静止时采样：建场、开合封面、翻页、拖拽、旋转的帧一律不计
+        var idle = state.mode === 'book' && state.bookOpen > 0.9 && !state.pageTurn &&
+            !state.coverDrag && !state.orbit && !state.multiTouch && !state.closing;
+        if (!idle) return;
+        // 前 20 帧不算：着色器编译、贴图首传都在这几帧里，会把平均值拉飞
+        if (p.n < 20) { p.n += 1; return; }
+        p.n += 1;
+        p.sum += delta;
+        if (p.n < 140) return;
+        p.done = true;
+        var avg = p.sum / (p.n - 20);
+        if (avg <= 0.04) return;
+        if (renderer3d.getPixelRatio() <= TOUCH_PIXEL_RATIO_MIN) return;
+        renderer3d.setPixelRatio(TOUCH_PIXEL_RATIO_MIN);
+        resizeShelf();          // setSize 会按新倍率重建后备缓冲，并补一帧
+    }
+
     function resizeShelf() {
         if (!shelf || shelf.disposed) return;
         var size = stageSize();
@@ -2538,10 +2641,9 @@
     function layoutShelf(instant) {
         if (!shelf) return;
         if (state.mode === 'book') {
-            // 书本模式下书架整排都收起来了：翻页这对按钮和中间的计数都不露头
-            if (els.prev) els.prev.hidden = true;
-            if (els.next) els.next.hidden = true;
-            syncPageCount(false);
+            // 书本模式下书架整排都收起来了：这对箭头桌面收掉（有方向键和拖拽），
+            // 触摸设备改当「上一页 / 下一页」常显 —— 统一交给 syncPagerArrows()
+            syncPagerArrows();
             return;
         }
         var layout = shelfLayout();
@@ -2638,14 +2740,29 @@
         // 它们必须收掉（之前只判 state.level，书本模式里 level 还停在 'shelf'，
         // 于是右边那颗「›」一直挂在那里）。
         var shelfLevel = state.level === 'shelf' && state.mode === 'shelf';
-        if (els.prev) els.prev.hidden = !shelfLevel;
-        if (els.next) els.next.hidden = !shelfLevel;
-        syncPageCount(shelfLevel);
+        syncPagerArrows();
     }
 
     // 顶栏那对箭头中间的「第几 / 共几本」。它们一次翻**一屏**（见 pageStep），
     // 只看箭头本身会以为它在乱跳 —— 有这行数字，"1/11 → 6/11 → 11/11 → 5/11"
     // 的规律就自己说清楚了。字号和颜色压到最淡，不跟标题抢视线。
+    // 分页箭头的显隐：书架层显示（「上一屏 / 下一屏」）；书摊开时桌面收掉
+    // （有 ←/→ 方向键和拖拽两条路），**触摸设备常显**并改当「上一页 / 下一页」——
+    // 手机上没键盘，拖拽又是"看不见"的手势，得留一对看得见的按钮。
+    function syncPagerArrows() {
+        var shelfLevel = state.level === 'shelf' && state.mode === 'shelf';
+        var pagerInBook = isTouch() && state.mode === 'book';
+        if (els.prev) {
+            els.prev.hidden = !(shelfLevel || pagerInBook);
+            els.prev.setAttribute('aria-label', pagerInBook ? '上一页' : '上一屏');
+        }
+        if (els.next) {
+            els.next.hidden = !(shelfLevel || pagerInBook);
+            els.next.setAttribute('aria-label', pagerInBook ? '下一页' : '下一屏');
+        }
+        syncPageCount(shelfLevel);
+    }
+
     function syncPageCount(show) {
         var count = els.pageCount;
         if (!count) return;
@@ -2789,6 +2906,7 @@
         function tick() {
             var delta = Math.min(0.05, shelf.clock.getDelta());
             var now = performance.now();
+            sampleRenderPerf(delta);
             updateDust(shelf.dust, (now - shelf.startedAt) / 1000);
             // 屋子配色也跟着帧走：换省份时墙、地、木架、灯一起过渡到新一套
             updateRoomTheme(delta);
@@ -2845,6 +2963,7 @@
                 // 视觉中心已经在世界 x = 0（上面那步就是把它挪过来的），
                 // 相机盯着 0 + 平移量即可
                 var focusX = view.panX;
+                // 书摊开时底部抽屉是收掉的，镜头不必让位（书架机位那条才抬）
                 var focusY = BOOK_INSPECT_Y + view.panY;
                 var focusZ = BOOK_Z;
                 // 滚轮缩放 = 相机拉近拉远（过去是缩书本模型）
@@ -3695,6 +3814,9 @@
 
         stage.addEventListener('pointerdown', function (event) {
             if (event.button !== undefined && event.button !== 0) return;
+            // 触摸：只有第一根手指算「单指手势」。第二根手指落下时不能再去起一次
+            // 翻页/旋转，否则捏合缩放会连带翻两页（双指的处理见下面的 touch 那段）。
+            if (state.multiTouch || event.isPrimary === false) return;
             // 舞台里的 DOM 按钮（复位视角）必须在这里放行：
             // 下面几条分支都会 setPointerCapture，而指针被舞台捕获之后，
             // 随后的 click 会派发给捕获者（舞台）而不是按钮 —— 按钮的
@@ -3769,6 +3891,8 @@
         });
 
         stage.addEventListener('pointermove', function (event) {
+            // 双指手势期间单指那套让路（见下面的 touch 段）
+            if (state.multiTouch) return;
             if (state.mode === 'book') {
                 if (state.orbit) {
                     var o = state.orbit;
@@ -3799,8 +3923,10 @@
                     return;
                 }
                 if (!state.bookDrag) {
-                    // 悬停：书还合着时把鼠标压上去，封面裂开一线
-                    state.coverHover = state.bookOpen < 0.5 && !!bookPageSide(event);
+                    // 悬停：书还合着时把鼠标压上去，封面裂开一线。
+                    // 触摸设备没有"悬停"这回事 —— 手指划过去也会派发 pointermove，
+                    // 不排掉的话封面会跟着手指莫名裂开
+                    state.coverHover = !isTouch() && state.bookOpen < 0.5 && !!bookPageSide(event);
                     return;
                 }
                 var drag = state.bookDrag;
@@ -3834,7 +3960,8 @@
             }
             // 没有按下时：只做悬停抬升
             if (pointerId === null) {
-                if (shelf && !reduceMotion) shelf.hoverIndex = pickBookIndex(event);
+                // 触摸设备不抬升：手指划过书架时那几本跟着抬起，看着像"卡了一下"
+                if (shelf && !reduceMotion && !isTouch()) shelf.hoverIndex = pickBookIndex(event);
                 return;
             }
             if (event.pointerId !== pointerId) return;
@@ -3874,7 +4001,7 @@
             event.preventDefault();
             if (state.mode === 'book') {
                 // 检视态：滚轮缩放（规格里的 zoom）
-                state.view.zoom = clamp(state.view.zoom * (event.deltaY > 0 ? 0.92 : 1.08), 0.6, 2.2);
+                state.view.zoom = clamp(state.view.zoom * (event.deltaY > 0 ? 0.92 : 1.08), 0.6, ZOOM_MAX);
                 return;
             }
             var now = performance.now();
@@ -3883,6 +4010,71 @@
             var delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
             setActive(state.active + (delta > 0 ? 1 : -1));
         }, { passive: false });
+
+        // ---------------- 触摸手势（手机 / 平板）----------------
+        // 单指沿用上面那套 pointer 逻辑：按住书页拖 = 翻页，拖背景 = 绕书旋转
+        // （书架态按住当前那本 = 转正）。这里只补两件触摸独有的事：
+        //   ① 双指捏合 = 缩放、双指拖动 = 平移 —— 原来缩放只有滚轮一条路，
+        //      手机上等于没有；
+        //   ② 第二根手指落下时把正在进行的单指拖拽**作废**，否则两根手指会各自
+        //      翻一页 / 各转一次相机。
+        var gesture = null;
+        function gesturePair(event) {
+            if (!event.touches || event.touches.length < 2) return null;
+            var a = event.touches[0];
+            var b = event.touches[1];
+            var dx = a.clientX - b.clientX;
+            var dy = a.clientY - b.clientY;
+            return {
+                dist: Math.max(1, Math.sqrt(dx * dx + dy * dy)),
+                midX: (a.clientX + b.clientX) / 2,
+                midY: (a.clientY + b.clientY) / 2
+            };
+        }
+        function cancelSinglePointerDrag() {
+            state.pageTurn = null;
+            state.coverDrag = null;
+            state.orbit = null;
+            state.bookDrag = null;
+            stage.classList.remove('page-dragging', 'dragging');
+        }
+        stage.addEventListener('touchstart', function (event) {
+            var pair = gesturePair(event);
+            if (!pair) return;
+            state.multiTouch = true;
+            cancelSinglePointerDrag();
+            gesture = {
+                dist: pair.dist, midX: pair.midX, midY: pair.midY,
+                zoom: state.view.zoom, panX: state.view.panX, panY: state.view.panY
+            };
+        }, { passive: true });
+        stage.addEventListener('touchmove', function (event) {
+            if (!gesture) return;
+            var pair = gesturePair(event);
+            if (!pair) return;
+            // 必须自己吃掉默认行为：不然 Safari 会顺手把整页缩放、安卓会上下回弹
+            if (event.cancelable) event.preventDefault();
+            if (state.mode !== 'book') return;
+            // 捏合 → 缩放（把 zoom 夹回滚轮那套范围，两种输入共用同一个值）
+            state.view.zoom = clamp(gesture.zoom * (pair.dist / gesture.dist), 0.6, ZOOM_MAX);
+            // 双指拖动 → 平移。**内容跟着手指走**（抓取式）：手指往右、书就往右。
+            // 取景点 panX 变大相机跟着变大，画面反而是往左走的 —— 所以要减号。
+            // （桌面 Shift + 拖动那条是另一套手感，用户只要求改双指这条。）
+            var rectG = stage.getBoundingClientRect();
+            state.view.panX = gesture.panX - (pair.midX - gesture.midX) / Math.max(1, rectG.width) * 3.2;
+            state.view.panY = gesture.panY + (pair.midY - gesture.midY) / Math.max(1, rectG.height) * 2.2;
+        }, { passive: false });
+        function endGesture(event) {
+            if (!gesture) return;
+            // 还留着两根手指（三指同时落下再抬一根）就先不收尾
+            if (event.touches && event.touches.length >= 2) return;
+            gesture = null;
+            state.multiTouch = false;
+            // 双指刚结束的那一下别被当成点击（会命中目录行直接跳页）
+            state.suppressClickUntil = performance.now() + 200;
+        }
+        stage.addEventListener('touchend', endGesture);
+        stage.addEventListener('touchcancel', endGesture);
 
         stage.addEventListener('click', function (event) {
             if (performance.now() < state.suppressClickUntil) return;
@@ -4749,7 +4941,25 @@
         var viewW = viewH * aspect;
         var openW = dims.pageW * 2 + 0.12;
         var openH = dims.height || BK_HEIGHT;
-        return Math.max(0.6, Math.min(viewH * BOOK_FILL_H / openH, viewW * BOOK_FILL_W / openW));
+        var fillW = BOOK_FILL_W;
+        var fillH = BOOK_FILL_H;
+        var floor = 0.6;
+        if (isMobilePortrait()) {
+            // 竖屏：整屏都是书的（信息卡已收掉），跨页占到屏宽的 ~9 成 ——
+            // 留一点边距，别让摊开的封面角贴到屏幕边上
+            fillW = 0.88; fillH = 0.66;
+            // 兜底下限也要跟着放开：竖屏手机算出来约 0.56，卡在 0.6 的话上面那两个
+            // 系数等于白调（实测书宽曾经一直停在 382/390px）
+            floor = 0.42;
+        } else if (isShortViewport()) {
+            // 手机横屏：横向很宽（844px）、纵向只有 ~340px —— 约束在**高度**这一项。
+            // 之前取 0.55 太保守，书只占画布高度的一半，一页才 ~118 CSS px
+            //（比竖屏的 167 还小）。横屏的意义就是"书能更大"，这里提到 0.82：
+            // 书高 ≈0.82×画布，一页 ≈240 CSS px（比竖屏大 ~45%）。
+            fillW = 0.9;
+            fillH = 0.82;
+        }
+        return Math.max(floor, Math.min(viewH * fillH / openH, viewW * fillW / openW));
     }
 
     var book = null;            // 展开态的书本运行时
@@ -4920,7 +5130,7 @@
         //   · 2× 视网膜屏上 500 CSS px → 1000 物理 px，同样卡线。
         // 提到 2.5 倍（1000×1410）覆盖这两个场景，单页 5.6MB；配合下面的
         // "窗口外真的释放"，常驻只有 10 页左右 ≈75MB，不会无限增长。
-        var canvas = makeCanvas(1000, 1410);
+        var canvas = pageCanvas();
         paintPage(canvas, spec);
         var texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
@@ -4936,7 +5146,7 @@
     var blankPageCache = null;
     function blankPageTexture(THREE) {
         if (blankPageCache) return blankPageCache;
-        var canvas = makeCanvas(1000, 1410);   // 跟内页同密度，补画时不跳分辨率
+        var canvas = pageCanvas();             // 跟内页同密度，补画时不跳分辨率
         var scale = canvas.width / 400;
         var ctx = canvas.getContext('2d');
         ctx.setTransform(scale, 0, 0, scale, 0, 0);
@@ -4976,9 +5186,15 @@
         // 58% 的沉墨在斜看/远看时会灰掉，用户反馈"有些看不清"。
         // 正文 ink 不动；muted 从 0.58 提到 0.76；accent 从 #9b704e 压到 #7f5c3d
         // （城市序号、小标、右侧「N 张」都用它）。
-        var ink = '#3b3128';
-        var muted = 'rgba(59,49,40,0.76)';
-        var accent = '#7f5c3d';
+        // ⚠️ 触摸设备上再压深一档：房间用的是 ACES 色调映射（曝光 1.16），它会把
+        // 暗部整体抬起来 —— 贴图里墨色 #3b3128（亮度≈50）渲染到手机屏上实测只剩
+        // p0.5=108 / p1=148（纸 238），字就成了"白底上的中灰"。
+        // 把内页摘出色调映射（toneMapped:false）能解决，但整页会变亮、不好看
+        // （用户反馈"太亮、没之前好看"）。所以改成**从贴图这一侧补**：
+        // 墨色本身压深，纸与整体亮度一律不动。
+        var ink = TOUCH_DEVICE ? '#150f07' : '#3b3128';
+        var muted = TOUCH_DEVICE ? 'rgba(21,15,7,0.88)' : 'rgba(59,49,40,0.76)';
+        var accent = TOUCH_DEVICE ? '#5b3d24' : '#7f5c3d';
         // 版心边距 M 与字阶 TYPE 定义在模块级（见 paintCover 之前）——
         // 书脊/封底贴图也画同族文字，放函数里它们就取不到了。
         // M 随左右页变：订口（内侧）比外缘多 PAGE_GUTTER_EXTRA。
@@ -6044,9 +6260,7 @@
         refreshBookSpread();
         setHeader(title, intro, crumb);
 
-        if (els.prev) els.prev.hidden = true;
-        if (els.next) els.next.hidden = true;
-        syncPageCount(false);
+        syncPagerArrows();
         if (fromShelf) {
             // 别再硬把封面按回 0：从书架"抽出来"的那一秒里，架上的书本来就被
             // 掀开了一角（renderShelfStage 那段 -1.92）。这里归零的话，封面会
@@ -6063,7 +6277,9 @@
             state.coverHover = false;
             state.coverDrag = null;
             state.orbit = null;
-            state.view = { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 };
+            state.multiTouch = false;          // 切态时清掉双指手势的残留
+            // 进场一律是「整跨页」机位（见 defaultView）；手机上要读小字自己双指放大
+            state.view = defaultView();
             // 记下这本书**此刻**的位姿：入场就是从这个位姿补间到检视态，
             // 中途没有尺寸突变、没有倾角突变，读起来就是「这一本滑到中间摊开」
             state.bookFrom = {
@@ -6356,6 +6572,14 @@
         // 参考对翻页做了音高区分：往回翻 0.93 倍速（更低沉）
         playCue('page', { rate: step > 0 ? 1 : 0.93 });
         if (!book || state.mode !== 'book') return;
+        // 封面还合着（用户把封面推回去了）：这一下先当"掀开封面"，
+        // 别去翻里面那些页 —— 否则按钮看起来像没反应（翻的是合着的书里的页）
+        if (state.bookOpen < 0.5) {
+            state.coverDrag = null;
+            state.openTarget = 1;
+            playCue('open');
+            return;
+        }
         // 上一次翻页还在落位：立刻收尾，连续按方向键也能一页一页跟得上
         settleTurnNow();
         var forward = step > 0;
@@ -6563,6 +6787,7 @@
         state.orbit = null;
         state.bookDrag = null;
         state.closing = null;
+        state.multiTouch = false;
         state.view = { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 };
         // 复位按钮的显隐是 updateBookTurn 每帧算的，而书架模式下那个函数不再运行，
         // 所以它会把「可见」的状态一直挂在画面上（用户看到的：Esc 关书之后
@@ -6599,6 +6824,7 @@
         state.coverHover = false;
         state.orbit = null;
         state.bookDrag = null;
+        state.multiTouch = false;
         setPhase('closing');
         playCue('close');
         // 「复位视角」按钮只在检视态有意义：合书一开始就收掉，
@@ -6740,8 +6966,15 @@
     function setHeader(title, intro, crumb) {
         if (els.title) {
             if (crumb && crumb.length) {
-                els.title.innerHTML = crumb.map(function (item, index) {
-                    var last = index === crumb.length - 1;
+                // 触摸设备顶栏只有一条窄位置（关闭键 + 静音键之间）：四段面包屑
+                //（世界这本书 › 山东 › 青岛 › 某某足迹点）会整段被省略号吃掉，
+                // 连"我在哪"都看不见。这里只保留最后两段（上级 + 当前），
+                // 回书架走左上角 ✕、回上一级点上级那段 —— 路径信息不丢。
+                var shown = (isTouch() && crumb.length > 2)
+                    ? crumb.slice(crumb.length - 2)
+                    : crumb;
+                els.title.innerHTML = shown.map(function (item, index) {
+                    var last = index === shown.length - 1;
                     var sep = index ? '<span class="ms-crumb-sep" aria-hidden="true">›</span>' : '';
                     if (last) {
                         // ④ 当前段带一个很淡的层级后缀（城市章节 / 旅行相册 / 足迹点），
@@ -6787,7 +7020,6 @@
 
     function open() {
         if (!els.root || els.root.classList.contains('show')) return;
-        if (!enabled()) return;
         var d = api();
         if (!d) {
             console.warn('世界这本书：没有拿到 FootprintMemoryData，先跳过');
@@ -6970,11 +7202,21 @@
         }
     }
 
-    // 入口只在桌面端出现（决策 13）：非触摸 + 宽度 >= 821
+    // 入口常显：手机端也放行（原来的「决策 13：只在桌面端出现」已经作废）。
+    // 这里只负责把按钮露出来，能不能真的翻开由 open() 决定。
     function syncEntry() {
-        var on = enabled();
-        if (els.btn) els.btn.hidden = !on;
-        if (!on && els.root && els.root.classList.contains('show')) close();
+        if (els.btn) els.btn.hidden = false;
+    }
+
+    // three.js 654KB：桌面端照旧空闲预热；触摸设备等到**第一次真的碰屏幕**再拉，
+    // 免得手机上没打算看书就先吃掉一份移动流量（入口按钮的 pointerdown 也在这条路上）
+    function schedulePreheat() {
+        if (!isTouch()) { preheat(); return; }
+        var once = function () {
+            document.removeEventListener('pointerdown', once, true);
+            preheat();
+        };
+        document.addEventListener('pointerdown', once, true);
     }
 
     // ---------------- 直达链接（与票根册的 ?view=tickets 同一套做法） ----------------
@@ -7057,12 +7299,23 @@
         }
         if (els.back) els.back.addEventListener('click', close);
         if (els.prev) {
-            els.prev.addEventListener('click', function () { setActive(state.active - pageStep()); });
+            els.prev.addEventListener('click', function () {
+                // 书摊开时（触摸设备）这对箭头是翻页，不是换本
+                if (state.mode === 'book') { turnBookPage(-1); return; }
+                setActive(state.active - pageStep());
+            });
         }
         if (els.next) {
-            els.next.addEventListener('click', function () { setActive(state.active + pageStep()); });
+            els.next.addEventListener('click', function () {
+                if (state.mode === 'book') { turnBookPage(1); return; }
+                setActive(state.active + pageStep());
+            });
         }
         document.addEventListener('keydown', onKeydown);
+        // 手机端音频必须由**手势**解锁（iOS 的自动播放策略）：第一次碰到覆盖层
+        // 就把 AudioContext 建好、把 6 个 mp3 预载一遍 —— 否则"第一次翻页没声音"，
+        // 因为那一下才刚开始解码。unlockAudio 本身是幂等的。
+        els.root.addEventListener('pointerdown', function () { unlockAudio(); }, { passive: true });
         els.root.addEventListener('click', function (event) {
             if (event.target === els.root) close();
         });
@@ -7077,7 +7330,7 @@
         });
 
         syncEntry();
-        if (enabled()) preheat();
+        schedulePreheat();
         initDeepLink();
     }
 
@@ -7113,7 +7366,7 @@
         if (btn) {
             btn.addEventListener('click', function (event) {
                 event.stopPropagation();
-                state.view = { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 };
+                state.view = defaultView();
                 announce('视角已复位');
             });
         }
@@ -7123,9 +7376,12 @@
         var btn = $('msViewReset');
         if (!btn) return;
         var v = state.view;
-        var moved = Math.abs(v.yaw) > 0.01 || Math.abs(v.pitch) > 0.01 ||
-            Math.abs(v.panX) > 0.01 || Math.abs(v.panY) > 0.01 ||
-            Math.abs(v.zoom - 1) > 0.01;
+        // 和**本档的默认机位**比，不是和 zoom=1 比 —— 手机上默认就是单页机位，
+        // 拿 1 去比的话那颗「复位视角」会一直挂在屏幕上
+        var d = defaultView();
+        var moved = Math.abs(v.yaw - d.yaw) > 0.01 || Math.abs(v.pitch - d.pitch) > 0.01 ||
+            Math.abs(v.panX - d.panX) > 0.01 || Math.abs(v.panY - d.panY) > 0.01 ||
+            Math.abs(v.zoom - d.zoom) > 0.01;
         btn.hidden = !(state.mode === 'book' && moved);
     }
 
