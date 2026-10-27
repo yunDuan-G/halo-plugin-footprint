@@ -8,6 +8,7 @@ metadata:
 spec:
   enabled: true
   requires: ">=2.26.0"
+  version: "3.0.0-beta.3"
   author:
     name: Handsome
     website: https://www.lik.cc/

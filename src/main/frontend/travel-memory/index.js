@@ -393,8 +393,6 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     // 同一个城市无论从省份进来还是从「全部城市」进来，都必须长得一模一样。
     const PROVINCE_CARD_DENSE_LIMIT = 6;
     const PROVINCE_CARD_GAP = 12;               // 同侧卡片最小间距（紧凑档减半）
-    // 同一条边上卡片的阶梯缩进：四档循环，避免排成一条笔直的队列
-    const PROVINCE_CARD_STAGGER = [0, 18, 36, 54];
     // 「全部城市」自动缩放的落点：轮廓可见（< 9500km）且仍是城市聚合态（> 1500km）
     const PROVINCE_ALL_FLY_HEIGHT = 8000000;
     const PROVINCE_ALL_FLY_DURATION = 1.6;
@@ -7312,15 +7310,18 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     // 整数 CSS 像素映射过去仍是小数设备像素，落在半格上的卡片文字就是糊的。
     // 对齐后每张卡都落在整格上，文字栅格化才稳定清晰。
 
-    const PROVINCE_EDGES = ['left', 'right', 'top', 'bottom'];
-    const PROVINCE_EDGE_SIDE_BIAS = 0.05;   // 上下与左右同样近时优先左右（沿用原来的观感）
-    const PROVINCE_LAYOUT_STEPS = 12;       // 沿边搜索的最大步数
     const PROVINCE_CLUSTER_PAD = 26;        // 标记簇包围盒的外扩，卡片尽量别压住标记群
-    // 「中央留空区」：可用区中间按这两比例留出一块不放卡片的地方 ——
-    // 卡片只贴四边，别漂在地球中央（那里是标记群、省名标注和视觉重心）。
-    // 真排不下时宁可叠在边上，也不会摆进这块区域。
+    // 环带布局：卡片优先落在窗口外圈，外圈占满后才向内补位。
+    // 每一层和每个沿边卡位都有固定但互不相同的偏移，避免排成规则行列。
+    const PROVINCE_RING_DEPTH_LIMIT = 4;
+    const PROVINCE_RING_DEPTH_GAP = 18;
+    const PROVINCE_RING_JITTER = [0, 13, 5, 21, 9, 17, 3, 25, 11, 19, 7, 23, 15];
+    const PROVINCE_RING_GAP_JITTER = [0, 12, 4, 17, 8, 14, 2, 10, 16, 6];
+    // 中央区域仍然只做视觉惩罚：环带真正排满后允许向内扩展，但不能把卡片丢到中心。
     const PROVINCE_CORE_KEEPOUT_X = 0.26;
     const PROVINCE_CORE_KEEPOUT_Y = 0.22;
+    const PROVINCE_LAYOUT_FALLBACK_GAP = 4;
+    const PROVINCE_MARKER_KEEPOUT = 12;
 
     function provinceSafeArea(W, H) {
         const insetX = provinceSideInset();
@@ -7364,21 +7365,175 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
         );
     }
 
-    // 一次布局：为一张卡片挑位置。按「就近边 → 沿边逐步外扩」搜索，
-    // 先满足不与已有卡片重叠，再尽量少压住标记群，最后才是离自己标记最近。
-    function pickProvinceCardSpot(item, area, spanX, spanY, cluster, placed, gap) {
+    function provinceRingJitter(item, depth, edgeIndex, salt, values) {
+        const seed = (item.layoutIndex || 0) * 7 + depth * 5 + edgeIndex * 3 + salt;
+        return values[seed % values.length];
+    }
+
+    // 沿某一条边生成错落卡位。每张卡自己的标记位置优先，其次是带随机呼吸感的
+    // 正反两向序列，以及已放卡片前后的窄缝。这里不会再生成贯穿整个视口的网格轴。
+    function provinceRingTrackValues(item, edge, area, placed, gap, depth, edgeIndex) {
+        const vertical = edge === 'left' || edge === 'right';
+        const start = vertical ? area.top : area.left;
+        const end = vertical ? area.bottom : area.right;
+        const size = vertical ? item.h : item.w;
+        const anchorCoord = vertical ? item.anchor.y : item.anchor.x;
+        const maxStart = end - size;
+        const values = [];
+        const add = (value) => {
+            if (Number.isFinite(value) && value >= start - 0.5 && value <= maxStart + 0.5) {
+                values.push(value);
+            }
+        };
+        const edgeJitter = provinceRingJitter(
+            item, depth, edgeIndex, 1, PROVINCE_RING_JITTER
+        ) * 0.62;
+        add(start + edgeJitter);
+        add(maxStart - edgeJitter);
+        add(clampNumber(anchorCoord - size / 2, start, maxStart));
+
+        let cursor = start + edgeJitter;
+        for (let step = 0; cursor <= maxStart + 0.5 && step < 16; step++) {
+            add(cursor);
+            const breath = provinceRingJitter(
+                item, depth, edgeIndex, step + 3, PROVINCE_RING_GAP_JITTER
+            );
+            cursor += size + gap + breath;
+        }
+
+        cursor = maxStart - edgeJitter;
+        for (let step = 0; cursor >= start - 0.5 && step < 16; step++) {
+            add(cursor);
+            const breath = provinceRingJitter(
+                item, depth, edgeIndex, step + 7, PROVINCE_RING_GAP_JITTER
+            );
+            cursor -= size + gap + breath;
+        }
+
+        placed.forEach((rect, index) => {
+            const cardStart = vertical ? rect.y : rect.x;
+            const cardSize = vertical ? rect.h : rect.w;
+            const localJitter = provinceRingJitter(
+                item, depth, edgeIndex, index + 11, PROVINCE_RING_JITTER
+            ) * 0.28;
+            add(cardStart + cardSize + gap + localJitter);
+            add(cardStart - size - gap - localJitter);
+        });
+
+        values.sort((a, b) => a - b);
+        const unique = [];
+        values.forEach(value => {
+            if (!unique.length || Math.abs(unique[unique.length - 1] - value) > 1) {
+                unique.push(value);
+            }
+        });
+        return unique;
+    }
+
+    // 只产生贴着四条边、由外向内分层的候选位。外圈（depth=0）永远比内圈优先，
+    // 卡片不够时才逐层向内扩展；不会再出现整块视口均匀铺格子的观感。
+    function provinceRingCandidates(item, area, placed, gap) {
+        const candidates = [];
+        const edges = [
+            { name: 'left', vertical: true },
+            { name: 'right', vertical: true },
+            { name: 'top', vertical: false },
+            { name: 'bottom', vertical: false }
+        ];
+        edges.forEach((edge, edgeIndex) => {
+            const depthPitch = (edge.vertical ? item.w : item.h) +
+                gap + PROVINCE_RING_DEPTH_GAP;
+            const along = provinceRingTrackValues(
+                item, edge.name, area, placed, gap, 0, edgeIndex
+            );
+            for (let depth = 0; depth <= PROVINCE_RING_DEPTH_LIMIT; depth++) {
+                const values = depth === 0
+                    ? along
+                    : provinceRingTrackValues(
+                        item, edge.name, area, placed, gap, depth, edgeIndex
+                    );
+                const depthJitter = provinceRingJitter(
+                    item, depth, edgeIndex, 2, PROVINCE_RING_JITTER
+                ) * 0.38;
+                values.forEach(position => {
+                    let x = 0;
+                    let y = 0;
+                    if (edge.name === 'left') {
+                        x = area.left + depth * depthPitch + depthJitter;
+                        y = position;
+                    } else if (edge.name === 'right') {
+                        x = area.right - item.w - depth * depthPitch - depthJitter;
+                        y = position;
+                    } else if (edge.name === 'top') {
+                        x = position;
+                        y = area.top + depth * depthPitch + depthJitter;
+                    } else {
+                        x = position;
+                        y = area.bottom - item.h - depth * depthPitch - depthJitter;
+                    }
+                    if (x < area.left - 0.5 || y < area.top - 0.5 ||
+                        x + item.w > area.right + 0.5 || y + item.h > area.bottom + 0.5) {
+                        return;
+                    }
+                    candidates.push({ x: x, y: y, depth: depth, edge: edge.name });
+                });
+            }
+        });
+        return candidates;
+    }
+
+    function provinceNearestEdge(rect, area) {
+        let edge = 'left';
+        let distance = rect.x - area.left;
+        const alternatives = [
+            ['right', area.right - (rect.x + rect.w)],
+            ['top', rect.y - area.top],
+            ['bottom', area.bottom - (rect.y + rect.h)]
+        ];
+        alternatives.forEach(([name, value]) => {
+            if (value < distance) {
+                edge = name;
+                distance = value;
+            }
+        });
+        return { edge: edge, distance: Math.max(0, distance) };
+    }
+
+    function provinceRectContainsMarker(rect, anchors) {
+        for (let i = 0; i < anchors.length; i++) {
+            const anchor = anchors[i];
+            if (anchor.x >= rect.x - PROVINCE_MARKER_KEEPOUT &&
+                anchor.x <= rect.x + rect.w + PROVINCE_MARKER_KEEPOUT &&
+                anchor.y >= rect.y - PROVINCE_MARKER_KEEPOUT &&
+                anchor.y <= rect.y + rect.h + PROVINCE_MARKER_KEEPOUT) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function provinceSpotCost(rect, item, area, cluster, core, candidate) {
+        const edge = provinceNearestEdge(rect, area);
+        const centerX = rect.x + rect.w / 2;
+        const centerY = rect.y + rect.h / 2;
+        const markerDistance = Math.hypot(centerX - item.anchor.x, centerY - item.anchor.y);
+        const areaSize = rect.w * rect.h;
+        const clusterRatio = cluster ? overlapArea(rect, cluster) / areaSize : 0;
+        const coreRatio = overlapArea(rect, core) / areaSize;
+        // 环层是第一优先级，之后才看离自己城市的距离。这样外圈还有空位时，
+        // 不会因为某张卡离内圈更近就提前钻进来。
+        return candidate.depth * 2600 +
+            edge.distance * 1.4 +
+            markerDistance * 0.32 +
+            clusterRatio * 300 +
+            coreRatio * 360;
+    }
+
+    // 一次布局：只在四边的错落环带里挑位置。先保证真实矩形不重叠，
+    // 再按“外圈优先 → 离自己标记近 → 少压标记群”选择。
+    function pickProvinceCardSpot(item, area, spanX, spanY, cluster, placed, gap, anchors) {
         const w = item.w;
         const h = item.h;
-        const a = item.anchor;
-        const stagger = PROVINCE_CARD_STAGGER[item.layoutIndex % PROVINCE_CARD_STAGGER.length];
-        const score = {
-            left: (a.x - area.left) / spanX,
-            right: (area.right - a.x) / spanX,
-            top: (a.y - area.top) / spanY + PROVINCE_EDGE_SIDE_BIAS,
-            bottom: (area.bottom - a.y) / spanY + PROVINCE_EDGE_SIDE_BIAS * 2
-        };
-        const edges = PROVINCE_EDGES.slice().sort((e1, e2) => score[e1] - score[e2]);
-        // 中央留空区（可用区正中那一块）：任何方向都不往这里摆卡片
         const core = {
             x: area.left + spanX * PROVINCE_CORE_KEEPOUT_X,
             y: area.top + spanY * PROVINCE_CORE_KEEPOUT_Y,
@@ -7386,76 +7541,265 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
             h: spanY * (1 - PROVINCE_CORE_KEEPOUT_Y * 2)
         };
 
-        let best = null;
-        edges.forEach((edge, edgeRank) => {
-            // 沿边外扩时优先朝屏幕中心那一侧，卡片整体更聚拢、不会甩到角落
-            const towardCenter = (edge === 'left' || edge === 'right')
-                ? Math.sign((area.top + area.bottom) / 2 - a.y)
-                : Math.sign((area.left + area.right) / 2 - a.x);
-            for (let k = 0; k <= PROVINCE_LAYOUT_STEPS; k++) {
-                const steps = k === 0 ? [0] : [k, -k];
-                for (let s = 0; s < steps.length; s++) {
-                    const step = steps[s];
-                    const x = edge === 'left' ? area.left + stagger
-                        : edge === 'right' ? area.right - w - stagger
-                            : a.x - w / 2 + step * (w + gap);
-                    const y = edge === 'top' ? area.top + stagger
-                        : edge === 'bottom' ? area.bottom - h - stagger
-                            : a.y - h / 2 + step * (h + gap);
-                    if (x < area.left || y < area.top || x + w > area.right || y + h > area.bottom) continue;
-                    const rect = { x: x, y: y, w: w, h: h };
-                    if (rectsOverlap(rect, core)) continue;   // 中央留空：宁可换方向、换格，也不摆到画面中间
-                    const padded = { x: x - gap, y: y - gap, w: w + gap * 2, h: h + gap * 2 };
-                    let blocked = false;
-                    for (let p = 0; p < placed.length; p++) {
-                        if (rectsOverlap(padded, placed[p])) { blocked = true; break; }
-                    }
-                    if (blocked) continue;
-                    let cost = Math.abs(step) * 70 + edgeRank * 30;
-                    if (towardCenter && step * towardCenter < 0) cost += 8;
-                    if (cluster) cost += 900 * (overlapArea(rect, cluster) / (w * h));
-                    if (!best || cost < best.cost) best = { x: x, y: y, edge: edge, cost: cost };
-                }
+        const candidates = provinceRingCandidates(item, area, placed, gap);
+        const emptyAt = (candidate, gapUsed, avoidMarkers) => {
+            const rect = { x: candidate.x, y: candidate.y, w: w, h: h };
+            if (avoidMarkers && provinceRectContainsMarker(rect, anchors)) return null;
+            const padded = {
+                x: rect.x - gapUsed,
+                y: rect.y - gapUsed,
+                w: rect.w + gapUsed * 2,
+                h: rect.h + gapUsed * 2
+            };
+            for (let p = 0; p < placed.length; p++) {
+                if (rectsOverlap(padded, placed[p])) return null;
             }
-        });
-        if (best) return best;
+            return rect;
+        };
 
-        // 四条边都排满了：在**外圈**做一次粗网格扫描（跳过中央留空区）。
-        // 同时记两个候选：完全不压别人的空位；以及"压得最少"的位置 ——
-        // 后者是"实在排不下就叠加"的实现，挑压得最少的能避免几张卡挤成一坨。
-        const stepX = Math.max(40, Math.round(w / 2));
-        const stepY = Math.max(30, Math.round(h / 2));
-        let gridBest = null;
-        let gridSoft = null;
-        for (let gy = area.top; gy + h <= area.bottom; gy += stepY) {
-            for (let gx = area.left; gx + w <= area.right; gx += stepX) {
-                const rect = { x: gx, y: gy, w: w, h: h };
-                if (rectsOverlap(rect, core)) continue;
-                const padded = { x: gx - gap, y: gy - gap, w: w + gap * 2, h: h + gap * 2 };
-                let overlapSum = 0;
-                for (let p = 0; p < placed.length; p++) {
-                    if (rectsOverlap(padded, placed[p])) overlapSum += overlapArea(rect, placed[p]);
+        // 正常间距排不下时，先缩到 4px，再允许相邻卡片仅贴边不重叠；
+        // 这比直接跳进“压住另一张卡”的兜底安全得多。
+        const attempts = [
+            { gapUsed: gap, avoidMarkers: true },
+            { gapUsed: Math.min(gap, PROVINCE_LAYOUT_FALLBACK_GAP), avoidMarkers: true },
+            { gapUsed: 0, avoidMarkers: true },
+            { gapUsed: 0, avoidMarkers: false }
+        ];
+        for (let attempt = 0; attempt < attempts.length; attempt++) {
+            const mode = attempts[attempt];
+            let best = null;
+            candidates.forEach(candidate => {
+                const rect = emptyAt(candidate, mode.gapUsed, mode.avoidMarkers);
+                if (!rect) return;
+                const edge = provinceNearestEdge(rect, area);
+                const cost = provinceSpotCost(rect, item, area, cluster, core, candidate);
+                if (!best || cost < best.cost) {
+                    best = { x: rect.x, y: rect.y, edge: edge.edge, cost: cost };
                 }
-                const d = Math.hypot(gx + w / 2 - a.x, gy + h / 2 - a.y);
-                if (!overlapSum) {
-                    if (!gridBest || d < gridBest.d) gridBest = { x: gx, y: gy, edge: edges[0], d: d };
-                } else if (!gridSoft || overlapSum < gridSoft.overlap) {
-                    gridSoft = { x: gx, y: gy, edge: edges[0], d: d, overlap: overlapSum };
-                }
+            });
+            if (best) {
+                return best;
             }
         }
-        if (gridBest) return { x: gridBest.x, y: gridBest.y, edge: gridBest.edge, cost: Infinity };
-        if (gridSoft) return { x: gridSoft.x, y: gridSoft.y, edge: gridSoft.edge, cost: Infinity };
 
-        // 最后兜底：真的没地方了，就落在首选方向（允许压住别的卡片），保证卡片不丢
-        const edge = edges[0];
-        const x = edge === 'left' ? area.left + stagger
-            : edge === 'right' ? area.right - w - stagger
-                : clampNumber(a.x - w / 2, area.left, Math.max(area.left, area.right - w));
-        const y = edge === 'top' ? area.top + stagger
-            : edge === 'bottom' ? area.bottom - h - stagger
-                : clampNumber(a.y - h / 2, area.top, Math.max(area.top, area.bottom - h));
-        return { x: x, y: y, edge: edge, cost: Infinity };
+        // 真正的容量不足：在所有候选里取“压得最少”的位置，避免几张卡叠成一坨。
+        let leastOverlap = null;
+        let leastOverlapArea = Infinity;
+        candidates.forEach(candidate => {
+            const rect = { x: candidate.x, y: candidate.y, w: w, h: h };
+            let overlapSum = 0;
+            placed.forEach(other => { overlapSum += overlapArea(rect, other); });
+            if (overlapSum < leastOverlapArea) {
+                leastOverlapArea = overlapSum;
+                const edge = provinceNearestEdge(rect, area);
+                leastOverlap = {
+                    x: rect.x,
+                    y: rect.y,
+                    edge: edge.edge,
+                    cost: Infinity
+                };
+            }
+        });
+        if (leastOverlap) return leastOverlap;
+
+        // 理论上不会走到这里（候选位包含四边最外层）；保留兜底避免丢失卡片。
+        return {
+            x: area.left,
+            y: area.top,
+            edge: 'left',
+            cost: Infinity
+        };
+    }
+
+    function provinceRingSlotTrack(start, end, size, gap, seed) {
+        const length = end - start;
+        const count = Math.max(1, Math.floor((length + gap) / (size + gap)));
+        if (count === 1) return [start];
+        const minSpan = count * size + (count - 1) * gap;
+        const slack = Math.max(0, length - minSpan);
+        const startOffset = Math.min(
+            slack * 0.35,
+            PROVINCE_RING_JITTER[seed % PROVINCE_RING_JITTER.length] * 0.65
+        );
+        let remaining = Math.max(0, slack - startOffset);
+        const weights = [];
+        for (let i = 0; i < count - 1; i++) {
+            weights.push(1 + PROVINCE_RING_GAP_JITTER[
+                (seed + i * 3) % PROVINCE_RING_GAP_JITTER.length
+            ]);
+        }
+        const weightSum = weights.reduce((sum, value) => sum + value, 0);
+        const extras = weights.map(value => Math.floor(remaining * value / weightSum));
+        let extraLeft = remaining - extras.reduce((sum, value) => sum + value, 0);
+        for (let i = 0; extraLeft > 0; i = (i + 1) % extras.length) {
+            extras[i] += 1;
+            extraLeft -= 1;
+        }
+
+        const values = [];
+        let cursor = start + startOffset;
+        for (let step = 0; step < count; step++) {
+            values.push(cursor);
+            cursor += size + gap + (extras[step] || 0);
+        }
+        return values;
+    }
+
+    // 满载时不再逐张抢位，而是提前铺好四边的错落环带卡位，再按“自己标记最近”
+    // 全局分配。卡位只存在于外圈各层，所以既不会排成整屏网格，也不会把空间切碎。
+    function reflowProvinceRingLayout(area, items, lockedRects, gap, anchors) {
+        if (!items.length) return null;
+        const maxW = Math.max.apply(null, items.map(item => item.w));
+        const maxH = Math.max.apply(null, items.map(item => item.h));
+        const edges = [
+            { name: 'left', vertical: true },
+            { name: 'right', vertical: true },
+            { name: 'top', vertical: false },
+            { name: 'bottom', vertical: false }
+        ];
+        const slots = [];
+        edges.forEach((edge, edgeIndex) => {
+            const size = edge.vertical ? maxH : maxW;
+            const start = edge.vertical ? area.top : area.left;
+            const end = edge.vertical ? area.bottom : area.right;
+            const depthPitch = (edge.vertical ? maxW : maxH) +
+                gap + PROVINCE_RING_DEPTH_GAP;
+            for (let depth = 0; depth <= PROVINCE_RING_DEPTH_LIMIT; depth++) {
+                const track = provinceRingSlotTrack(
+                    start, end, size, gap, edgeIndex * 17 + depth * 7
+                );
+                track.forEach((position, trackIndex) => {
+                    const depthJitter = PROVINCE_RING_JITTER[
+                        (edgeIndex * 5 + depth * 3 + trackIndex) % PROVINCE_RING_JITTER.length
+                    ] * 0.2;
+                    let x = 0;
+                    let y = 0;
+                    if (edge.name === 'left') {
+                        x = area.left + depth * depthPitch + depthJitter;
+                        y = position;
+                    } else if (edge.name === 'right') {
+                        x = area.right - maxW - depth * depthPitch - depthJitter;
+                        y = position;
+                    } else if (edge.name === 'top') {
+                        x = position;
+                        y = area.top + depth * depthPitch + depthJitter;
+                    } else {
+                        x = position;
+                        y = area.bottom - maxH - depth * depthPitch - depthJitter;
+                    }
+                    if (x < area.left - 0.5 || y < area.top - 0.5 ||
+                        x + maxW > area.right + 0.5 || y + maxH > area.bottom + 0.5) {
+                        return;
+                    }
+                    slots.push({
+                        x: x,
+                        y: y,
+                        w: maxW,
+                        h: maxH,
+                        depth: depth,
+                        edge: edge.name
+                    });
+                });
+            }
+        });
+
+        const attempts = [
+            { gapUsed: gap, avoidMarkers: true },
+            { gapUsed: Math.min(gap, PROVINCE_LAYOUT_FALLBACK_GAP), avoidMarkers: true },
+            { gapUsed: 0, avoidMarkers: true },
+            { gapUsed: 0, avoidMarkers: false }
+        ];
+        const centerX = (area.left + area.right) / 2;
+        const centerY = (area.top + area.bottom) / 2;
+        slots.forEach(slot => {
+            slot.angle = Math.atan2(
+                slot.y + slot.h / 2 - centerY,
+                slot.x + slot.w / 2 - centerX
+            );
+        });
+
+        // 先选出一组彼此绝对不重叠的环带卡位，再把城市配到最近的卡位。
+        // 这比逐张抢位更稳定：外圈先满，缺位才向内层拿，且不会互相把路堵死。
+        let selected = null;
+        let maxPicked = 0;
+        for (let attempt = 0; attempt < attempts.length && !selected; attempt++) {
+            const mode = attempts[attempt];
+            const usable = slots.filter(slot => {
+                const cell = {
+                    x: slot.x - mode.gapUsed,
+                    y: slot.y - mode.gapUsed,
+                    w: slot.w + mode.gapUsed * 2,
+                    h: slot.h + mode.gapUsed * 2
+                };
+                if (lockedRects.some(rect => rectsOverlap(cell, rect))) return false;
+                if (mode.avoidMarkers && provinceRectContainsMarker(slot, anchors)) return false;
+                return true;
+            });
+            const orders = [
+                (a, b) => a.depth - b.depth || a.angle - b.angle,
+                (a, b) => a.depth - b.depth || b.angle - a.angle,
+                (a, b) => a.depth - b.depth || a.x - b.x || a.y - b.y,
+                (a, b) => a.depth - b.depth || a.y - b.y || a.x - b.x
+            ];
+            for (let order = 0; order < orders.length && !selected; order++) {
+                const ordered = usable.slice().sort(orders[order]);
+                const picked = [];
+                for (let i = 0; i < ordered.length && picked.length < items.length; i++) {
+                    const slot = ordered[i];
+                    const cell = {
+                        x: slot.x - mode.gapUsed,
+                        y: slot.y - mode.gapUsed,
+                        w: slot.w + mode.gapUsed * 2,
+                        h: slot.h + mode.gapUsed * 2
+                    };
+                    if (picked.some(other => rectsOverlap(cell, other))) continue;
+                    picked.push(slot);
+                }
+                maxPicked = Math.max(maxPicked, picked.length);
+                if (picked.length >= items.length) selected = picked;
+            }
+        }
+        if (!selected) {
+            console.warn('[footprint] ring slot selection failed max=' +
+                maxPicked + '/' + items.length + ' slots=' + slots.length);
+            return null;
+        }
+
+        const pairs = [];
+        items.forEach(item => {
+            selected.forEach(slot => {
+                const x = slot.x + (slot.w - item.w) / 2;
+                const y = slot.y + (slot.h - item.h) / 2;
+                pairs.push({
+                    item: item,
+                    slot: slot,
+                    x: x,
+                    y: y,
+                    distance: Math.hypot(
+                        x + item.w / 2 - item.anchor.x,
+                        y + item.h / 2 - item.anchor.y
+                    )
+                });
+            });
+        });
+        pairs.sort((a, b) => a.distance - b.distance);
+        const assigned = new Map();
+        const usedSlots = new Set();
+        pairs.forEach(pair => {
+            if (assigned.has(pair.item) || usedSlots.has(pair.slot)) return;
+            assigned.set(pair.item, {
+                x: pair.x,
+                y: pair.y,
+                edge: pair.slot.edge
+            });
+            usedSlots.add(pair.slot);
+        });
+        if (assigned.size !== items.length) {
+            console.warn('[footprint] ring assignment failed ' +
+                assigned.size + '/' + items.length + ' slots=' + selected.length);
+            return null;
+        }
+        return assigned;
     }
 
     function layoutProvinceCards() {
@@ -7467,7 +7811,7 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
         const spanX = Math.max(1, area.right - area.left);
         const spanY = Math.max(1, area.bottom - area.top);
         // 卡片多时只把同侧间距收紧一点（12 → 8），卡片本身尺寸不变；
-        // 再密就交给"就近边外扩 → 网格兜底 → 堆叠"这套机制。
+        // 再密就继续沿四边增加环层，不进入贯穿视口的规则网格。
         const gap = provinceCardsItems.length > PROVINCE_CARD_DENSE_LIMIT ? 8 : PROVINCE_CARD_GAP;
 
         // 1) 锚点：每张卡跟着自己那座城市的标记
@@ -7480,28 +7824,49 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
 
         // 2) 标记群包围盒 + 已经拖拽定位的卡片（它们位置固定，先占位当障碍）
         const cluster = active.length ? markerClusterRect(active) : null;
-        const placed = [];
-        provinceCardsItems.forEach(item => {
-            if (item.locked && item.anchor) {
-                placed.push({ x: item.x, y: item.y, w: item.w, h: item.h });
-            }
-        });
+        const lockedItems = active.filter(item => item.locked);
+        const lockedRects = lockedItems.map(item => ({
+            x: item.x, y: item.y, w: item.w, h: item.h
+        }));
+        const placed = lockedRects.slice();
+        const unlockedActive = active.filter(item => !item.locked);
 
         // 3) 最贴边的先排：它可选的方向最少，先把位置占住
-        active
+        const anchors = active.map(item => item.anchor);
+        let needsRingReflow = false;
+        unlockedActive
             .slice()
             .sort((a, b) => provinceEdgeAffinity(a, area, spanX, spanY) -
                 provinceEdgeAffinity(b, area, spanX, spanY))
             .forEach(item => {
-                const spot = pickProvinceCardSpot(item, area, spanX, spanY, cluster, placed, gap);
+                const spot = pickProvinceCardSpot(
+                    item, area, spanX, spanY, cluster, placed, gap, anchors
+                );
+                if (!Number.isFinite(spot.cost)) needsRingReflow = true;
                 item.x = spot.x;
                 item.y = spot.y;
                 item.edge = spot.edge;
                 placed.push({ x: spot.x, y: spot.y, w: item.w, h: item.h });
-                applyProvinceCardBox(item);
             });
 
-        // 4) 转到地球背面（没有屏幕坐标）的卡片保持原位，只由连线层负责淡出
+        // 4) 环带接近满载时，在外圈各层之间重新分配；仍然不进入中央规则网格。
+        if (needsRingReflow) {
+            const reflowed = reflowProvinceRingLayout(
+                area, unlockedActive, lockedRects, gap, anchors
+            );
+            if (reflowed) {
+                reflowed.forEach((spot, item) => {
+                    item.x = spot.x;
+                    item.y = spot.y;
+                    item.edge = spot.edge;
+                });
+            }
+        }
+
+        // 5) 应用自动布局（拖拽过的卡片位置保持不变）
+        unlockedActive.forEach(applyProvinceCardBox);
+
+        // 6) 转到地球背面（没有屏幕坐标）的卡片保持原位，只由连线层负责淡出
         provinceCardsItems.forEach(item => {
             if (!item.anchor) applyProvinceCardBox(item);
         });

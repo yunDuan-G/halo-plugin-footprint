@@ -966,6 +966,25 @@ const populateTimeline = async (map) => {
         // 最后将整个元素添加到时间线中
         timeline.appendChild(timelineItem);
 
+        // 标题悬停会放大并上跃；描述行数越多，标题的静态位置越靠上。
+        // 按卡片当前的真实布局动态限制上移距离，避免长描述卡片把标题顶出媒体区。
+        const fitTimelineTitleHover = () => {
+            const anchor = locationDiv.querySelector('.timeline-title-anchor');
+            if (!anchor) return;
+            const compact = window.innerWidth <= 768;
+            const desiredShift = compact ? -70 : -72;
+            const scale = compact ? 1.2 : 1.28;
+            const safeInset = 10;
+            const mediaTop = timelineMedia.getBoundingClientRect().top;
+            const baseBottom = locationDiv.getBoundingClientRect().bottom;
+            const minShift = mediaTop + safeInset -
+                (baseBottom - anchor.offsetHeight * scale);
+            const shift = Math.max(desiredShift, Math.min(0, minShift));
+            anchor.style.setProperty('--timeline-title-shift', shift.toFixed(1) + 'px');
+        };
+        contentCard.addEventListener('pointerenter', fitTimelineTitleHover);
+        contentCard.addEventListener('focusin', fitTimelineTitleHover);
+
         // 添加点击事件处理
         detailBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
@@ -2420,13 +2439,16 @@ const addFootprintMarkers = async (map, footprintData) => {
         photoWallConnector.style.transform = `rotate(${Math.atan2(deltaY, deltaX)}rad)`;
     };
 
-    const updateMobilePhotoWallLayout = () => {
-        if (!isMobile || !photoWallElement) return;
+    // 桌面端描述完整显示，标题区会随文字换行变高；移动端仍限制两行。
+    // 两边统一按标题区真实高度设置画布顶部，避免描述和图片互相覆盖。
+    const updatePhotoWallLayout = () => {
+        if (!photoWallElement) return;
         const heading = photoWallElement.querySelector('.photo-wall-heading');
         const canvas = photoWallElement.querySelector('.photo-wall-canvas');
         if (!heading || !canvas) return;
 
-        const canvasTop = Math.max(76, heading.offsetTop + heading.offsetHeight + 12);
+        const minTop = isMobile ? 76 : 88;
+        const canvasTop = Math.max(minTop, heading.offsetTop + heading.offsetHeight + 12);
         photoWallElement.style.setProperty('--photo-wall-canvas-top', `${canvasTop}px`);
     };
 
@@ -2493,10 +2515,8 @@ const addFootprintMarkers = async (map, footprintData) => {
         }, {passive: false});
         photoWallLayer.appendChild(photoWallElement);
 
-        if (isMobile) {
-            updateMobilePhotoWallLayout();
-            requestAnimationFrame(updateMobilePhotoWallLayout);
-        }
+        updatePhotoWallLayout();
+        requestAnimationFrame(updatePhotoWallLayout);
         if (!isMobile) {
             photoWallConnector = document.createElement('span');
             photoWallConnector.className = 'photo-wall-connector';
@@ -2505,8 +2525,11 @@ const addFootprintMarkers = async (map, footprintData) => {
         }
     };
 
-    const mobilePhotoWallResizeHandler = debounce(updateMobilePhotoWallLayout, 150);
-    window.addEventListener('resize', mobilePhotoWallResizeHandler);
+    const photoWallResizeHandler = debounce(() => {
+        updatePhotoWallLayout();
+        positionPhotoWall();
+    }, 150);
+    window.addEventListener('resize', photoWallResizeHandler);
 
     const handlePhotoWallClick = (e) => {
         e.stopPropagation();
@@ -2825,7 +2848,7 @@ const addFootprintMarkers = async (map, footprintData) => {
     // 清理函数
     const cleanup = () => {
         closeCurrentMarker();
-        window.removeEventListener('resize', mobilePhotoWallResizeHandler);
+        window.removeEventListener('resize', photoWallResizeHandler);
         if (closeActiveFootprint === closeCurrentMarker) {
             closeActiveFootprint = null;
         }

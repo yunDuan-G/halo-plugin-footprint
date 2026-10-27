@@ -96,7 +96,58 @@ tasks.named('classes') {
     dependsOn tasks.named('minifyFrontend')
 }
 
+def haloAdminUsername = providers.gradleProperty('haloAdminUsername')
+    .orElse(providers.environmentVariable('HALO_ADMIN_USERNAME'))
+def haloAdminPassword = providers.gradleProperty('haloAdminPassword')
+    .orElse(providers.environmentVariable('HALO_ADMIN_PASSWORD'))
+
 halo {
     version = '2.26.0'
     debug = true
+
+    // Halo devtools 默认使用 admin/admin 探测插件状态。已有开发数据
+    // 通常改过管理员密码，此时需通过环境变量或 -P 参数提供真实凭据。
+    if (haloAdminUsername.isPresent()) {
+        superAdminUsername = haloAdminUsername.get()
+    }
+    if (haloAdminPassword.isPresent()) {
+        superAdminPassword = haloAdminPassword.get()
+    }
+}
+
+/*
+ * Halo 的 devtools 插件只在 generatePluginComponentsIdx 执行时，
+ * 临时把组件索引加入 jar 的拷贝规则。若 jar 被 Gradle 判定为
+ * UP-TO-DATE，生成任务不会执行，产物就会缺少
+ * META-INF/plugin-components.idx，插件 Bean 也不会被注册。
+ *
+ * 在这里把索引声明成 jar 的固定输入，确保增量构建和 clean build
+ * 都能稳定产出可加载的插件包。
+ */
+def pluginComponentsIndex = layout.buildDirectory.file('tmp/META-INF/plugin-components.idx')
+
+tasks.named('generatePluginComponentsIdx') {
+    outputs.file(pluginComponentsIndex)
+}
+
+/*
+ * Halo devtools 的开发容器以 build/resources/main 作为插件资源根目录。
+ * 组件索引只生成到 build/tmp，因此还需同步一份到开发模式的类路径。
+ */
+def syncDevPluginComponentsIndex = tasks.register('syncDevPluginComponentsIndex', Copy) {
+    dependsOn tasks.named('generatePluginComponentsIdx')
+    from(pluginComponentsIndex)
+    into layout.buildDirectory.dir('resources/main/META-INF')
+}
+
+tasks.named('jar') {
+    inputs.file(pluginComponentsIndex)
+    from(pluginComponentsIndex) {
+        into 'META-INF'
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.named('classes') {
+    dependsOn syncDevPluginComponentsIndex
 }
