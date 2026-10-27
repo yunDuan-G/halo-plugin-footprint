@@ -523,7 +523,7 @@ function nextTicketStopSuggestion() {
     // 与城市聚合同一套键：adcode 优先，避免同一座城市因为写法不同被当成"没去过"
     const ticketCities = new Set(ticketItems.map(fp => deps.cityKeyOf(fp)).filter(Boolean));
     const candidates = [];
-    deps.FOOTPRINTS().forEach(fp => {
+    deps.footprints().forEach(fp => {
         if (ticketImageUrl(fp.ticketImage) || !fp.city) return;
         const key = deps.cityKeyOf(fp);
         if (!key || ticketCities.has(key) || candidates.includes(fp.city)) return;
@@ -657,51 +657,49 @@ export function wrapTicketLetterText(ctx, text, maxWidth) {
 function ticketLetterCanvas(fp, image) {
     const meta = ticketMeta(fp);
     const canvas = document.createElement('canvas');
-    canvas.width = 900;
-    canvas.height = 1280;
+    canvas.width = 1280;
+    canvas.height = 1100;
     const ctx = canvas.getContext('2d');
     const cream = '#f3eee2';
     const ink = '#35423d';
     const muted = '#8b7865';
     const accent = '#9b704e';
-    const bg = ctx.createLinearGradient(0, 0, 0, 1280);
+    const bg = ctx.createLinearGradient(0, 0, 0, 1100);
     bg.addColorStop(0, '#e8e0d2');
     bg.addColorStop(1, '#d6cbb8');
     ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, 900, 1280);
+    ctx.fillRect(0, 0, 1280, 1100);
     ctx.strokeStyle = 'rgba(118,92,61,0.34)';
     ctx.lineWidth = 3;
-    ctx.strokeRect(24, 24, 852, 1232);
+    ctx.strokeRect(24, 24, 1232, 1052);
 
     ctx.fillStyle = accent;
     ctx.font = '600 24px ui-monospace, Consolas, monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('A LETTER FROM A TICKET', 450, 78);
+    ctx.fillText('A LETTER FROM A TICKET', 640, 76);
     ctx.fillStyle = ink;
     ctx.font = '400 44px "PingFang SC", "Microsoft YaHei", "Noto Serif SC", serif';
-    ctx.fillText('未寄出的明信片', 450, 132);
+    ctx.fillText('未寄出的明信片', 640, 128);
 
-    // 票根图直接贴在纸面上：不垫白卡、不加粗边框，按内容宽度铺满，
-    // 高度由图片自身比例决定；下面的正文起点跟着图高浮动，长图短图都不会顶到文字。
-    const shotX = 40;
-    const shotW = 820;
-    const shotTop = 168;
-    const shotMaxH = 520;
-    let shotBottom = shotTop + 360;
+    // 横向明信片采用上下结构：票根完整放在上方区域，正文在下方通栏排布。
+    // 用 contain（取宽高比例较小的一边）保证任何竖版/横版票根都不会被裁掉。
+    const shotX = 120;
+    const shotW = 1040;
+    const shotTop = 148;
+    const shotH = 480;
+    const shotBottom = shotTop + shotH;
     if (image) {
-        const scale = Math.min(shotW / image.width, shotMaxH / image.height);
-        const dw = image.width * scale;
-        const dh = image.height * scale;
-        const dx = shotX + (shotW - dw) / 2;
-        ctx.drawImage(image, dx, shotTop, dw, dh);
-        shotBottom = shotTop + dh;
+        const scale = Math.min(shotW / image.width, shotH / image.height);
+        const drawW = image.width * scale;
+        const drawH = image.height * scale;
+        const drawX = shotX + (shotW - drawW) / 2;
+        const drawY = shotTop + (shotH - drawH) / 2;
+        ctx.drawImage(image, drawX, drawY, drawW, drawH);
     } else {
-        ctx.fillStyle = '#e4dccd';
-        ctx.fillRect(shotX, shotTop, shotW, shotBottom - shotTop);
         ctx.fillStyle = muted;
         ctx.font = '400 150px "Noto Serif SC", "Songti SC", serif';
         ctx.textAlign = 'center';
-        ctx.fillText((fp.city || '?').charAt(0), 450, shotTop + 260);
+        ctx.fillText((fp.city || '?').charAt(0), 640, shotTop + 312);
     }
     // 图下小字：城市 · 日期 · 票根名
     ctx.fillStyle = muted;
@@ -709,9 +707,15 @@ function ticketLetterCanvas(fp, image) {
     ctx.textAlign = 'center';
     ctx.fillText(
         [fp.city || meta.route, meta.date, fp.name || meta.title].filter(Boolean).join(' · '),
-        450,
+        640,
         shotBottom + 44
     );
+    ctx.strokeStyle = 'rgba(118,92,61,0.2)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(64, 704);
+    ctx.lineTo(1216, 704);
+    ctx.stroke();
 
     // 信件正文
     const desc = String(fp.description || '').trim();
@@ -725,21 +729,21 @@ function ticketLetterCanvas(fp, image) {
         descText + '当时没有说出口的话，都留在这张纸里了。\n' +
         '—— 一张票根，代替当时的我寄出。';
     ctx.fillStyle = ink;
-    ctx.font = '400 30px "PingFang SC", "Microsoft YaHei", "Noto Serif SC", serif';
+    ctx.font = '400 25px "PingFang SC", "Microsoft YaHei", "Noto Serif SC", serif';
     ctx.textAlign = 'left';
-    const lines = wrapTicketLetterText(ctx, letter, 760);
-    const lineHeight = 46;
-    const startY = shotBottom + 106;
-    // 正文行数按剩余高度算：图高变化时不会把落款挤出去
-    const maxLines = Math.max(4, Math.floor((1224 - startY) / lineHeight));
+    const lines = wrapTicketLetterText(ctx, letter, 1120);
+    const lineHeight = 31;
+    const startY = 744;
+    // 下方通栏正文按剩余高度自动限行，底部署名不会被挤出画布。
+    const maxLines = Math.max(4, Math.floor((1002 - startY) / lineHeight));
     lines.slice(0, maxLines).forEach((line, i) => {
-        ctx.fillText(line, 70, startY + i * lineHeight);
+        ctx.fillText(line, 80, startY + i * lineHeight);
     });
 
     ctx.textAlign = 'right';
     ctx.fillStyle = muted;
     ctx.font = '26px "PingFang SC", "Microsoft YaHei", serif';
-    ctx.fillText('旅行记忆 · 票根收藏', 852, 1245);
+    ctx.fillText('旅行记忆 · 票根收藏', 1216, 1044);
     return canvas;
 }
 
@@ -1234,7 +1238,7 @@ function finishTicketReplay() {
     }
     // 重走只放映「带票根图」的足迹，这里说明一下总数，免得用户以为别的足迹丢了
     if (ticketReplayEndNote) {
-        const withoutTicket = Math.max(0, deps.FOOTPRINTS().length - ticketItems.length);
+    const withoutTicket = Math.max(0, deps.footprints().length - ticketItems.length);
         ticketReplayEndNote.textContent = withoutTicket
             ? '重走只放映有票根图的足迹，另有 ' + withoutTicket + ' 个足迹未附票根'
             : '';
@@ -1376,7 +1380,7 @@ export function ticketDate(value) {
 }
 
 export function ticketItemsFromFootprints() {
-    return deps.FOOTPRINTS().filter(fp =>
+    return deps.footprints().filter(fp =>
         ticketImageUrl(fp.ticketImage) &&
         (!ticketCityFilter || deps.cityKeyOf(fp) === ticketCityFilter));
 }
@@ -1858,7 +1862,6 @@ function reloadTicket(index) {
  */
 export function initTicketGallery() {
     ticketStripMode = !!((deps.footprintCfg() || {}).ticketGalleryStyle === 'strip');
-    ticketGalleryBtn.addEventListener('click', () => setTicketView(true));
     ticketGalleryBack.addEventListener('click', () => setTicketView(false));
     ticketModeArchiveBtn.addEventListener('click', () => setTicketViewMode('archive'));
     ticketModeReplayBtn.addEventListener('click', () => setTicketViewMode('replay'));

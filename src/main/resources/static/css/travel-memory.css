@@ -46,11 +46,6 @@
             width: 100%;
             height: 100%;
         }
-        /* 2D 模式：隐藏顶部导航栏，切换按钮改到高德页底部控制栏（#back3dBtn） */
-        body.mode-2d #topNav {
-            display: none;
-        }
-
         /* ============ 顶部导航栏（报头式极简） ============
            结构：左侧双语字标（行楷中文 + 字距拉宽的英文），
            右侧按“主操作 + 探索工具”分组；探索工具在放大/窄屏时
@@ -288,7 +283,6 @@
             gap: 2px;
             min-width: 0;
         }
-        #navMoreBtn,
         #navBackGlobeBtn {
             display: none;
             align-items: center;
@@ -298,13 +292,6 @@
             display: none;
         }
         #terrainBtn[hidden] ~ .nav-sep-tools { display: none; }
-
-        /* 放大模式（3D 看不到整球）：导航保持可见，追加“回到整球”入口；
-           PC 端工具仍平铺展示，窄屏才收进“工具”菜单 */
-        body.nav-zoom #navBackGlobeBtn { display: inline-flex; }
-        body.nav-zoom .nav-sep-back { display: inline-block; }
-        body.nav-zoom #backGlobeBtn.show,
-        body.nav-zoom #cityFillFloatBtn.show { display: none; }
 
         /* “工具”弹出菜单 */
         #topNav.tools-open .nav-group-more {
@@ -381,6 +368,407 @@
             #topNav .nav-group-primary { gap: 0; }
         }
 
+        /* ============ 足迹页悬浮工具 ============
+           不再复制全站导航。页面级视图切换常驻，内容与地球工具收进右下角面板。 */
+        body.mode-2d #footprintToolbar {
+            display: none;
+        }
+        #footprintToolbar {
+            position: fixed;
+            right: max(18px, env(safe-area-inset-right));
+            bottom: max(18px, env(safe-area-inset-bottom));
+            z-index: 10000;
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            user-select: none;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transform: translateY(8px);
+            transition: opacity 0.32s ease, visibility 0.32s, transform 0.32s ease;
+        }
+        #footprintToolbar.visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+        #footprintToolbar button {
+            appearance: none;
+            box-sizing: border-box;
+            min-height: 44px;
+            border: 1px solid rgba(247, 245, 241, 0.22);
+            background: rgba(6, 9, 15, 0.76);
+            color: rgba(247, 245, 241, 0.9);
+            font: 13px/1.35 "PingFang SC", "Microsoft YaHei", sans-serif;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            -webkit-backdrop-filter: blur(16px) saturate(130%);
+            backdrop-filter: blur(16px) saturate(130%);
+            transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease,
+                transform 0.18s ease;
+        }
+        #footprintToolbar button:hover:not(:disabled),
+        #footprintToolbar button.active,
+        #footprintToolbar button[aria-pressed="true"] {
+            color: #0b0e14;
+            background: rgba(247, 245, 241, 0.94);
+            border-color: rgba(247, 245, 241, 0.94);
+        }
+        #footprintToolbar button:focus-visible {
+            outline: 2px solid rgba(247, 245, 241, 0.82);
+            outline-offset: 3px;
+        }
+        #footprintToolbar button:disabled {
+            opacity: 0.36;
+            cursor: default;
+        }
+        .footprint-toolbar-primary {
+            padding: 0 15px;
+            border-radius: 999px;
+            color: #fff;
+            font-weight: 600;
+        }
+        .footprint-view-group {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            padding: 0;
+            box-sizing: border-box;
+            border: 0;
+            border-radius: 999px;
+            background: rgba(6, 9, 15, 0.72);
+            box-shadow: inset 0 0 0 1px rgba(247, 245, 241, 0.18);
+            -webkit-backdrop-filter: blur(16px) saturate(130%);
+            backdrop-filter: blur(16px) saturate(130%);
+        }
+        #footprintToolbar .footprint-view-group > button {
+            border: 0;
+            background: transparent;
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+        }
+        #footprintToolbar .footprint-view-group > button:first-child {
+            border-radius: 999px 0 0 999px;
+        }
+        #footprintToolbar .footprint-view-group > button:last-child {
+            border-radius: 0 999px 999px 0;
+        }
+        #footprintToolbar .footprint-view-group > button:hover:not(:disabled),
+        #footprintToolbar .footprint-view-group > button.active {
+            background: rgba(247, 245, 241, 0.94);
+            color: #0b0e14;
+        }
+        .footprint-toolbar-view {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 0 15px;
+            border-radius: 999px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .footprint-toolbar-view svg {
+            width: 16px;
+            height: 16px;
+            flex: 0 0 auto;
+        }
+        #footprintToolbar #backGlobeBtn {
+            position: static;
+            right: auto;
+            bottom: auto;
+            width: auto;
+            height: 44px;
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transform: none;
+        }
+        #footprintToolbar #backGlobeBtn:disabled {
+            opacity: 0.38;
+            pointer-events: none;
+        }
+        /* 视图组和地图设置使用完全一致的悬停反馈，避免图标按钮与文字按钮出现不同底色。 */
+        #footprintToolbar .footprint-view-group > button:hover:not(:disabled),
+        #footprintToolbar .footprint-view-group > button.active,
+        #footprintToolbar #navMoreBtn:hover:not(:disabled) {
+            color: #0b0e14;
+            background: rgba(247, 245, 241, 0.94);
+            border-color: transparent;
+            box-shadow: none;
+        }
+        .footprint-view-label-compact {
+            display: none;
+        }
+        .footprint-toolbar-trigger {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 15px;
+            border-radius: 999px;
+            font-weight: 600;
+        }
+        #navMoreBtn .nav-chev {
+            transition: transform 0.2s ease;
+        }
+        #footprintToolbar #navMoreBtn {
+            display: inline-flex;
+        }
+        #footprintToolbar.tools-open #navMoreBtn .nav-chev {
+            transform: rotate(180deg);
+        }
+        #footprintToolbar .nav-chev {
+            flex: 0 0 auto;
+            opacity: 0.76;
+        }
+        .footprint-tools-panel {
+            position: absolute;
+            right: 0;
+            bottom: calc(100% + 10px);
+            display: flex;
+            flex-direction: column;
+            width: min(286px, calc(100vw - 32px));
+            max-height: min(70dvh, 560px);
+            padding: 9px;
+            overflow-y: auto;
+            box-sizing: border-box;
+            border: 1px solid rgba(247, 245, 241, 0.14);
+            border-radius: 16px;
+            background: rgba(6, 9, 15, 0.94);
+            box-shadow: 0 22px 58px rgba(0, 0, 0, 0.48);
+            -webkit-backdrop-filter: blur(22px) saturate(135%);
+            backdrop-filter: blur(22px) saturate(135%);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transform: translateY(8px) scale(0.98);
+            transform-origin: right bottom;
+            transition: opacity 0.18s ease, visibility 0.18s, transform 0.18s ease;
+        }
+        #footprintToolbar.tools-open .footprint-tools-panel {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transform: translateY(0) scale(1);
+        }
+        .footprint-tools-section {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .footprint-tools-section + .footprint-tools-section {
+            margin-top: 7px;
+            padding-top: 7px;
+            border-top: 1px solid rgba(247, 245, 241, 0.1);
+        }
+        .footprint-tools-heading {
+            margin: 0;
+            padding: 7px 10px 5px;
+            color: rgba(247, 245, 241, 0.48);
+            font: 600 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+            letter-spacing: 0.16em;
+        }
+        #navTools .footprint-tool-item {
+            width: 100%;
+            padding: 9px 11px;
+            border: 0;
+            border-radius: 10px;
+            background: transparent;
+            text-align: left;
+            justify-content: space-between;
+        }
+        #navTools .footprint-tool-item:hover:not(:disabled),
+        #navTools .footprint-tool-item.active,
+        #navTools .footprint-tool-item[aria-pressed="true"] {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        #navTools .nav-menu {
+            position: relative;
+            width: 100%;
+        }
+        #navTools .nav-menu > button {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        #navTools #layerButtons.nav-menu-panel {
+            position: static;
+            display: flex;
+            width: 100%;
+            min-width: 0;
+            margin: 2px 0 0;
+            padding: 4px;
+            flex-direction: column;
+            gap: 2px;
+            border: 0;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.045);
+            box-shadow: none;
+            animation: none;
+        }
+        #navTools #layerButtons.nav-menu-panel[hidden] {
+            display: none;
+        }
+        #navTools #layerButtons.nav-menu-panel button {
+            display: flex;
+            width: 100%;
+            min-height: 44px;
+            padding: 8px 9px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            text-align: left;
+        }
+        #navTools #layerButtons.nav-menu-panel button.active::after {
+            content: "✓";
+            margin-left: auto;
+        }
+
+        /* 足迹内容常驻入口：与地图设置分开，避免内容功能藏在二级菜单里。 */
+        body.mode-2d #footprintContentDock {
+            display: none;
+        }
+        #footprintContentDock {
+            position: fixed;
+            left: 50%;
+            bottom: max(18px, env(safe-area-inset-bottom));
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 5px;
+            box-sizing: border-box;
+            border: 1px solid rgba(247, 245, 241, 0.16);
+            border-radius: 999px;
+            background: rgba(6, 9, 15, 0.78);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
+            -webkit-backdrop-filter: blur(18px) saturate(130%);
+            backdrop-filter: blur(18px) saturate(130%);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transform: translateX(-50%) translateY(8px);
+            transition: opacity 0.32s ease, visibility 0.32s, transform 0.32s ease;
+        }
+        #footprintContentDock.visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transform: translateX(-50%) translateY(0);
+        }
+        #footprintContentDock [hidden] {
+            display: none !important;
+        }
+        .footprint-content-action {
+            appearance: none;
+            min-width: 0;
+            min-height: 40px;
+            padding: 0 13px;
+            border: 0;
+            border-radius: 999px;
+            background: transparent;
+            color: rgba(247, 245, 241, 0.8);
+            font: 12px/1.35 "PingFang SC", "Microsoft YaHei", sans-serif;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: color 0.18s ease, background 0.18s ease;
+        }
+        .footprint-content-action:hover,
+        .footprint-content-action:focus-visible,
+        .footprint-content-action[aria-pressed="true"] {
+            color: #0b0e14;
+            background: rgba(247, 245, 241, 0.94);
+        }
+        .footprint-content-action:focus-visible {
+            outline: 2px solid rgba(247, 245, 241, 0.82);
+            outline-offset: 2px;
+        }
+        .footprint-content-action:disabled {
+            opacity: 0.42;
+            cursor: default;
+        }
+        .footprint-content-label-compact {
+            display: none;
+        }
+        .settings-icon {
+            flex: 0 0 auto;
+        }
+
+        @media (max-width: 820px) {
+            #footprintContentDock {
+                left: max(10px, env(safe-area-inset-left));
+                right: max(10px, env(safe-area-inset-right));
+                bottom: max(10px, env(safe-area-inset-bottom));
+                transform: translateY(8px);
+            }
+            #footprintContentDock.visible {
+                transform: translateY(0);
+            }
+            .footprint-content-action {
+                flex: 1 1 0;
+                padding: 0 7px;
+                font-size: 12px;
+            }
+            .footprint-content-label-full {
+                display: none;
+            }
+            .footprint-content-label-compact {
+                display: inline;
+            }
+            #footprintToolbar {
+                bottom: max(68px, calc(env(safe-area-inset-bottom) + 68px));
+            }
+            #backGlobeBtn {
+                bottom: max(124px, calc(env(safe-area-inset-bottom) + 124px));
+            }
+            #cityFillFloatBtn {
+                bottom: max(170px, calc(env(safe-area-inset-bottom) + 170px));
+            }
+        }
+
+        @media (max-width: 520px) {
+            #footprintToolbar {
+                right: max(12px, env(safe-area-inset-right));
+            }
+            .footprint-toolbar-primary {
+                padding: 0 13px;
+                font-size: 12px !important;
+            }
+            .footprint-toolbar-trigger {
+                width: 44px;
+                padding: 0;
+                justify-content: center;
+            }
+            .footprint-toolbar-trigger span {
+                display: none;
+            }
+            .footprint-view-label-full {
+                display: none;
+            }
+            .footprint-view-label-compact {
+                display: inline;
+            }
+            .footprint-toolbar-view {
+                padding: 0 10px;
+            }
+            .footprint-tools-panel {
+                width: min(270px, calc(100vw - 24px));
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #footprintToolbar,
+            .footprint-tools-panel,
+            #navMoreBtn .nav-chev {
+                transition: none;
+            }
+        }
+
         /* 左下角状态/版权提示 */
         #status {
             position: fixed;
@@ -419,7 +807,7 @@
         #backGlobeBtn,
         #cityFillFloatBtn {
             position: fixed;
-            right: 24px;
+            right: max(24px, env(safe-area-inset-right));
             z-index: 9998;
             width: 38px;
             height: 38px;
@@ -439,10 +827,10 @@
             transition: opacity 0.35s ease, visibility 0.35s, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
         }
         #backGlobeBtn {
-            bottom: 24px;
+            bottom: max(82px, calc(env(safe-area-inset-bottom) + 82px));
         }
         #cityFillFloatBtn {
-            bottom: 70px;
+            bottom: max(128px, calc(env(safe-area-inset-bottom) + 128px));
         }
         #backGlobeBtn svg,
         #cityFillFloatBtn svg {
@@ -454,6 +842,12 @@
             opacity: 1;
             visibility: visible;
             pointer-events: auto;
+        }
+        body.footprint-tools-open #backGlobeBtn.show,
+        body.footprint-tools-open #cityFillFloatBtn.show {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
         }
         #cityFillFloatBtn.active {
             background: #f7f5f1;
@@ -474,7 +868,9 @@
 
         /* 详情卡打开时，右下角浮动按钮让位，避免遮挡卡片 */
         body.card-open #backGlobeBtn.show,
-        body.card-open #cityFillFloatBtn.show {
+        body.card-open #cityFillFloatBtn.show,
+        body.card-open #footprintToolbar,
+        body.card-open #footprintContentDock {
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
@@ -1674,6 +2070,8 @@
             /* 尺寸由 JS 按每张图片的实际宽高比设置；这里只是尚未测量时的兜底 */
             width: 160px;
             height: 120px;
+            padding: 0;
+            box-sizing: border-box;
             border-radius: 8px;
             overflow: hidden;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
@@ -1689,10 +2087,11 @@
             width: 100%;
             height: 100%;
             background-position: center;
-            /* contain：极端比例（被上下限夹过）时也不会裁掉画面，最多两侧留一点底色 */
-            background-size: contain;
+            /* 容器已经按原图比例计算，因此 cover 只处理边框/像素取整造成的缝隙，
+               不再让深色按钮底板从两侧或上下透出来。 */
+            background-size: cover;
             background-repeat: no-repeat;
-            object-fit: contain;   /* <img> 走这条：同样保持比例、不裁切 */
+            object-fit: cover;
             opacity: 0;
             transition: opacity 0.25s ease;
             pointer-events: none;
@@ -3884,7 +4283,16 @@
         }
 
         /* ============ 票根档案墙 ============ */
-        body.ticket-gallery-open #topNav {
+        body.ticket-gallery-open #footprintToolbar,
+        body.ticket-gallery-open #footprintContentDock,
+        body.ticket-gallery-open #pageIntro {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.18s ease, visibility 0.18s;
+        }
+        body.memory-shelf-open #footprintToolbar,
+        body.memory-shelf-open #footprintContentDock {
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
@@ -5182,9 +5590,11 @@
         /* ============ 城市卡片墙（城市总览目录） ============ */
         /* 打开全屏浮层时顶栏要立刻让位：只写 visibility 会被顶栏自身的 0.6s 过渡拖住，
            结果浮层淡入的这段时间里顶栏一直以 opacity:1 透在下面，约 0.6s 后才突然移除 */
-        body.city-view-open #topNav,
+        body.city-view-open #footprintToolbar,
+        body.city-view-open #footprintContentDock,
         body.city-view-open #pageIntro,
-        body.city-wall-open #topNav,
+        body.city-wall-open #footprintToolbar,
+        body.city-wall-open #footprintContentDock,
         body.city-wall-open #pageIntro {
             opacity: 0;
             visibility: hidden;
@@ -7045,8 +7455,8 @@
         /* 每页用自己的画布比例；宽度取「最大宽」和「最大高换算出的宽」里更紧的一边，
            高度永远不会被截，也就不会出现左右留白 */
         .ticket-letter-stage {
-            --media-ratio: 0.703125;      /* 写信画布 900 × 1280 */
-            --media-aspect: 900 / 1280;
+            --media-ratio: 1.163636;      /* 写信画布 1280 × 1100，放大票根后的横向上下结构 */
+            --media-aspect: 1280 / 1100;
         }
         .postcard-stage {
             --media-ratio: 0.75;          /* 城市明信片画布 1080 × 1440 */
@@ -7129,6 +7539,12 @@
             height: auto;
             display: block;
             object-fit: contain;
+        }
+        .ticket-letter-stage .ticket-letter-skeleton,
+        .ticket-letter-stage #ticketLetterImg {
+            /* 横向写信页需要比竖向城市明信片更宽的最大宽度 */
+            --media-max-w: min(920px, 94vw);
+            --media-max-h: min(72vh, 640px);
         }
         .ticket-letter-stage.is-loading #ticketLetterImg,
         .ticket-letter-stage.is-error #ticketLetterImg,

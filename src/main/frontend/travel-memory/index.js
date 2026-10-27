@@ -248,7 +248,7 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     // 1.120 中设置 zoomFactor 不会生效（滚轮逻辑读取的是私有字段 _zoomFactor）。
     // 这里做特性检测：新版本用公开属性，1.120 用私有字段回退。
     const cameraController = viewer.scene.screenSpaceCameraController;
-    const WHEEL_ZOOM_FACTOR = 3.5;   // 滚轮灵敏度系数（默认 5，越小滚一格缩放越精细）
+    const WHEEL_ZOOM_FACTOR = 1.8;   // 滚轮灵敏度系数（默认 5；降到 1.5，单格缩放更细）
     if ('zoomFactor' in cameraController) {
         cameraController.zoomFactor = WHEEL_ZOOM_FACTOR;
     } else {
@@ -300,24 +300,24 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
         });
     }
 
-    // 3D 地球品牌文案：标题/描述使用“3D 地球”Tab 的独立配置（globeTitle/globeDesc），
-    // 导航栏英文名保持默认 "Travel Memory"，不再从基本设置读取。
+    // 3D 地球品牌文案：标题/描述使用“3D 地球”Tab 的独立配置（globeTitle/globeDesc）。
+    // 页面不再复制全站导航或双语报头，站点名称由主题导航负责。
     const footprintCfg = window.FOOTPRINT_CONFIG || {};
-    const navBrandZh = document.querySelector('.nav-brand-zh');
     const introTitleEl = document.querySelector('.intro-title');
     const introDescEl = document.querySelector('.intro-desc');
-    if (navBrandZh && footprintCfg.globeTitle) navBrandZh.textContent = footprintCfg.globeTitle;
     if (introTitleEl && footprintCfg.globeTitle) introTitleEl.textContent = footprintCfg.globeTitle;
     if (introDescEl && footprintCfg.globeDesc) introDescEl.textContent = footprintCfg.globeDesc;
 
     // ================= 左侧标题卡（仅 3D，整球视图显示） =================
     const pageIntro = document.getElementById('pageIntro');
-    const topNav = document.getElementById('topNav');   // 导航栏与标题卡同步显隐
+    // 开发热更新期间可能短暂出现「新 JS + 旧模板」；主题覆盖也可能保留旧 #topNav。
+    // 先兼容旧节点，避免单个缓存错位让整页渲染直接中断。
+    const topNav = document.getElementById('footprintToolbar') ||
+        document.getElementById('topNav');
+    const contentDock = document.getElementById('footprintContentDock');
     const navTools = document.getElementById('navTools');
     const navMoreBtn = document.getElementById('navMoreBtn');
-    const navBackGlobeBtn = document.getElementById('navBackGlobeBtn');
     const backGlobeBtn = document.getElementById('backGlobeBtn');   // 放大后显示，一键回球
-    const cityFillFloatBtn = document.getElementById('cityFillFloatBtn');   // 放大后显示，城市高亮开关
     // 相机高度（米）：高于 SHOW 时显示（能看到整个地球），低于 HIDE 时隐藏；
     // 两个值必须拉开一段（回滞区间），否则在阈值附近轻微缩放就会来回闪烁。
     const INTRO_SHOW_HEIGHT = 10500000;
@@ -398,7 +398,8 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     const PROVINCE_ALL_FLY_DURATION = 1.6;
     const PROVINCE_ALL_FLY_LNG = 104.0;
     const PROVINCE_ALL_FLY_LAT = 34.5;
-    const PROVINCE_SAFE_TOP = 88;               // 顶部导航 64 + 留白
+    const PROVINCE_SAFE_TOP_MIN = 24;           // 没有主题导航时只留基础呼吸空间
+    const PROVINCE_SAFE_TOP_GAP = 24;           // 主题导航底部到卡片安全区的距离
     const PROVINCE_SAFE_BOTTOM = 96;            // 底部留白
     // 自动排版时离屏幕左右边缘的距离：不贴边，随视口宽度加大
     const PROVINCE_SIDE_INSET_MIN = 76;
@@ -451,6 +452,62 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     let provinceHintShown = false;      // 本次会话是否已经提示过"省份可以点"
     let provinceHintTimer = null;
     let provinceCardClickTimer = null;  // 区分单击（进相册）与双击（打开单城市卡）
+    let themeNavOffset = 0;             // 主题导航实际底边；0 表示当前模板没有站点导航
+    let themeNavElement = null;
+    let themeNavResizeObserver = null;
+
+    function findThemeNavigationElement() {
+        const candidates = document.querySelectorAll(
+            'body > header, body > nav, [role="banner"], .site-header, #site-header, .navbar, #navbar, .app-header'
+        );
+        for (const element of candidates) {
+            if (element.closest('#footprintToolbar')) continue;
+            const rect = element.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            if (rect.height > 0 && rect.bottom > 0 && rect.top <= 24 &&
+                rect.bottom < window.innerHeight * 0.4 &&
+                style.display !== 'none' && style.visibility !== 'hidden') {
+                return element;
+            }
+        }
+        return null;
+    }
+
+    function syncThemeNavigationInset() {
+        const rootStyle = getComputedStyle(document.documentElement);
+        const declaredHeight = rootStyle.getPropertyValue('--footprint-theme-nav-height').trim();
+        const nextElement = declaredHeight ? null : findThemeNavigationElement();
+        if (themeNavResizeObserver && themeNavElement !== nextElement) {
+            themeNavResizeObserver.disconnect();
+        }
+        themeNavElement = nextElement;
+        if (themeNavElement && themeNavResizeObserver) {
+            themeNavResizeObserver.observe(themeNavElement);
+        }
+
+        let nextOffset = 0;
+        if (declaredHeight) {
+            const parsed = parseFloat(declaredHeight);
+            if (Number.isFinite(parsed)) nextOffset = Math.max(0, parsed);
+        } else if (themeNavElement) {
+            nextOffset = Math.max(0, Math.min(
+                themeNavElement.getBoundingClientRect().bottom,
+                window.innerHeight * 0.4
+            ));
+        }
+        document.documentElement.style.setProperty('--footprint-nav-offset', nextOffset + 'px');
+        if (Math.abs(nextOffset - themeNavOffset) > 0.5) {
+            themeNavOffset = nextOffset;
+            provinceLayoutDirty = true;
+        }
+    }
+
+    if (typeof ResizeObserver === 'function') {
+        themeNavResizeObserver = new ResizeObserver(syncThemeNavigationInset);
+    }
+    syncThemeNavigationInset();
+    requestAnimationFrame(syncThemeNavigationInset);
+    window.addEventListener('resize', syncThemeNavigationInset, { passive: true });
 
     // ================= 照片环（点足迹标记后围绕标记铺开的多图预览） =================
     const PHOTO_RING_COUNT = 5;            // 环上固定展示张数（第 6 个角度位放「全部 ›」）
@@ -458,8 +515,11 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     // 上限大约是初版 76×54 的两倍；下限兜住极端竖图（细长条）与全景图（扁长条）。
     const PHOTO_RING_MAX_W = 260;
     const PHOTO_RING_MAX_H = 120;
-    const PHOTO_RING_MIN_W = 72;
-    const PHOTO_RING_MIN_H = 72;
+    // 极端竖图/全景图不强行撑成接近方形：容器保持原图比例，
+    // 避免 object-fit: contain 在两侧或上下留下明显的黑色底板。
+    // 32px 仍高于 Web 指针目标的最低 24px，窄图也保留可点击范围。
+    const PHOTO_RING_MIN_W = 32;
+    const PHOTO_RING_MIN_H = 32;
     const PHOTO_RING_PLACEHOLDER_W = 160;  // 图片还没加载完时的占位尺寸（4:3 的典型值）
     const PHOTO_RING_PLACEHOLDER_H = 120;
     const PHOTO_RING_COMPACT_SCALE = 0.82; // 空间不足时的降级：整体等比缩小
@@ -522,7 +582,8 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
             introOverlayEls = [
                 document.getElementById('cityView'),
                 document.getElementById('cityWall'),
-                document.getElementById('ticketGallery')
+                document.getElementById('ticketGallery'),
+                document.getElementById('memoryShelf')
             ];
         }
         return introOverlayEls;
@@ -536,38 +597,41 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
                 pageIntro.classList.remove('visible');
             }
             topNav.classList.add('visible');
+            contentDock?.classList.add('visible');
             document.body.classList.remove('nav-zoom');
-            backGlobeBtn.classList.remove('show');
-            cityFillFloatBtn.classList.remove('show');
+            backGlobeBtn.disabled = true;
             return;
         }
         // 全屏覆盖层（城市卡片墙 / 城市足迹 / 票根）打开时隐藏顶部导航栏与标题卡，避免遮挡；
         // 这里用 getElementById 动态判断，避免引用后置声明的变量（TDZ）。
-        const [cityViewEl, cityWallEl, ticketGalleryEl] = introOverlayElements();
+        const [cityViewEl, cityWallEl, ticketGalleryEl, memoryShelfEl] = introOverlayElements();
         const overlayOpen = !!(cityViewEl && cityViewEl.classList.contains('show')) ||
             !!(cityWallEl && cityWallEl.classList.contains('show')) ||
-            !!(ticketGalleryEl && ticketGalleryEl.classList.contains('show'));
+            !!(ticketGalleryEl && ticketGalleryEl.classList.contains('show')) ||
+            document.body.classList.contains('memory-shelf-open') ||
+            !!(memoryShelfEl && memoryShelfEl.classList.contains('show'));
         if (overlayOpen) {
             if (introVisible) {
                 introVisible = false;
                 pageIntro.classList.remove('visible');
             }
             topNav.classList.remove('visible');
+            contentDock?.classList.remove('visible');
             document.body.classList.remove('nav-zoom');
             navTools.classList.remove('open');
             topNav.classList.remove('tools-open');
+            document.body.classList.remove('footprint-tools-open');
             navMoreBtn.setAttribute('aria-expanded', 'false');
-            backGlobeBtn.classList.remove('show');
-            cityFillFloatBtn.classList.remove('show');
+            backGlobeBtn.disabled = true;
             return;
         }
         // 2D 高德视图：导航栏常驻（保证 2D/3D 切换按钮可用），地球标题卡/浮动按钮隐藏
         if (amapMode) {
             pageIntro.classList.remove('visible');
             topNav.classList.add('visible');
+            contentDock?.classList.add('visible');
             document.body.classList.remove('nav-zoom');
-            backGlobeBtn.classList.remove('show');
-            cityFillFloatBtn.classList.remove('show');
+            backGlobeBtn.disabled = true;
             return;
         }
         // 相机高度每帧只取一次：positionCartographic 每次调用都会新建 Cartographic 并做坐标换算，
@@ -580,9 +644,9 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
                 pageIntro.classList.remove('visible');
             }
             topNav.classList.add('visible');
+            contentDock?.classList.add('visible');
             document.body.classList.remove('nav-zoom');
-            backGlobeBtn.classList.remove('show');
-            cityFillFloatBtn.classList.remove('show');
+            backGlobeBtn.disabled = true;
         } else {
             const h = cameraHeight;
             if (!introVisible && h > INTRO_SHOW_HEIGHT) {
@@ -591,6 +655,7 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
                 // 回到整球视图时复位“工具”溢出菜单，避免残留展开态
                 navTools.classList.remove('open');
                 topNav.classList.remove('tools-open');
+                document.body.classList.remove('footprint-tools-open');
                 navMoreBtn.setAttribute('aria-expanded', 'false');
                 if (detailCardsReady) {
                     // 回到整球视图时自动关闭详情卡：标题卡就在左下角，卡片不收会和它叠在一起；
@@ -607,10 +672,10 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
             // 导航常驻：整球视图显示全部工具；放大后保留 2D/票根/回到整球等入口。
             // 每次渲染都按当前相机高度校正状态，覆盖层关闭后也能自动恢复。
             topNav.classList.add('visible');
+            contentDock?.classList.add('visible');
             document.body.classList.toggle('nav-zoom', !introVisible);
-            // 浮动快捷按钮只作为非导航场景的补充；nav-zoom 时由 CSS 隐藏
-            backGlobeBtn.classList.toggle('show', !introVisible);
-            cityFillFloatBtn.classList.toggle('show', !introVisible);
+            // 视图组始终可见：整球态保持禁用，放大后启用“整球视角”。
+            backGlobeBtn.disabled = introVisible;
         }
 
         // 中国边界：放大到国内范围才显示，拉远/整球视图隐藏；带 SHOW/HIDE 回滞区间
@@ -667,12 +732,13 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
         });
     }
     backGlobeBtn.addEventListener('click', flyBackToGlobe);
-    if (navBackGlobeBtn) navBackGlobeBtn.addEventListener('click', flyBackToGlobe);
 
     // 票根页（重走放映）会把镜头停在某个城市附近，
     // 这个高度下自动旋转看起来像原地打转；返回地球/回到票夹时若自动旋转开着，
     // 就把视角收回整个地球。只在确实被拉近（低于整球高度）时触发，避免多余飞行。
     function restoreGlobeViewForAutoRotate() {
+        ticketGlobeAutoRotate = false;
+        refreshAutoRotate();
         if (!autoRotate) return;
         if (viewer.scene.mode !== Cesium.SceneMode.SCENE3D) return;
         if (viewer.camera.positionCartographic.height >= INTRO_SHOW_HEIGHT) return;
@@ -869,6 +935,7 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     // 切 2D：先让地球“展开”成平面，动画结束后再显示高德页面
     function switchTo2D() {
         if (amapMode || morphing) return;
+        setNavToolsOpen(false);
         closeGlobeOverlays();
         pauseAutoRotate('2d');   // 立刻停转，别让展开动画和自转抢镜头
         if (reduceMotion) {   // 无障碍：关闭动画，直接切换
@@ -913,24 +980,67 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     // 所以当前在 2D 时打开票根页要先切回 3D：不播合并动画，也不写 localStorage，
     // 免得用户只是点开一次票根链接，记住的 2D 偏好就被改掉了。
     function forceGlobeForTickets() {
-        if (!amapMode && !morphing && viewer.scene.mode === Cesium.SceneMode.SCENE3D) return;
-        clearTimeout(morphTimeoutId);
-        morphing = false;
-        pendingMode = null;
-        try {
-            // 展开动画途中就切票根页的话，先让它立即落地；否则动画结束时仍会按 pendingMode 切去 2D
-            viewer.scene.completeMorph();
-            if (viewer.scene.mode !== Cesium.SceneMode.SCENE3D) viewer.scene.morphTo3D(0);
-        } catch (e) {
-            console.warn('票根页切回 3D 失败：', e);
+        const ticketGlobePause = 'ticket-globe-restore';
+        const targetHeight = 21000000;
+        const targetDestination = Cesium.Cartesian3.fromDegrees(104.0, 35.0, targetHeight);
+        const needsSceneRestore = amapMode || morphing ||
+            viewer.scene.mode !== Cesium.SceneMode.SCENE3D;
+        if (needsSceneRestore) {
+            clearTimeout(morphTimeoutId);
+            morphing = false;
+            pendingMode = null;
+            try {
+                // 展开动画途中就切票根页的话，先让它立即落地；否则动画结束时仍会按 pendingMode 切去 2D
+                viewer.scene.completeMorph();
+                if (viewer.scene.mode !== Cesium.SceneMode.SCENE3D) viewer.scene.morphTo3D(0);
+            } catch (e) {
+                console.warn('票根页切回 3D 失败：', e);
+            }
+            finishSwitchTo3D(false);
+            viewer.resize();   // 容器刚从隐藏恢复，先校正画布尺寸
         }
-        finishSwitchTo3D(false);
-        viewer.resize();   // 容器刚从隐藏恢复，先校正画布尺寸
+
+        // 无论此前在整球、城市特写还是省份卡片态，进入票根页都回到同一张正面地球。
         viewer.camera.cancelFlight();
-        // 平面合并回球体后相机常贴近地表（地球看着是“扁”的），直接归位到整球视角
-        viewer.camera.setView({
-            destination: Cesium.Cartesian3.fromDegrees(104.0, 35.0, 21000000)
-        });
+        // 票根浮层打开时 updateIntroVisibility() 会提前返回，必须在这里主动清掉
+        // 低视角遗留的中国轮廓、城市填充和省份高亮。
+        boundaryVisible = false;
+        cityFillVisible = false;
+        if (chinaBoundarySource) chinaBoundarySource.show = false;
+        cityFillDataSources.forEach(dataSource => { dataSource.show = false; });
+        applyProvinceHighlight('');
+        markerLabelDirty = true;
+
+        // 票根背景明确需要自转：临时覆盖用户偏好，关闭票根后恢复原设置。
+        ticketGlobeAutoRotate = true;
+        ['entrance', 'card', 'city-card', 'province-cards', 'photo-ring', '2d']
+            .forEach(reason => autoRotatePauses.delete(reason));
+        const currentHeight = viewer.camera.positionCartographic.height;
+        const shouldAnimateZoom = !reduceMotion && currentHeight < 12000000;
+        const finishGlobeRestore = () => {
+            hoverPaused = false;
+            lastRotateTime = null;
+            resumeAutoRotate(ticketGlobePause);
+        };
+        if (shouldAnimateZoom) {
+            pauseAutoRotate(ticketGlobePause);
+            viewer.camera.flyTo({
+                destination: targetDestination,
+                duration: 1.35,
+                complete: finishGlobeRestore,
+                cancel: finishGlobeRestore
+            });
+        } else {
+            viewer.camera.setView({ destination: targetDestination });
+            finishGlobeRestore();
+        }
+        // 打开票根浮层后鼠标不会再离开 Cesium canvas；必须主动清掉此前在地球上触发的悬停暂停。
+        hoverPaused = false;
+        lastRotateTime = null;
+        refreshAutoRotate();
+        introVisible = false;
+        pageIntro.classList.remove('visible');
+        document.body.classList.remove('nav-zoom');
     }
 
     // morph 动画结束：按目标模式完成视图交换
@@ -1008,6 +1118,7 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
         try { localStorage.setItem(AUTO_ROTATE_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* 忽略 */ }
     }
     let autoRotatePref = getSavedAutoRotate();
+    let ticketGlobeAutoRotate = false;
     const autoRotatePauses = new Set();
     let autoRotate = false;
 
@@ -1016,7 +1127,7 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     let lastRotateTime = null;
 
     function refreshAutoRotate() {
-        const allowed = autoRotatePref && !reduceMotion;
+        const allowed = (autoRotatePref || ticketGlobeAutoRotate) && !reduceMotion;
         const want = allowed && autoRotatePauses.size === 0;
         // 按钮反映「用户偏好」而不是「此刻是否在转」：卡片 / 票根页 / 2D 只是临时让镜头停住，
         // 停的不是设置本身，退出后会自动接着转。
@@ -1142,8 +1253,6 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     function applyCityFillBtnState() {
         cityFillBtn.classList.toggle('active', cityFillEnabled);
         cityFillBtn.setAttribute('aria-pressed', String(cityFillEnabled));
-        cityFillFloatBtn.classList.toggle('active', cityFillEnabled);
-        cityFillFloatBtn.setAttribute('aria-pressed', String(cityFillEnabled));
     }
     function setCityFillEnabled(on) {
         if (cityFillEnabled === on) return;
@@ -1158,7 +1267,6 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     }
     applyCityFillBtnState();
     cityFillBtn.addEventListener('click', () => setCityFillEnabled(!cityFillEnabled));
-    cityFillFloatBtn.addEventListener('click', () => setCityFillEnabled(!cityFillEnabled));
 
     viewer.clock.onTick.addEventListener(() => {
         if (!autoRotate) return;
@@ -1437,6 +1545,7 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     function setNavToolsOpen(open) {
         navTools.classList.toggle('open', open);
         topNav.classList.toggle('tools-open', open);
+        document.body.classList.toggle('footprint-tools-open', open);
         navMoreBtn.setAttribute('aria-expanded', String(open));
         if (!open && !layerPanel.hidden) {
             layerPanel.hidden = true;
@@ -1453,20 +1562,6 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
             setNavToolsOpen(false);
         }
     });
-    // 从窄屏切回桌面时复位“工具”弹出态，避免残留的下拉样式
-    const navMobileMql = window.matchMedia('(max-width: 820px)');
-    function syncNavToolsState() {
-        if (!navMobileMql.matches) {
-            navTools.classList.remove('open');
-            topNav.classList.remove('tools-open');
-            navMoreBtn.setAttribute('aria-expanded', 'false');
-        }
-    }
-    if (navMobileMql.addEventListener) {
-        navMobileMql.addEventListener('change', syncNavToolsState);
-    } else {
-        navMobileMql.addListener(syncNavToolsState);
-    }
 
     document.addEventListener('keydown', (e) => {
         // 灯箱打开时：← / → 切换图片
@@ -2389,6 +2484,8 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
         const city = cityList[ci];
         if (!city) return;
         closeProvinceCards();   // 详情卡与省份卡片组互斥：打开城市卡就收起省份卡片
+        hoveredProvince = false;
+        applyCanvasCursor();
         pauseAutoRotate('city-card');   // 打开城市聚合卡：临时停转（关掉卡片按用户偏好自动恢复）
         if (markerCard.classList.contains('visible')) hideMarkerCard();
         if (cityView.classList.contains('show')) closeCityView(false);
@@ -2822,7 +2919,7 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
             return;
         }
         // 省份：门控（3D / 桌面端 / 中国轮廓已显示 / 城市聚合态）通过才判定；
-        // 命中且该省有足迹 → 每个城市一张卡片 + 一条连线；该省没有足迹 → 什么都不做。
+        // 命中且该省有足迹 → 展开城市卡片；该省没有足迹 → 收起当前卡片组。
         if (provincePickingEnabled()) {
             const info = provinceAtScreenPoint(movement.position);
             if (info) {
@@ -6291,6 +6388,8 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
         loadPostcardImage,
         postcardToBlob
     });
+    // 票根按钮在模块初始化之前先绑定，避免票根模块内部后续初始化出错时入口完全失效。
+    document.getElementById('ticketGalleryBtn')?.addEventListener('click', () => setTicketView(true));
     initTicketGallery();
 
     // 省界轮廓同样挂在 globeReady 之后：它只在放大到国内范围才显示
@@ -6356,7 +6455,7 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     // - 省份面的填充是 alpha=0（Cesium 的拾取通道会直接丢弃这类片元），命中判定只能走几何计算；
     // - 每个有足迹的城市各出一张卡 + 一条线，卡片按各自标记的屏幕位置分左右两侧、错开排布；
     // - 相机完全不动；线画在屏幕空间的 SVG 上，随地球转动与卡片拖动实时跟随；
-    // - 拖拽过的不再参与自动排版，再点一次该省份时重新排版。
+    // - 拖拽过的在当前展开周期内锁定；收起后重新打开会恢复自动排版。
 
     function provinceElements() {
         if (!provinceEls) {
@@ -6387,6 +6486,9 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
 
     // 省份可点还多一条：中国轮廓已经显示（放大到国内范围）
     function provincePickingEnabled() {
+        // 右侧城市聚合卡打开时，省份不再参与悬停/点击命中。
+        // 否则点击无足迹省份也会被省份分支吞掉，无法继续执行“关城市卡”的空白点击逻辑。
+        if (cityCard.classList.contains('visible')) return false;
         return cityCardsEnabled() && boundaryVisible;
     }
 
@@ -6647,10 +6749,10 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
     }
 
     // ---------- 打开 / 关闭 ----------
-    // 点击入口：再点同一个省 = 重新排版（把拖拽过的卡片放回自动布局），收起交给点空白 / Esc
+    // 点击入口：再点同一个省 = 收起整组卡片；点其他省则切换到新的一组。
     function openProvinceCards(adcode) {
         if (provinceCardsActive && provinceCardsAdcode === String(adcode) && provinceCardsMode === 'province') {
-            relayoutProvinceCards();
+            closeProvinceCards();
             return true;
         }
         return activateProvinceCards(adcode);
@@ -6665,7 +6767,11 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
         const info = provinceInfoByAdcode(adcode, false) || provinceIndex.get(String(adcode));
         if (!info) return false;
         const cities = provinceCitiesOf(info.adcode, info.name);
-        if (!cities.length) return false;   // 无足迹的省份：什么都不做（也不关闭已打开的卡片）
+        if (!cities.length) {
+            // 点击没有足迹的省份也视作“离开当前省份”：已有卡片组时收起。
+            if (provinceCardsActive) closeProvinceCards();
+            return false;
+        }
         return activateCityCards({
             mode: 'province',
             adcode: info.adcode,
@@ -7069,22 +7175,6 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
         }, 320);
     }
 
-    // 再点一次同一个省 = 重新排版（解开拖拽过的卡片，让它们回到自动布局）
-    function relayoutProvinceCards() {
-        if (!provinceCardsActive || !provinceCardsItems.length) return;
-        provinceCardsItems.forEach(item => {
-            item.locked = false;
-            if (item.el) item.el.classList.add('is-flying');   // 借入场飞行态的过渡，位移不硬跳
-        });
-        provinceLayoutDirty = true;
-        layoutProvinceCards();
-        window.setTimeout(() => {
-            provinceCardsItems.forEach(item => {
-                if (item.el) item.el.classList.remove('is-flying');
-            });
-        }, 420);
-    }
-
     // ---------- 一次性提示：告诉首次放大到国内范围的用户"省份可以点" ----------
     // 只在桌面端、本次会话第一次出现中国轮廓时展示，6 秒后自动退场；
     // 用户一旦点开卡片组就立刻收起（说明他已经会了）。
@@ -7325,11 +7415,12 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityList, cityVie
 
     function provinceSafeArea(W, H) {
         const insetX = provinceSideInset();
+        const safeTop = Math.max(PROVINCE_SAFE_TOP_MIN, themeNavOffset + PROVINCE_SAFE_TOP_GAP);
         return {
             left: insetX,
             right: Math.max(insetX + 140, W - insetX),
-            top: PROVINCE_SAFE_TOP,
-            bottom: Math.max(PROVINCE_SAFE_TOP + 200, H - PROVINCE_SAFE_BOTTOM)
+            top: safeTop,
+            bottom: Math.max(safeTop + 200, H - PROVINCE_SAFE_BOTTOM)
         };
     }
 
