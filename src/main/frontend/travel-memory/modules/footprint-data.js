@@ -88,11 +88,13 @@ export function applyFootprints(loaded) {
     return true;
 }
 
-// 统计区：总足迹数 / 去过的城市数（数据驱动）
+// 统计区：总足迹数 / 去过的城市数 / 走过的省份数（数据驱动）
 export function updateIntroStats() {
     const total = document.getElementById('introTotal');
     const cities = document.getElementById('introCities');
+    const provinces = document.getElementById('introProvinces');
     if (total) total.textContent = FOOTPRINTS.length;
     if (cities) cities.textContent = new Set(FOOTPRINTS.map(f => f.city).filter(Boolean)).size;
+    if (provinces) provinces.textContent = new Set(FOOTPRINTS.map(f => f.province).filter(Boolean)).size;
 }
 updateIntroStats();

@@ -166,6 +166,11 @@ spec:
           name: globeDesc
           value: '把每一次出发，收藏成地球上的坐标；让走过的城市，成为星空下的故事。'
           help: "3D 地球首页标题卡的描述文字（不读取基本设置中的足迹描述）"
+        - $formkit: checkbox
+          label: 显示最近旅程卡
+          name: showRecentTripCard
+          value: true
+          help: "在 3D 地球首屏右下角显示最近旅程照片与入口。关闭后左侧的最近一次旅行摘要仍会显示"
         - $formkit: select
           label: 地球地名标注
           name: globeLabels

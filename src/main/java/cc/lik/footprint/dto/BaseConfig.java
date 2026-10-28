@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
  * <p>插件前台运行所需的全部配置，由 {@code FootprintConfigService#getConfigByGroupName()}
  * 从多个 Setting 分组汇总而成。</p>
  *
- * <p>这里使用 {@code @Builder} 而非位置参数构造：本类字段多达 37 个且大量为
+ * <p>这里使用 {@code @Builder} 而非位置参数构造：本类字段多达 38 个且大量为
  * String / Boolean，用位置参数装配时相邻的同类型字段一旦错位，编译期不会报错，
  * 只会在前台表现为「配置串了」，排查成本极高。</p>
  */
@@ -38,6 +38,8 @@ public class BaseConfig {
     private String globeDesc;
     /** 3D 地球常驻地名标注：off 关闭 / city 只显示城市名 / all 城市名 + 足迹名 */
     private String globeLabels;
+    /** 是否显示首屏右下角的最近旅程卡 */
+    private Boolean showRecentTripCard;
 
     // 天地图（group: tianditu）
     private String tiandituKey;

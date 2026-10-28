@@ -79,6 +79,7 @@ public class FootprintConfigServiceImpl implements FootprintConfigService {
                     .globeDesc(legacy.path("globeDesc")
                         .asText("把每一次出发，收藏成地球上的坐标；让走过的城市，成为星空下的故事。"))
                     .globeLabels(legacy.path("globeLabels").asText("all"))
+                    .showRecentTripCard(legacy.path("showRecentTripCard").asBoolean(true))
 
                     .tiandituKey(keys.getT3())
                     .enableTerrainDefault(

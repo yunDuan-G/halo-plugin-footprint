@@ -2443,14 +2443,45 @@
         // 搁板右端（x≈6~8）其实已经在画面之外 —— 原方案 2 就改成前景右下。
         // 上方墙面：暗木画框 + 一张纸面（挂在书架线上方，不在书后面）
         // （壁灯按用户选择 B 去掉了：只留画框，墙面更干净；那盏暖光也一并去掉）
-        var wallFrame = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.78, 0.055), woodDarkMaterial);
+        var frameWoodMaterial = woodDarkMaterial.clone();
+        frameWoodMaterial.emissive = new THREE.Color('#3b2412');
+        frameWoodMaterial.emissiveIntensity = 0;
+        var wallFrame = new THREE.Mesh(new THREE.BoxGeometry(1.30, 0.96, 0.06), frameWoodMaterial);
         wallFrame.position.set(2.7, 2.15, -3.56);
         wallFrame.receiveShadow = true;
         scene.add(wallFrame);
-        var framePaper = new THREE.Mesh(new THREE.PlaneGeometry(0.88, 0.62),
+        var framePaper = new THREE.Mesh(new THREE.PlaneGeometry(1.12, 0.78),
             new THREE.MeshStandardMaterial({ color: '#f6f0e2', roughness: 0.95, metalness: 0 }));
         framePaper.position.set(2.7, 2.15, -3.52);
         scene.add(framePaper);
+        var frameCanvases = [makeCanvas(1080, 740), makeCanvas(1080, 740)];
+        var frameTextures = frameCanvases.map(function (canvas) {
+            var texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.anisotropy = maxAnisotropy;
+            return texture;
+        });
+        var frameMeshes = frameTextures.map(function (texture, index) {
+            var mesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(1.08, 0.74),
+                new THREE.MeshStandardMaterial({
+                    map: texture,
+                    roughness: 0.72,
+                    metalness: 0,
+                    transparent: true,
+                    opacity: 0,
+                    depthWrite: false
+                })
+            );
+            mesh.position.set(2.7, 2.15, -3.512 + index * 0.002);
+            mesh.renderOrder = 2 + index;
+            mesh.visible = false;
+            scene.add(mesh);
+            return mesh;
+        });
+        var frameLight = new THREE.PointLight(0xffe6c4, 0.52, 2.6, 2);
+        frameLight.position.set(2.7, 2.72, -2.72);
+        scene.add(frameLight);
 
         // （地面上的三本平放书 + 落地小台灯按用户要求整组去掉；只留墙面上的画框与壁灯。
         //   相应的那盏暖光也一并去掉，避免"没有来源的光"。）
@@ -2468,6 +2499,17 @@
             backRail: backRail,
             uprights: uprights,
             dust: dust,
+            wallFrame: wallFrame,
+            framePaper: framePaper,
+            frameTextures: frameTextures,
+            frameMeshes: frameMeshes,
+            frameMaterials: frameMeshes.map(function (mesh) { return mesh.material; }),
+            frameHitObjects: [wallFrame, framePaper, frameMeshes[0], frameMeshes[1]],
+            frameLight: frameLight,
+            frameActive: -1,
+            frameFade: null,
+            frameHover: false,
+            frameSubject: null,
             camera: camera,
             rigs: rigs,
             raycaster: new THREE.Raycaster(),
@@ -2498,6 +2540,7 @@
 
         // 建好就先把当前这本的屋子刷上（不过渡，避免开场从 0 号色滑到当前色）
         applyRoomTheme(state.active, true);
+        updateWallFrame(state.books[state.active], true);
         layoutShelf(true);
         startAnimation();
 
@@ -2565,9 +2608,11 @@
     // 沿路插值会让它横穿整个画面 —— 参考实现遇到这种情况是**在看不见的时候瞬移**
     // （updateShelfLayout 里的 wrappedAcrossSeam：直接把 x 写成目标、opacity 归零）。
     // 这里同样处理：立刻落到新位姿，同时让它沉在搁板下面，再从容升起。
-    // 「从板后升上来」这类入场的延迟（ms）：等刚让位的那本把精选位腾开再升。
-    // 不然两本书会在同一个横坐标上叠着，看着就是"新的一本出现得太快、穿模"。
-    var SEAM_RISE_DELAY = 160;
+    // 精选位交接延迟：旧书先用 SINK_PHASE 的时长就地沉下，新书随后才进入。
+    // 450ms × 45% ≈ 203ms，再留 47ms 净空，避免两本书在中央发生深度交叠。
+    var SHELF_HANDOFF_DELAY = Math.round(SHELF_MOVE_MS * SINK_PHASE) + 47;
+    // 跨半圈从板后升上来的书也遵守同一段交接间隔。
+    var SEAM_RISE_DELAY = SHELF_HANDOFF_DELAY;
 
     function startRigTimeline(rig, now, duration, seam, delay, lane) {
         if (!rig || !rig.target) return;
@@ -2649,6 +2694,13 @@
         var layout = shelfLayout();
         var total = shelf.rigs.length;
         if (!total) return;
+        // 找出上一轮位于精选位的那本。它需要先完成下沉，其他书才能一起重排；
+        // 否则右侧书列会提前向左收拢，视觉上像第二条书列抢在新书之前启动。
+        var outgoingRig = null;
+        shelf.rigs.forEach(function (rig) {
+            if (rig.slot === -1) outgoingRig = rig;
+        });
+        var activeChanged = !!outgoingRig && shelf.rigs.indexOf(outgoingRig) !== state.active;
 
         var now = performance.now();
         var duration = (instant || reduceMotion) ? 0 : SHELF_MOVE_MS;
@@ -2731,6 +2783,16 @@
             var riseDelay = (seam && sinkTarget < 0.5 && rigDur)
                 ? SEAM_RISE_DELAY + Math.max(0, slot) * SEAM_RISE_STAGGER
                 : 0;
+            // 相邻切书时，新精选书不一定走 seam（例如第 1 本 → 第 2 本），
+            // 但它同样必须等旧书完全沉下再开始向中央移动。
+            if (index === state.active && oldSlot !== undefined && oldSlot !== -1 && rigDur) {
+                riseDelay = Math.max(riseDelay, SHELF_HANDOFF_DELAY);
+            }
+            // 切换精选书时，除正在退场的旧书外，整排书列统一等待。
+            // 这样右侧书架不会在新精选书尚未起步时提前收拢。
+            if (activeChanged && rigDur && rig !== outgoingRig) {
+                riseDelay = Math.max(riseDelay, SHELF_HANDOFF_DELAY);
+            }
             // ③ 被点中的那本（从书列里挪 2 格以上过来）走"前面那条道"
             var lane = (index === state.active && !seam && stepCount >= 2) ? 1 : 0;
             startRigTimeline(rig, now, rigDur, seam, riseDelay, lane);
@@ -2908,6 +2970,7 @@
             var now = performance.now();
             sampleRenderPerf(delta);
             updateDust(shelf.dust, (now - shelf.startedAt) / 1000);
+            updateWallFrameFade(delta);
             // 屋子配色也跟着帧走：换省份时墙、地、木架、灯一起过渡到新一套
             updateRoomTheme(delta);
 
@@ -3080,6 +3143,8 @@
             // 会让"最后一帧还在动"，也就没有确定的首末帧）
             shelf.camera.position.set(camPlan.pos.x, camPlan.pos.y, camPlan.pos.z);
             shelf.camera.lookAt(camPlan.target.x, camPlan.target.y, camPlan.target.z);
+            shelf.camera.updateMatrixWorld();
+            syncWallFrameAction();
 
             renderer3d.render(shelf.scene, shelf.camera);
             // 记一帧"已经画到画布上"。注意计数器放在 render 之后：
@@ -3100,6 +3165,15 @@
         if (shelf.frame) cancelAnimationFrame(shelf.frame);
         if (shelf.resizeObserver) shelf.resizeObserver.disconnect();
         shelf.rigs.forEach(disposeRig);
+        (shelf.frameTextures || []).forEach(function (texture) {
+            if (texture && texture.dispose) texture.dispose();
+        });
+        (shelf.frameMaterials || []).forEach(function (material) {
+            if (material && material.dispose) material.dispose();
+        });
+        if (shelf.wallFrame && shelf.wallFrame.material && shelf.wallFrame.material.dispose) {
+            shelf.wallFrame.material.dispose();
+        }
         if (renderer3d) {
             renderer3d.dispose();
             if (renderer3d.domElement && renderer3d.domElement.parentNode) {
@@ -3270,6 +3344,190 @@
             // 标记一下"这张封面不用等了"：否则「正在装订书架…」会白等满 2.5 秒
             rig.coverSettled = true;
         });
+    }
+
+    // ---------------- 墙上相框：当前省份的代表照片 ----------------
+    var frameUpdateToken = 0;
+
+    function frameSubject(book) {
+        if (!book) return null;
+        var city = (book.cities || []).find(function (item) { return !!item.cover; }) ||
+            (book.cities || [])[0] || null;
+        return {
+            book: book,
+            city: city,
+            name: city ? city.name : book.name,
+            date: city && city.latestTime ? city.latestTime : book.latestTime,
+            image: (city && city.cover) || book.cover || ''
+        };
+    }
+
+    function drawImageCover(ctx, image, x, y, width, height) {
+        var scale = Math.max(width / image.width, height / image.height);
+        var sourceWidth = width / scale;
+        var sourceHeight = height / scale;
+        var sourceX = (image.width - sourceWidth) / 2;
+        var sourceY = (image.height - sourceHeight) / 2;
+        ctx.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight,
+            x, y, width, height);
+    }
+
+    function paintWallFrameTexture(texture, book, image) {
+        if (!texture || !texture.image || !book) return;
+        var canvas = texture.image;
+        var ctx = canvas.getContext('2d');
+        var width = canvas.width;
+        var height = canvas.height;
+        var inset = 10;
+        var photoWidth = width - inset * 2;
+        var photoHeight = height - inset * 2;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = '#f3ebda';
+        ctx.fillRect(0, 0, width, height);
+
+        if (image && image.width && image.height) {
+            drawImageCover(ctx, image, inset, inset, photoWidth, photoHeight);
+            var wash = ctx.createLinearGradient(0, inset, 0, inset + photoHeight);
+            wash.addColorStop(0, 'rgba(255, 248, 226, 0.08)');
+            wash.addColorStop(0.64, 'rgba(24, 25, 23, 0.02)');
+            wash.addColorStop(1, 'rgba(31, 28, 22, 0.22)');
+            ctx.fillStyle = wash;
+            ctx.fillRect(inset, inset, photoWidth, photoHeight);
+        } else {
+            var fallback = ctx.createLinearGradient(0, inset, width, inset + photoHeight);
+            fallback.addColorStop(0, '#ece2cf');
+            fallback.addColorStop(1, '#d8c9af');
+            ctx.fillStyle = fallback;
+            ctx.fillRect(inset, inset, photoWidth, photoHeight);
+
+            // 没有照片时只保留无文字的抽象旅行轨迹。
+            var stops = (book.cities || []).slice(0, 3);
+            var startX = inset + 110;
+            var endX = width - inset - 110;
+            var routeY = height * 0.48;
+            ctx.strokeStyle = 'rgba(83, 70, 50, 0.34)';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(startX, routeY);
+            ctx.bezierCurveTo(width * 0.36, routeY - 100, width * 0.62, routeY + 92, endX, routeY);
+            ctx.stroke();
+            (stops.length ? stops : [{ name: book.name }]).forEach(function (city, index, list) {
+                var ratio = list.length === 1 ? 0.5 : index / (list.length - 1);
+                var x = lerp(startX, endX, ratio);
+                var y = routeY + Math.sin(ratio * Math.PI * 2) * 54;
+                ctx.beginPath();
+                ctx.fillStyle = roomTint(state.active, 'accent');
+                ctx.arc(x, y, 12, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.strokeStyle = 'rgba(98, 80, 55, 0.16)';
+            ctx.lineWidth = 2;
+            for (var ring = 1; ring <= 4; ring++) {
+                ctx.beginPath();
+                ctx.ellipse(width / 2, height / 2, 120 + ring * 88, 72 + ring * 58, 0, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.13)';
+        ctx.beginPath();
+        ctx.moveTo(inset, inset);
+        ctx.lineTo(width * 0.48, inset);
+        ctx.lineTo(width * 0.22, inset + photoHeight);
+        ctx.lineTo(inset, inset + photoHeight);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(84, 65, 42, 0.32)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(inset, inset, photoWidth, photoHeight);
+
+        texture.needsUpdate = true;
+    }
+
+    function swapWallFrame(book, image, instant) {
+        if (!shelf || !shelf.frameTextures || !book) return;
+        var next = shelf.frameActive === 0 ? 1 : 0;
+        paintWallFrameTexture(shelf.frameTextures[next], book, image);
+        shelf.frameMeshes[next].visible = true;
+        shelf.frameMeshes[next].position.z = -3.508;
+        if (shelf.frameActive >= 0) {
+            shelf.frameMeshes[shelf.frameActive].position.z = -3.512;
+        }
+        if (instant || reduceMotion || shelf.frameActive < 0) {
+            shelf.frameMaterials.forEach(function (material, index) {
+                material.opacity = index === next ? 1 : 0;
+            });
+            shelf.frameTextures.forEach(function (texture, index) {
+                if (index !== next) shelf.frameMeshes[index].visible = false;
+            });
+            shelf.frameActive = next;
+            shelf.frameFade = null;
+            return;
+        }
+        shelf.frameMaterials[next].opacity = 0;
+        shelf.frameFade = {
+            from: shelf.frameActive,
+            to: next,
+            start: performance.now(),
+            duration: 420
+        };
+        shelf.frameActive = next;
+    }
+
+    function updateWallFrame(book, instant) {
+        if (!shelf || !book) return;
+        var subject = frameSubject(book);
+        var token = ++frameUpdateToken;
+        shelf.frameSubject = subject;
+        if (!subject.image) {
+            swapWallFrame(book, null, instant);
+            return;
+        }
+        if (shelf.frameActive < 0) swapWallFrame(book, null, true);
+        var d = api();
+        var thumb = d && d.cityCardImageUrl
+            ? (d.cityCardImageUrl(subject.image) || subject.image)
+            : subject.image;
+        loadImage(thumb).then(function (image) {
+            if (!shelf || shelf.disposed || token !== frameUpdateToken) return;
+            swapWallFrame(book, image, instant);
+        }).catch(function () {
+            if (!shelf || shelf.disposed || token !== frameUpdateToken) return;
+            swapWallFrame(book, null, instant);
+        });
+    }
+
+    function updateWallFrameFade(delta) {
+        if (!shelf || !shelf.frameMaterials) return;
+        var response = reduceMotion ? 1 : Math.min(1, delta * 8);
+        if (shelf.frameLight) {
+            shelf.frameLight.intensity = lerp(
+                shelf.frameLight.intensity,
+                shelf.frameHover ? 0.9 : 0.52,
+                response
+            );
+        }
+        if (shelf.wallFrame && shelf.wallFrame.material) {
+            shelf.wallFrame.material.emissiveIntensity = lerp(
+                shelf.wallFrame.material.emissiveIntensity,
+                shelf.frameHover ? 0.18 : 0,
+                response
+            );
+        }
+        if (!shelf.frameFade) return;
+        var fade = shelf.frameFade;
+        var progress = clamp((performance.now() - fade.start) / fade.duration, 0, 1);
+        var eased = smoothstep(progress);
+        shelf.frameMaterials[fade.from].opacity = 1 - eased;
+        shelf.frameMaterials[fade.to].opacity = eased;
+        if (progress >= 1) {
+            shelf.frameMeshes[fade.from].visible = false;
+            shelf.frameMaterials[fade.from].opacity = 0;
+            shelf.frameMaterials[fade.to].opacity = 1;
+            shelf.frameFade = null;
+        }
     }
 
     // ---------------- L1 书架：DOM ----------------
@@ -3526,8 +3784,10 @@
               // 否则舞台会掉进第一列（372px），版面直接被拉歪
               (infoHtml(book) || '<aside class="ms-info" id="msInfo"></aside>') +
               '<section class="ms-stage" id="msStage" tabindex="0" role="group" ' +
-                'aria-label="书架：滚轮或左右方向键切换省份，点击当前的书翻开">' +
+                'aria-label="书架：滚轮或左右方向键切换省份，点击当前的书翻开，点击墙上的照片查看城市相册">' +
                 '<div class="ms-floor" aria-hidden="true"></div>' +
+                '<button class="ms-wall-frame-action" type="button" tabindex="0" ' +
+                  'aria-label="打开墙上的旅行照片">墙上的旅行照片</button>' +
                 // 舞台右缘那颗浮动「›」已撤掉：它和顶栏那对 ‹ › 几乎在同一列、
                 // 显隐条件也一样，看着就是同一对按钮被拆成两处（用户反馈"冲突"）。
                 // 翻屏统一由顶栏那对负责，见 pageStep()。
@@ -3537,7 +3797,16 @@
                 // （那句顶栏没有替代品，顶栏副标题在书本模式是收起的）。
                 '<div class="ms-stage-hint"></div>' +
               '</section>' +
-              '<div class="ms-building" id="msBuilding"><span>正在装订书架…</span></div>' +
+              '<div class="ms-building" id="msBuilding" role="status" aria-live="polite">' +
+                '<span class="ms-binding-icon" aria-hidden="true">' +
+                  '<span class="ms-binding-book">' +
+                    '<span class="ms-binding-pages"></span>' +
+                    '<span class="ms-binding-cover"></span>' +
+                  '</span>' +
+                  '<span class="ms-binding-thread"></span>' +
+                '</span>' +
+                '<span class="ms-building-label">正在装订书架<span class="ms-binding-dots"></span></span>' +
+              '</div>' +
             '</div>';
         els.stage = $('msStage');
         // 竖栏必须在 **stage 重建之后**再插进去：放在函数开头时 els.stage 还指向
@@ -3620,6 +3889,7 @@
         syncLeftRail();
         // 整间屋子跟着换色（墙、地、木架、灯、雾 + 信息板的强调色）
         if (changed) applyRoomTheme(next);
+        if (changed) updateWallFrame(state.books[next]);
         if (changed) updateInfo();
         if (shelf && shelf.rigs[next]) {
             attachCoverPhoto(shelf.rigs[next]);
@@ -3628,7 +3898,7 @@
         }
     }
 
-    function openActiveBook() {
+    function openActiveBook(targetCity) {
         var book = state.books[state.active];
         if (!book || state.opening) return;
         state.opening = true;
@@ -3646,7 +3916,11 @@
         setTimer('open', function () {
             state.opening = false;
             if (!els.root || !els.root.classList.contains('show')) return;
-            openChapters(book);
+            if (targetCity && book.cities.indexOf(targetCity) >= 0) {
+                openAlbum(book, targetCity, 0);
+            } else {
+                openChapters(book);
+            }
         }, reduceMotion ? 0 : OPEN_ANIM_MS);
     }
 
@@ -3708,6 +3982,56 @@
         if (!hit) return '';
         // 这片叶翻到什么程度，决定它现在算左页还是右页
         return hit.pivot.rotation.y > -1.2 ? 'right' : 'left';
+    }
+
+    function wallFrameHitTest(event) {
+        if (!shelf || state.mode !== 'shelf' || !shelf.frameHitObjects) return false;
+        var rect = els.stage.getBoundingClientRect();
+        shelf.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        shelf.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        shelf.raycaster.setFromCamera(shelf.pointer, shelf.camera);
+        return shelf.raycaster.intersectObjects(shelf.frameHitObjects, false).length > 0;
+    }
+
+    function setWallFrameHover(hovered) {
+        if (!shelf) return;
+        shelf.frameHover = !!hovered;
+        if (els.stage) els.stage.classList.toggle('frame-hover', shelf.frameHover);
+    }
+
+    function syncWallFrameAction() {
+        var action = els.stage && els.stage.querySelector('.ms-wall-frame-action');
+        if (!action || !shelf || !shelf.camera || state.mode !== 'shelf') {
+            if (action) action.hidden = true;
+            return;
+        }
+        var subject = shelf.frameSubject;
+        action.hidden = !subject || !subject.city;
+        if (action.hidden) return;
+        var rect = els.stage.getBoundingClientRect();
+        var center = new shelf.THREE.Vector3(2.7, 2.15, -3.51).project(shelf.camera);
+        var halfW = new shelf.THREE.Vector3(3.35, 2.15, -3.51).project(shelf.camera);
+        var halfH = new shelf.THREE.Vector3(2.7, 2.63, -3.51).project(shelf.camera);
+        var centerX = (center.x + 1) * rect.width / 2;
+        var centerY = (1 - center.y) * rect.height / 2;
+        var width = Math.abs((halfW.x + 1) * rect.width / 2 - centerX) * 2;
+        var height = Math.abs((1 - halfH.y) * rect.height / 2 - centerY) * 2;
+        action.style.left = centerX.toFixed(1) + 'px';
+        action.style.top = centerY.toFixed(1) + 'px';
+        action.style.width = Math.max(44, width).toFixed(1) + 'px';
+        action.style.height = Math.max(44, height).toFixed(1) + 'px';
+        action.setAttribute(
+            'aria-label',
+            '打开' + (subject.name || '墙上') + '的旅行照片'
+        );
+    }
+
+    function openWallFrameAlbum() {
+        var current = state.books[state.active];
+        var subject = frameSubject(current);
+        if (!current || !subject || !subject.city) return;
+        setWallFrameHover(false);
+        openActiveBook(subject.city);
     }
 
     function bindStage() {
@@ -3822,6 +4146,7 @@
             // 随后的 click 会派发给捕获者（舞台）而不是按钮 —— 按钮的
             // click 监听永远收不到事件。放行等于让浏览器按常规派发 click。
             if (event.target && event.target.closest && event.target.closest('.ms-view-reset')) return;
+            if (event.target && event.target.closest && event.target.closest('.ms-wall-frame-action')) return;
             if (state.mode === 'book') {
                 if (!bookHitTest(event)) {
                     // 只有书本之外才允许移动整本书：绕它旋转（按住 Shift 改成平移）
@@ -3961,7 +4286,11 @@
             // 没有按下时：只做悬停抬升
             if (pointerId === null) {
                 // 触摸设备不抬升：手指划过书架时那几本跟着抬起，看着像"卡了一下"
-                if (shelf && !reduceMotion && !isTouch()) shelf.hoverIndex = pickBookIndex(event);
+                var frameHovered = !isTouch() && wallFrameHitTest(event);
+                setWallFrameHover(frameHovered);
+                if (shelf && !reduceMotion && !isTouch()) {
+                    shelf.hoverIndex = frameHovered ? -1 : pickBookIndex(event);
+                }
                 return;
             }
             if (event.pointerId !== pointerId) return;
@@ -3994,6 +4323,7 @@
         stage.addEventListener('pointercancel', finish);
         stage.addEventListener('pointerleave', function (event) {
             if (shelf) shelf.hoverIndex = -1;
+            setWallFrameHover(false);
             if (pointerId !== null && !stage.hasPointerCapture(pointerId)) finish(event);
         });
 
@@ -4081,11 +4411,24 @@
             // （这里原来拦两个已经不存在的类：.ms-pager 和 .ms-book-nav —— 两者
             // 在 DOM 里都查不到了，拦空气。留一行注释说明去过哪儿。）
             if (state.mode === 'book') { onBookClick(event); return; }
+            if (wallFrameHitTest(event)) { openWallFrameAlbum(); return; }
             var index = pickBookIndex(event);
             if (index < 0) return;
             if (index !== state.active) { setActive(index); return; }
             openActiveBook();
         });
+
+        var frameAction = stage.querySelector('.ms-wall-frame-action');
+        if (frameAction) {
+            frameAction.addEventListener('pointerenter', function () { setWallFrameHover(true); });
+            frameAction.addEventListener('pointerleave', function () { setWallFrameHover(false); });
+            frameAction.addEventListener('focus', function () { setWallFrameHover(true); });
+            frameAction.addEventListener('blur', function () { setWallFrameHover(false); });
+            frameAction.addEventListener('click', function (event) {
+                event.stopPropagation();
+                openWallFrameAlbum();
+            });
+        }
     }
 
     // ---------------- 回退：CSS 3D 书架 ----------------
@@ -4705,6 +5048,8 @@
     var AUDIO_BASE = '/plugins/footprint/assets/static/audio/';
     var AUDIO_POOL = 3;              // 每个音效 3 份：够快速连点，又不会叠成噪音
     var audioPool = {};
+    var audioPreloadStarted = false;
+    var audioGestureHintShown = false;
 
     function audioUrl(file) { return AUDIO_BASE + file + '?version=' + version; }
 
@@ -4730,10 +5075,35 @@
         });
     }
 
+    function preloadAudioAssets() {
+        if (audioPreloadStarted) return;
+        audioPreloadStarted = true;
+        ensureAudioPool();
+        Object.keys(audioPool).forEach(function (name) {
+            audioPool[name].forEach(function (el) {
+                try { el.load(); } catch (e) { /* 忽略 */ }
+            });
+        });
+    }
+
+    function showAudioGestureHint() {
+        if (audioGestureHintShown) return;
+        audioGestureHintShown = true;
+        if (els.soundWake) {
+            els.soundWake.hidden = false;
+            els.soundWake.classList.remove('is-nudged');
+            // 强制重排一次，让用户连续滚轮时同一个提示动画也能重新引起注意。
+            void els.soundWake.offsetWidth;
+            els.soundWake.classList.add('is-nudged');
+        }
+        announce('浏览器要求先点击一次才能播放音效，请点击右上角开启音效');
+    }
+
     function playCue(name, options) {
-        // 兜底解锁：cue 的调用点本身就在事件处理里（点击/拖动），算用户手势。
+        // 有真实用户激活（点击、按键等）时先完成解锁；部分浏览器也允许直接
+        // autoplay，所以即使尚未激活仍尝试播放，成功后再把入口收掉。
         if (!audio.unlocked) unlockAudio();
-        if (!audio.unlocked || audio.muted) return;
+        if (audio.muted) return;
         var list = audioPool[name];
         if (!list) return;
         var el = null;
@@ -4747,18 +5117,36 @@
             // 参考对翻页做了音高区分：往回翻 0.93 倍速（更低沉）
             el.playbackRate = (options && options.rate) || 1;
             var playing = el.play();
+            if (playing && playing.then) {
+                playing.then(function () {
+                    if (!audio.unlocked) {
+                        audio.unlocked = true;
+                        syncAudioUI();
+                    }
+                }).catch(function () { /* 统一在下面记录失败原因 */ });
+            }
             if (playing && playing.catch) {
                 playing.catch(function (error) {
                     // 记下失败原因（自动播放被拦 / 解码失败…）便于排查，不影响翻书
                     audio.lastError = (error && error.name) || 'play-rejected';
+                    if (audio.lastError === 'NotAllowedError') showAudioGestureHint();
                 });
             }
-        } catch (e) { audio.lastError = (e && e.name) || 'play-threw'; }
+        } catch (e) {
+            audio.lastError = (e && e.name) || 'play-threw';
+            if (audio.lastError === 'NotAllowedError') showAudioGestureHint();
+        }
     }
 
-    // 首次手势后才建 AudioContext 并解锁（浏览器自动播放策略）
-    function unlockAudio() {
+    // 首次真实手势后解锁（浏览器自动播放策略）。
+    // wheel 不是 Chromium 认可的激活手势，所以不能在这里假装已解锁。
+    function unlockAudio(event) {
         if (audio.unlocked) return;
+        var activation = navigator.userActivation;
+        if (activation && !activation.isActive) {
+            syncAudioUI();
+            return;
+        }
         try {
             ensureAudioPool();
             applyAudioVolume();
@@ -4769,6 +5157,15 @@
                 });
             });
             audio.unlocked = true;
+            audioGestureHintShown = false;
+            if (els.soundWake) {
+                els.soundWake.classList.remove('is-nudged');
+            }
+            // 右上角入口本身不能在这里立刻隐藏：pointerdown 一收，pointerup /
+            // click 就没有目标了，确认音会被整段吞掉。等 click 处理完再收起。
+            var onSoundWake = event && els.soundWake &&
+                els.soundWake.contains(event.target);
+            if (!onSoundWake) syncAudioUI();
         } catch (e) { /* 环境不支持就当静音 */ }
     }
 
@@ -4784,6 +5181,9 @@
             els.volume.value = String(audio.volume);
             // 轨道已填充的部分跟着音量走（CSS 里用 --ms-vol 画那道渐变）
             els.volume.style.setProperty('--ms-vol', Math.round(audio.volume * 100) + '%');
+        }
+        if (els.soundWake) {
+            els.soundWake.hidden = audio.unlocked || audio.muted;
         }
         applyAudioVolume();
     }
@@ -4804,6 +5204,18 @@
     function bindAudioControls() {
         audioLoadPrefs();
         syncAudioUI();
+        if (els.soundWake) {
+            els.soundWake.addEventListener('click', function (event) {
+                event.stopPropagation();
+                if (els.soundWake.classList.contains('is-nudged')) {
+                    els.soundWake.classList.remove('is-nudged');
+                }
+                unlockAudio();
+                // 用户点这个入口就是想确认声音是否可用，开启后立即回一声。
+                playCue('select');
+                syncAudioUI();
+            });
+        }
         if (els.mute) {
             els.mute.addEventListener('click', function (event) {
                 event.stopPropagation();
@@ -4820,6 +5232,8 @@
         // 否则从顶栏入口进来、第一次点的是"世界这本书"按钮时就解不了锁。
         document.addEventListener('pointerdown', unlockAudio, true);
         document.addEventListener('keydown', unlockAudio, true);
+        // wheel 不注册为“解锁手势”：Chromium 的 userActivation 在滚轮后仍是
+        // false。若未来某个浏览器允许滚轮播放，playCue 仍会直接尝试并自行更新状态。
         // 页面隐藏时把正在响的音效暂停（照参考的 handleVisibility）
         document.addEventListener('visibilitychange', function () {
             if (!document.hidden) return;
@@ -4831,6 +5245,9 @@
                 });
             });
         });
+        // 直接打开 ?view=books 时没有按钮点击手势可供预载；先把媒体资源准备好，
+        // 第一次滚轮切书时就不必在同一个事件里临时加载、解码。
+        preloadAudioAssets();
     }
 
     // ==========================================================================
@@ -6170,6 +6587,7 @@
         state.bookPages = pages;
         state.bookSpread = spreadIndex || 0;
         state.mode = 'book';
+        syncBackControl();
         setPhase('inspection');
         state.bookEnterAt = fromShelf ? performance.now() : 0;
         runtime.group.visible = true;
@@ -6739,6 +7157,7 @@
 
     function exitBookMode() {
         state.mode = 'shelf';
+        syncBackControl();
         setPhase('shelf');
         state.pageTurn = null;
         state.bookLevel = 'chapters';
@@ -7011,6 +7430,14 @@
         if (title) announce(title + (intro ? '。' + intro : ''));
     }
 
+    function syncBackControl() {
+        if (!els.back) return;
+        var inBook = state.mode === 'book';
+        var label = inBook ? '返回书架' : '关闭世界这本书';
+        els.back.setAttribute('aria-label', label);
+        els.back.title = label;
+    }
+
     // 这里原本有一颗顶栏的「‹ 返回城市章节」（只在旅行相册里出现）。它和页内
     // 工具条的返回按钮、以及顶栏面包屑做的是同一件事，一并去掉了 —— 现在"上一层"
     // 只有一个入口：顶栏面包屑里点当前路径的上一段（见 setHeader）。
@@ -7033,6 +7460,7 @@
         state.opening = false;
         state.bookRotation = null;
         state.page = 0;
+        syncBackControl();
 
         setHeader('世界这本书', '正在整理省份、城市与旅行照片…', [{ label: '世界这本书' }]);
         els.body.innerHTML = '<div class="ms-empty"><span>正在装订书架…</span>' +
@@ -7114,6 +7542,7 @@
         state.photos = [];
         state.page = 0;
         state.opening = false;
+        syncBackControl();
         state.turning = false;
         state.bookRotation = null;
         els.body.innerHTML = '';
@@ -7278,6 +7707,7 @@
         els.pageCount = $('memoryShelfPageCount');
         els.mute = $('memoryShelfMute');
         els.volume = $('memoryShelfVolume');
+        els.soundWake = $('memoryShelfSoundWake');
         bindAudioControls();
         reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -7297,7 +7727,12 @@
                 open();
             });
         }
-        if (els.back) els.back.addEventListener('click', close);
+        if (els.back) {
+            els.back.addEventListener('click', function () {
+                if (state.mode === 'book') backToShelf();
+                else close();
+            });
+        }
         if (els.prev) {
             els.prev.addEventListener('click', function () {
                 // 书摊开时（触摸设备）这对箭头是翻页，不是换本

@@ -156,6 +156,15 @@ body.memory-shelf-open #pageIntro {
 .ms-back { justify-self: start; }
 .ms-actions { justify-self: end; }
 
+/* 左上角按钮承担当前层级最直接的退出动作：
+   书架态关闭整层，展开书本后先合书回到书架。 */
+.ms-back-icon-shelf,
+.ms-back-label-shelf { display: none; }
+#memoryShelf.book-mode .ms-back-icon-close,
+#memoryShelf.book-mode .ms-back-label-close { display: none; }
+#memoryShelf.book-mode .ms-back-icon-shelf { display: inline; }
+#memoryShelf.book-mode .ms-back-label-shelf { display: inline; }
+
 /* 静音键：图标按钮，内边距按图标收窄（原先是给 emoji 留的宽边距） */
 .ms-sound { padding: 0 11px; }
 
@@ -163,6 +172,41 @@ body.memory-shelf-open #pageIntro {
     display: block;
     width: 17px;
     height: 17px;
+}
+
+/* 直接打开书库时，Chromium 无法用第一次滚轮解锁音频。这个一次性入口
+   把限制说清楚，也避免用户误以为书架音效坏了；真实点击入口进入时自动隐藏。 */
+.ms-sound-wake {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 38px;
+    padding: 0 13px;
+    border: 1px solid rgba(155, 112, 78, 0.42);
+    border-radius: 10px;
+    background: rgba(155, 112, 78, 0.12);
+    color: var(--ms-accent);
+    font: inherit;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(80, 64, 46, 0.08);
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.ms-sound-wake svg { width: 16px; height: 16px; }
+.ms-sound-wake:hover {
+    border-color: rgba(155, 112, 78, 0.66);
+    background: rgba(155, 112, 78, 0.19);
+}
+.ms-sound-wake:active { transform: translateY(1px); }
+.ms-sound-wake[hidden] { display: none; }
+.ms-sound-wake.is-nudged { animation: msSoundWakeNudge 0.66s cubic-bezier(0.22, 1, 0.36, 1); }
+
+@keyframes msSoundWakeNudge {
+    0%, 100% { transform: translateX(0); box-shadow: 0 1px 2px rgba(80, 64, 46, 0.08); }
+    30% { transform: translateX(-3px); box-shadow: 0 0 0 4px rgba(155, 112, 78, 0.13); }
+    60% { transform: translateX(3px); }
 }
 
 /* 两个状态同在一段 SVG 里：默认显示声波，aria-pressed="true" 时换成"声波加叉"。
@@ -284,7 +328,8 @@ body.memory-shelf-open #pageIntro {
 }
 
 #memoryShelf.book-mode .ms-back,
-#memoryShelf.book-mode .ms-nav {
+#memoryShelf.book-mode .ms-nav,
+#memoryShelf.book-mode .ms-sound-wake {
     min-height: 30px;
     padding: 0 11px;
     font-size: 12px;
@@ -506,8 +551,10 @@ body.memory-shelf-open #pageIntro {
     inset: 0;
     z-index: 5;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 14px;
     background: linear-gradient(180deg, rgba(250, 244, 232, 0.97), rgba(240, 231, 214, 0.97));
     color: var(--ms-ink);
     font-size: 14px;
@@ -515,12 +562,127 @@ body.memory-shelf-open #pageIntro {
     transition: opacity 0.26s ease;
 }
 
-.ms-building span::after {
+.ms-building-label {
+    display: inline-flex;
+    align-items: baseline;
+}
+
+.ms-binding-dots::after {
     content: '';
     display: inline-block;
     width: 0.6em;
     text-align: left;
     animation: ms-dots 1.2s steps(4, end) infinite;
+}
+
+.ms-binding-icon {
+    position: relative;
+    display: block;
+    width: 72px;
+    height: 58px;
+    perspective: 150px;
+}
+
+.ms-binding-book {
+    position: absolute;
+    left: 10px;
+    top: 3px;
+    width: 48px;
+    height: 48px;
+    transform-style: preserve-3d;
+    animation: msBookThread 2.5s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+.ms-binding-pages,
+.ms-binding-cover {
+    position: absolute;
+    top: 3px;
+    height: 42px;
+    box-sizing: border-box;
+    border-radius: 2px 6px 6px 2px;
+}
+
+.ms-binding-pages {
+    left: 10px;
+    width: 36px;
+    border: 1px solid rgba(103, 78, 48, 0.34);
+    background:
+        repeating-linear-gradient(
+            180deg,
+            rgba(255, 252, 244, 0.94) 0 5px,
+            rgba(154, 120, 79, 0.27) 5px 6px
+        );
+    box-shadow: 0 5px 12px rgba(66, 48, 30, 0.14);
+}
+
+.ms-binding-cover {
+    left: 4px;
+    z-index: 2;
+    width: 42px;
+    border: 1px solid var(--ms-accent);
+    background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.16), transparent 30%),
+        var(--ms-accent);
+    transform-origin: 7px 50%;
+    animation: msBookCover 2.5s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+.ms-binding-cover::after {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 11px;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--ms-gold);
+    box-shadow:
+        0 6px 0 rgba(255, 243, 215, 0.52),
+        0 12px 0 rgba(255, 243, 215, 0.28);
+    content: '';
+}
+
+.ms-binding-thread {
+    position: absolute;
+    right: 1px;
+    top: 14px;
+    z-index: 3;
+    width: 19px;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--ms-gold);
+    box-shadow: 0 0 7px rgba(177, 130, 61, 0.34);
+    transform-origin: 100% 50%;
+    animation: msBindThread 2.5s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+.ms-binding-thread::after {
+    position: absolute;
+    left: -3px;
+    top: -2px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ms-gold);
+    content: '';
+}
+
+@keyframes msBookThread {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    48% { transform: translateY(-2px) rotate(0.7deg); }
+}
+
+@keyframes msBookCover {
+    0%, 100% { transform: rotateY(-2deg); }
+    45% { transform: rotateY(-17deg); }
+    68% { transform: rotateY(-8deg); }
+}
+
+@keyframes msBindThread {
+    0%, 16% { opacity: 0; transform: translate(5px, -6px) rotate(-52deg); }
+    24% { opacity: 1; transform: translate(3px, 0) rotate(-52deg); }
+    52% { opacity: 1; transform: translate(1px, 22px) rotate(-52deg); }
+    76% { opacity: 0.82; transform: translate(-2px, 38px) rotate(-52deg); }
+    88%, 100% { opacity: 0; transform: translate(-5px, 45px) rotate(-52deg); }
 }
 
 @keyframes ms-dots {
@@ -957,6 +1119,24 @@ body.memory-shelf-open #pageIntro {
 /* 按下就变「抓取」：覆盖纸张、封面、背景拖动 */
 .ms-stage:active { cursor: grabbing; }
 .ms-stage.rotating { cursor: ew-resize; }
+.ms-stage.frame-hover { cursor: pointer; }
+.ms-wall-frame-action {
+    position: absolute;
+    z-index: 4;
+    display: block;
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: transparent;
+    cursor: pointer;
+    transform: translate(-50%, -50%);
+}
+.ms-wall-frame-action[hidden] { display: none; }
+.ms-wall-frame-action:focus-visible {
+    outline: 2px solid var(--ms-gold);
+    outline-offset: 4px;
+}
 /* 舞台是画布区域，键盘操作反馈靠 aria-live 播报；这里不画焦点圈 ——
    之前用方向键翻页时，舞台上会出现一圈棕色描边，看着像界面破了 */
 .ms-stage:focus-visible,
@@ -1559,6 +1739,15 @@ body.memory-shelf-open #pageIntro {
     .ms-back span { display: none; }        /* 「关闭」只留 × 图标 */
     .ms-back { padding: 0 11px; }
     .ms-nav { min-height: 32px; min-width: 32px; padding: 0 10px; }
+    /* 手机上顶栏没有放「开启音效」四个字的空间：保留声波图标，
+       首次滚轮被浏览器拦下时的提示动画会把注意力带到它上面。 */
+    .ms-sound-wake {
+        min-width: 32px;
+        min-height: 32px;
+        padding: 0 9px;
+        border-radius: 50%;
+    }
+    .ms-sound-wake span { display: none; }
     /* 音量滑条收掉：手机顶栏放不下，留着静音键（音量本身有记住的默认值） */
     .ms-volume { display: none; }
 
@@ -1630,8 +1819,20 @@ body.memory-shelf-open #pageIntro {
 
 @media (prefers-reduced-motion: reduce) {
     #memoryShelf.show { animation: none; }
+    .ms-binding-book,
+    .ms-binding-cover,
+    .ms-binding-thread,
+    .ms-binding-dots::after {
+        animation: none;
+    }
+    .ms-binding-cover { transform: rotateY(-8deg); }
+    .ms-binding-thread {
+        opacity: 1;
+        transform: translate(1px, 22px) rotate(-52deg);
+    }
     .ms-loading-bar i { width: 100%; animation: none; }
     .ms-page-turner { animation: none !important; }
+    .ms-sound-wake.is-nudged { animation: none; }
     .ms-info { animation: none; }
     .ms-scene { transition: none; }
     .ms-fbook,

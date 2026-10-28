@@ -169,6 +169,10 @@ import {
     setCityWallProvinceFilter
 } from './modules/city-wall.js';
 import {
+    setupHomeStory,
+    refreshHomeStory
+} from './modules/home-story.js';
+import {
     setupCreativeOverlays,
     initCreativeOverlays,
     refreshCityWallFeatureActions,
@@ -402,6 +406,7 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityListSnapshot(
         }
         markFootprintDataReady();
         updateIntroStats();
+        refreshHomeStory();
         document.dispatchEvent(new CustomEvent('footprints:loaded'));
     });
 
@@ -438,6 +443,18 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityListSnapshot(
         setOverlayHidden
     });
     initCityView();
+
+    // ================= 首次进入的旅行档案摘要 =================
+    setupHomeStory({
+        footprints: () => FOOTPRINTS,
+        cityList: () => cityListSnapshot(),
+        cityKeyOf,
+        cityWallImages,
+        cityCardImageUrl,
+        showRecentTripCard: () => footprintCfg.showRecentTripCard !== false,
+        showCityCard,
+        showMarkerCard
+    });
 
     // ================= 省份城市卡片（点击省份 → 每个有足迹的城市各一张小卡片 + 抛物线） =================
     // 实现见 modules/province-cards.js；命中判定的几何索引也在那边。
