@@ -216,7 +216,7 @@ export function provincePickingEnabled() {
     // 右侧城市聚合卡打开时，省份不再参与悬停/点击命中。
     // 否则点击无足迹省份也会被省份分支吞掉，无法继续执行“关城市卡”的空白点击逻辑。
     if (deps.cityCard?.()?.classList.contains('visible')) return false;
-    return deps.cityCardsEnabled() && deps.boundaryVisible();
+    return cityCardsEnabled() && deps.boundaryVisible();
 }
 
 // ---------- 省份边界 GeoJSON（共享请求） ----------
@@ -709,7 +709,7 @@ function startProvinceMarkerPulse(items) {
 
 // 一键展开：所有去过的城市各一张卡片 + 一条连线
 export function activateAllCityCards() {
-    if (!deps.cityCardsEnabled()) return false;
+    if (!cityCardsEnabled()) return false;
     const cities = deps.cityList().map((city, ci) => ci);
     if (!cities.length) return false;
     const open = () => activateCityCards({
@@ -744,7 +744,7 @@ function flyToChinaForCityCards(done) {
         }
         if (!provinceAllFlight) return;   // 飞行途中已被取消
         provinceAllFlight = false;
-        if (deps.cityCardsEnabled()) done();
+        if (cityCardsEnabled()) done();
         syncProvinceAllBtn();
     };
     if (provinceAllFlightTimer !== null) {
@@ -1986,7 +1986,7 @@ export function syncProvinceAllAvailability() {
     const btn = provinceAllBtnEl();
     if (!btn) return;
     if (!deps) return;
-    const enabled = deps.cityCardsEnabled();
+    const enabled = cityCardsEnabled();
     if (provinceAllAvailable === enabled) return;
     provinceAllAvailable = enabled;
     btn.disabled = !enabled;

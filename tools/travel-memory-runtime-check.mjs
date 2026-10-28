@@ -49,6 +49,7 @@ try {
 let sequence = 0;
 const pending = new Map();
 const exceptions = [];
+const consoleErrors = [];
 ws.addEventListener('message', event => {
     const message = JSON.parse(event.data);
     if (message.id && pending.has(message.id)) {
@@ -59,6 +60,11 @@ ws.addEventListener('message', event => {
     if (message.method === 'Runtime.exceptionThrown') {
         const details = message.params.exceptionDetails;
         exceptions.push(String(details.exception?.description || details.text));
+    } else if (message.method === 'Runtime.consoleAPICalled' &&
+        message.params.type === 'error') {
+        consoleErrors.push(message.params.args
+            .map(argument => argument.value ?? argument.description ?? '')
+            .join(' '));
     }
 });
 
@@ -94,8 +100,9 @@ const state = await evaluate(`JSON.stringify({
 })`);
 
 console.log('页面状态:', state);
-if (exceptions.length) {
-    console.error('未处理异常:\n' + exceptions.join('\n'));
+if (exceptions.length || consoleErrors.length) {
+    const errors = [...exceptions, ...consoleErrors];
+    console.error('运行时错误:\n' + errors.join('\n'));
     process.exitCode = 1;
 } else {
     console.log('未捕获到前台未处理异常');
