@@ -69,6 +69,10 @@ let deps = null;
  */
 export function setupMarkers(d) {
     deps = d;
+    const raw = String(deps.footprintCfg().globeLabels || 'all').trim().toLowerCase();
+    GLOBE_LABEL_MODE = (raw === 'off' || raw === 'city' || raw === 'all') ? raw : 'all';
+    SHOW_CITY_LABELS = GLOBE_LABEL_MODE !== 'off';
+    SHOW_FOOTPRINT_LABELS = GLOBE_LABEL_MODE === 'all';
 }
 
 // 详情卡（足迹卡 / 城市聚合卡）：整球视图（标题卡出现）时自动收起；初始化完成前不触发
@@ -198,12 +202,9 @@ const MARKER_URL = markerIconUrl('footprint', MARKER_REF_SIZE / MARKER_SIZE);
 // 桌面上也要逐个去碰运气。这里给已有的标记实体挂一个 label ——
 // 实体本身已经处理好了「模式切换 / 转到背面隐藏」，标签跟着实体走即可，
 // 既不新增实体，也不影响点击拾取。层级与标记一致：聚合态标城市，展开态标足迹。
-const GLOBE_LABEL_MODE = (() => {
-    const raw = String(deps.footprintCfg().globeLabels || 'all').trim().toLowerCase();
-    return (raw === 'off' || raw === 'city' || raw === 'all') ? raw : 'all';
-})();
-const SHOW_CITY_LABELS = GLOBE_LABEL_MODE !== 'off';
-const SHOW_FOOTPRINT_LABELS = GLOBE_LABEL_MODE === 'all';
+let GLOBE_LABEL_MODE = 'all';
+let SHOW_CITY_LABELS = true;
+let SHOW_FOOTPRINT_LABELS = true;
 const LABEL_FONT = '500 12px "PingFang SC", "Microsoft YaHei", sans-serif';
 const LABEL_FONT_PX = 12;        // 与上面的字号保持一致：避让时按它估算文字宽度
 const LABEL_LINE_HEIGHT = 17;    // 一行文字占的高度（含行距），用于屏幕空间避让
@@ -968,7 +969,7 @@ function showMarkerTip(entity, text) {
     updateMarkerTipPosition();
 }
 
-function hideMarkerTip() {
+export function hideMarkerTip() {
     markerTipEntity = null;
     hoveredMarkerKey = '';   // 气泡被别的入口收起后，指针再动一次可以重新弹出来
     markerTip.classList.remove('show');
@@ -1213,7 +1214,7 @@ function updateMarkerOverlays() {
 // 窗口尺寸变化后标签要重排（视口边界变了，但相机没动，光靠相机变化判定不会触发）
 window.addEventListener('resize', () => { markerLabelDirty = true; });
 
-const markerPickHandler = new Cesium.ScreenSpaceEventHandler(deps.viewer().scene.canvas);
+let markerPickHandler = null;
 
 // 判断拾取到的是单个足迹还是城市标记
 function findPickedMarker(picked) {
@@ -1250,7 +1251,7 @@ function pickMarkerUnderPointer(screenPos) {
     return (dx * dx + dy * dy <= radius * radius) ? found : null;
 }
 
-markerPickHandler.setInputAction((movement) => {
+function onMarkerHover(movement) {
     const found = pickMarkerUnderPointer(movement.endPosition);
     // 光标是标记「可点」的第一层暗示（尺寸放大由 setMarkerFocus 负责）
     setHoveredMarker(!!found);
@@ -1270,18 +1271,18 @@ markerPickHandler.setInputAction((movement) => {
     } else {
         hideMarkerTip();
     }
-}, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+}
 
 // 鼠标离开画布时收起名称气泡
-deps.viewer().scene.canvas.addEventListener('mouseleave', () => {
+function onMarkerPointerLeave() {
     hideMarkerTip();
     setHoveredMarker(false);
     setHoveredProvince(false);
     applyCanvasCursor();
-});
+}
 
 // 点击足迹打开详情卡；点击城市标记显示城市聚合卡；点击空白处关闭
-markerPickHandler.setInputAction((movement) => {
+function onMarkerClick(movement) {
     const found = findPickedMarker(deps.viewer().scene.pick(movement.position));
     if (found && found.type === 'footprint') {
         const fp = deps.footprints()[found.index];
@@ -1325,7 +1326,7 @@ markerPickHandler.setInputAction((movement) => {
     } else if (cityCard.classList.contains('visible')) {
         hideCityCard();
     }
-}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+}
 
 // ================= 标记键盘可达（Tab 聚焦 → Enter 打开详情卡） =================
 // 每个标记对应一个屏幕外按钮；聚焦时在球面上亮出该标记名称，
@@ -1474,6 +1475,12 @@ export function syncMarkerModeByHeight(cameraHeight) {
  * 绑定与相机帧同步的悬停/标签更新。必须在 setupMarkers 之后调用一次。
  */
 export function initMarkersOverlay() {
+    if (markerPickHandler) return;
+    const canvas = deps.viewer().scene.canvas;
+    markerPickHandler = new Cesium.ScreenSpaceEventHandler(canvas);
+    markerPickHandler.setInputAction(onMarkerHover, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+    markerPickHandler.setInputAction(onMarkerClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    canvas.addEventListener('mouseleave', onMarkerPointerLeave);
     deps.viewer().scene.postRender.addEventListener(updateMarkerTipPosition);
     deps.viewer().scene.postRender.addEventListener(updateMarkerOverlays);
 }

@@ -28,6 +28,7 @@ const GLOBE_SSE_NEAR_HEIGHT = 2500000;   // 相机低于此高度算「贴近」
 
 /** 按当前相机高度调整 LOD 容差（相机 moveEnd 与逐帧逻辑都会调）。 */
 export function applyScreenSpaceError() {
+    if (!deps) return;
     const h = deps.viewer().camera.positionCartographic.height;
     const next = h < GLOBE_SSE_NEAR_HEIGHT ? GLOBE_SSE_NEAR : GLOBE_SSE_FAR;
     if (deps.viewer().scene.maximumScreenSpaceError !== next) {

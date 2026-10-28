@@ -36,6 +36,7 @@ let amapMode = false;   // 当前是否处于 2D 高德地图视图（导航栏�
  */
 export function setupViewMode(d) {
     deps = d;
+    deps.viewer().scene.morphComplete.addEventListener(onMorphComplete);
 }
 
 // ================= 2D/3D 自定义切换按钮 =================
@@ -323,7 +324,7 @@ export function forceGlobeForTickets() {
 }
 
 // morph 动画结束：按目标模式完成视图交换
-deps.viewer().scene.morphComplete.addEventListener(() => {
+function onMorphComplete() {
     try {
         updateSceneModeBtn();
         if (pendingMode === '2d') {
@@ -360,7 +361,7 @@ deps.viewer().scene.morphComplete.addEventListener(() => {
         morphing = false;
         pendingMode = null;
     }
-});
+}
 
 sceneModeBtn.addEventListener('click', () => {
     if (amapMode) {

@@ -204,6 +204,7 @@ function provinceSideInset() {
 
 // 展开城市卡片的前置条件：桌面端 + 3D 场景 + 城市聚合态（这一层才有城市标记可连）
 export function cityCardsEnabled() {
+    if (!deps) return false;
     if (!provinceCardsEnabled()) return false;
     if (deps.viewer().scene.mode !== Cesium.SceneMode.SCENE3D) return false;
     return deps.cityMode();
@@ -211,6 +212,7 @@ export function cityCardsEnabled() {
 
 // 省份可点还多一条：中国轮廓已经显示（放大到国内范围）
 export function provincePickingEnabled() {
+    if (!deps) return false;
     // 右侧城市聚合卡打开时，省份不再参与悬停/点击命中。
     // 否则点击无足迹省份也会被省份分支吞掉，无法继续执行“关城市卡”的空白点击逻辑。
     if (deps.cityCard?.()?.classList.contains('visible')) return false;
@@ -1836,7 +1838,6 @@ function updateProvinceOverlays() {
     if (!provinceCameraMoved() && !provinceLayoutDirty) return;
     layoutProvinceCards();
 }
-deps.viewer().scene.postRender.addEventListener(updateProvinceOverlays);
 
 // “拉出来”的生长动画：线沿自身长度铺开；动画结束后清掉 dash，
 // 否则线随地球移动、长度变化时会出现断口。
@@ -1984,6 +1985,7 @@ function syncProvinceAllBtn() {
 export function syncProvinceAllAvailability() {
     const btn = provinceAllBtnEl();
     if (!btn) return;
+    if (!deps) return;
     const enabled = deps.cityCardsEnabled();
     if (provinceAllAvailable === enabled) return;
     provinceAllAvailable = enabled;

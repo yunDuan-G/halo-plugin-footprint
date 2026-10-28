@@ -110,7 +110,8 @@ import {
     applyGlobeBranding,
     closeNavigationTools,
     dismissIntroForTickets,
-    hideBoundaryForTickets
+    hideBoundaryForTickets,
+    restoreGlobeViewForAutoRotate
 } from './modules/navigation.js';
 import {
     setupMarkers,
@@ -131,6 +132,7 @@ import {
     cityViewItems,
     cityPhotoItems,
     hideMarkerCard,
+    hideMarkerTip,
     showMarkerCard,
     hideCityCard,
     showCityCard,
@@ -233,7 +235,6 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityListSnapshot(
         viewer: () => viewer,
         reduceMotion: () => reduceMotion
     });
-    initAutoRotate();
 
     // ================= 顶部导航与左侧标题卡 =================
     // 实现见 modules/navigation.js：标题卡/导航显隐、状态栏、底图菜单、Esc 逐级关闭。
@@ -249,7 +250,6 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityListSnapshot(
         hasTdtKey: hasTiandituKey,
         footprintCfg: () => footprintCfg
     });
-    initNavigation();
 
     // ================= 底图 =================
     // 实现见 modules/basemap.js：天地图 provider、7 档底图切换、瓦片容错。
@@ -257,7 +257,6 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityListSnapshot(
         viewer: () => viewer,
         cityFillOn: isCityFillEnabled
     });
-    initBaseMap();
 
     // ================= 足迹标记与详情卡 =================
     // 实现见 modules/markers.js：标记构建、城市聚合、详情卡、悬停与标签避让。
@@ -271,8 +270,6 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityListSnapshot(
         cityLabelVisible: isCityLabelVisible,
         applyScreenSpaceError
     });
-    initMarkers();
-    initMarkersOverlay();
 
     // ================= 城市淡色填充 =================
     // 实现见 modules/city-fill.js；主题配色在 modules/province-style.js。
@@ -283,7 +280,6 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityListSnapshot(
         baseProviders: baseProviderMap,
         currentBaseKey: currentBase,
     });
-    initCityFill();
 
     // ================= 2D/3D 视图切换 =================
     // 实现见 modules/view-mode.js；morph 动画与视图模式记忆都在那边。
@@ -302,7 +298,15 @@ setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityListSnapshot(
 
     // ================= 首屏配置（相机 / 忙碌标志 / 光照 / 地球可用信号） =================
     setupGlobeBasics({ viewer: () => viewer });
+
+    // 所有模块先完成依赖注入，再开始任何可能回调其他模块的初始化。
+    initAutoRotate();
     initGlobeBasics();
+    initNavigation();
+    initBaseMap();
+    initMarkers();
+    initMarkersOverlay();
+    initCityFill();
 
     // 3D 地球品牌文案（实现见 modules/navigation.js）
     applyGlobeBranding();

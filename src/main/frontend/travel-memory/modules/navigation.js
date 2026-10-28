@@ -218,13 +218,11 @@ function updateIntroVisibility() {
     // 城市聚合切换：放大到城市范围展开为单个足迹，拉远聚合回城市标记。
     // 程序化“飞往城市”期间先不按高度切换，落地瞬间由 finishCityFlight 统一展开。
     // LOD 容差也跟着高度走（moveEnd 之外再兜一层：瞬时 setView 不会触发 moveEnd）
-    deps.applyScreenSpaceError()();
+    deps.applyScreenSpaceError();
     syncMarkerModeByHeight(cameraHeight);
     // 导航栏「全部城市」的可用态跟着层级走（只在翻转时写 DOM）
     syncProvinceAllAvailability();
 }
-deps.viewer().scene.postRender.addEventListener(updateIntroVisibility);
-updateIntroVisibility();
 
 // 回到整球视图：飞回初始中国朝向的整球视角
 function flyBackToGlobe() {
@@ -240,7 +238,7 @@ backGlobeBtn.addEventListener('click', flyBackToGlobe);
 // 票根页（重走放映）会把镜头停在某个城市附近，
 // 这个高度下自动旋转看起来像原地打转；返回地球/回到票夹时若自动旋转开着，
 // 就把视角收回整个地球。只在确实被拉近（低于整球高度）时触发，避免多余飞行。
-function restoreGlobeViewForAutoRotate() {
+export function restoreGlobeViewForAutoRotate() {
     setTicketGlobeAutoRotate(false);
     refreshAutoRotate();
     if (!isAutoRotating()) return;
