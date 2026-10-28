@@ -78,6 +78,10 @@ async function evaluate(expression) {
 await send('Page.enable');
 await send('Runtime.enable');
 await send('Page.navigate', { url: pageUrl });
+await sleep(2000);
+if (process.env.ENABLE_CITY_FILL === '1') {
+    await evaluate(`localStorage.setItem('travelMemoryCityFill', '1'); location.reload(); true`);
+}
 await sleep(12000);
 
 const state = await evaluate(`JSON.stringify({

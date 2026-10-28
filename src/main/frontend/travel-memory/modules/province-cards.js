@@ -421,7 +421,7 @@ function provinceCitiesOf(adcode, name) {
     const byName = [];
     const targetName = normalizeProvinceName(name);
     deps.cityList().forEach((city, ci) => {
-        const fp = deps.FOOTPRINTS()[city.indices[0]];
+        const fp = deps.footprints()[city.indices[0]];
         if (!fp) return;
         if (fp.provinceAdcode) {
             if (String(fp.provinceAdcode) === String(adcode)) exact.push(ci);
