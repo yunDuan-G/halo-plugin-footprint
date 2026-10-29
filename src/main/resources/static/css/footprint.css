@@ -355,6 +355,7 @@ body.mode-2d#footprint-page {
     align-items: center;
     justify-content: center;
 }
+#messageBoards[hidden] { display: none; }
 #zoom-restore:hover, #messageBoards:hover {
     background: var(--primary-color, #42b983);
     color: #fff;

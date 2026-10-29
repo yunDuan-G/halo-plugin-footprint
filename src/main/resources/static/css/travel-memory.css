@@ -1191,17 +1191,25 @@
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
-            transform: translateY(16px) rotate(0.25deg);
+            transform-origin: 100% 100%;
+            transform: translate3d(26px, 18px, 0) scale(0.965);
+            /* 离场比入场更快：界面开始放大时，卡片先干脆地退回右下角，
+               不拖住用户对地球操作的注意力。 */
             transition:
-                opacity 0.65s ease,
-                visibility 0.65s,
-                transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+                opacity 0.34s cubic-bezier(0.4, 0, 1, 1),
+                transform 0.38s cubic-bezier(0.4, 0, 1, 1),
+                visibility 0s linear 0.38s;
         }
-        #pageIntro.visible ~ #homeRecentTrip:not([hidden]) {
+        #pageIntro.visible ~ #homeRecentTrip.is-visible:not([hidden]) {
             opacity: 1;
             visibility: visible;
             pointer-events: auto;
-            transform: translateY(0) rotate(0);
+            transform: translate3d(0, 0, 0) scale(1);
+            /* 入场稍慢、减速更明显，让卡片像从页面右下角自然落位。 */
+            transition:
+                opacity 0.58s cubic-bezier(0.22, 1, 0.36, 1),
+                transform 0.68s cubic-bezier(0.22, 1, 0.36, 1),
+                visibility 0s linear 0s;
         }
         #homeRecentTrip[hidden] {
             display: none;

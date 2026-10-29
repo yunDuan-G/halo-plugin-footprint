@@ -42,6 +42,8 @@
             highlightVisitedCities: /*[[${settings.highlightVisitedCities}]]*/ true,
             photoWallPageSize: /*[[${settings.photoWallPageSize}]]*/ 12,
             photoWallStyle: /*[[${settings.photoWallStyle}]]*/ 'focus',
+            enableMessageBoard: /*[[${settings.enableMessageBoard}]]*/ false,
+            messageBoardUrl: /*[[${settings.messageBoardUrl}]]*/ '',
             globeTitle: /*[[${settings.globeTitle}]]*/ '旅行记忆',
             globeDesc: /*[[${settings.globeDesc}]]*/ '把每一次出发，收藏成地球上的坐标；让走过的城市，成为星空下的故事。',
             globeLabels: /*[[${settings.globeLabels}]]*/ 'all',
@@ -868,7 +870,8 @@
         <button id="zoom-restore" data-tooltip="返回中国全图视图" aria-label="返回中国全图视图">中国地图</button>
         <button id="back3dBtn" data-tooltip="切换回 3D 地球" aria-label="切换回 3D 地球" type="button">3D 地球</button>
         <div id="timeline-btn" data-tooltip="查看旅行时间线">时间线</div>
-        <div id="messageBoards" class="amap-scale-text" data-tooltip="查看留言板" role="button" tabindex="0" aria-label="查看留言板">留言板</div>
+        <div id="messageBoards" class="amap-scale-text" data-tooltip="查看留言板" role="button"
+             tabindex="-1" aria-label="查看留言板" aria-hidden="true" hidden>留言板</div>
         <button id="map-fullscreen" data-tooltip="进入全屏地图" aria-label="进入全屏地图" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path class="fullscreen-enter-icon" d="M3 9V3h6M15 3h6v6M21 15v6h-6M9 21H3v-6"></path>

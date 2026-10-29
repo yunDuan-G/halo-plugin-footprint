@@ -2878,11 +2878,6 @@ const addFootprintMarkers = async (map, footprintData) => {
         }
     });
 
-
-    document.getElementById('messageBoards').addEventListener('click', () => {
-        window.open('http://www.yunduan019.com/liu', '_blank');
-    });
-
     const fullscreenButton = document.getElementById('map-fullscreen');
     const fullscreenTarget = document.getElementById('footprint-page');
     const updateFullscreenButton = () => {

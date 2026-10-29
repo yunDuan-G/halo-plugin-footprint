@@ -67,8 +67,12 @@ if (document.getElementById('homeRecentTripPhotos').children.length !== 0) {
 
 showRecentTripCard = true;
 homeStory.refreshHomeStory();
+await new Promise(resolve => setTimeout(resolve, 60));
 if (document.getElementById('homeRecentTrip').hidden) {
     throw new Error('配置为 true 时，右下最近旅程卡应显示');
+}
+if (!document.getElementById('homeRecentTrip').classList.contains('is-visible')) {
+    throw new Error('配置为 true 时，右下最近旅程卡应进入可动画的显示状态');
 }
 if (document.getElementById('homeRecentTripPhotos').children.length !== 3) {
     throw new Error('最近旅程卡应渲染三个照片槽位');
@@ -77,5 +81,11 @@ document.getElementById('homeRecentTripStart').click();
 if (openedCity !== 0) {
     throw new Error('最近旅程入口应打开最新足迹所在城市');
 }
+showRecentTripCard = false;
+homeStory.refreshHomeStory();
+if (!document.getElementById('homeRecentTrip').hidden ||
+    document.getElementById('homeRecentTrip').classList.contains('is-visible')) {
+    throw new Error('再次关闭时，最近旅程卡应立即退出可显示状态');
+}
 
-console.log('最近旅程卡开关通过：关闭仅隐藏右下卡片，开启后照片和入口正常工作');
+console.log('最近旅程卡开关通过：显示/隐藏状态、照片和入口均正常');

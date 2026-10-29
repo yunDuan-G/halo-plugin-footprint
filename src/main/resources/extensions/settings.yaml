@@ -125,6 +125,17 @@ spec:
               value: card
             - label: 照片徽章
               value: photo
+        - $formkit: checkbox
+          label: 启用留言板
+          name: enableMessageBoard
+          value: false
+          help: "显示 2D 地图底部工具栏中的「留言板」入口。关闭后会同时移除视觉、键盘焦点和读屏入口"
+        - $formkit: text
+          label: 留言板地址
+          name: messageBoardUrl
+          value: ''
+          placeholder: 'https://example.com/message'
+          help: "完全自定义留言板目标地址。支持任意完整 HTTP/HTTPS 地址（可带路径、查询参数和锚点），以及站内绝对路径或相对路径；留空时不会显示留言板入口"
         - $formkit: select
           name: highlightScheme
           label: 悬停高亮方案

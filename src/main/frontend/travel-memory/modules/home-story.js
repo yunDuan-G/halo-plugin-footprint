@@ -11,6 +11,7 @@ let deps = null;
 let latestFootprint = null;
 let latestIndex = -1;
 let bound = false;
+let revealFrame = null;
 
 const introLatest = document.getElementById('introLatest');
 const introLatestDate = document.getElementById('introLatestDate');
@@ -22,6 +23,52 @@ const recentTripRoute = document.getElementById('homeRecentTripRoute');
 const recentTripMeta = document.getElementById('homeRecentTripMeta');
 const recentTripPhotos = document.getElementById('homeRecentTripPhotos');
 const recentTripStart = document.getElementById('homeRecentTripStart');
+
+function requestUiFrame(callback) {
+    if (typeof window.requestAnimationFrame === 'function') {
+        return { type: 'raf', id: window.requestAnimationFrame(callback) };
+    }
+    return { type: 'timeout', id: window.setTimeout(callback, 16) };
+}
+
+function cancelUiFrame(handle) {
+    if (!handle) return;
+    if (handle.type === 'raf' && typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(handle.id);
+    } else {
+        window.clearTimeout(handle.id);
+    }
+}
+
+function hideRecentTrip(clearPhotos) {
+    if (revealFrame) {
+        cancelUiFrame(revealFrame);
+        revealFrame = null;
+    }
+    if (recentTrip) {
+        recentTrip.classList.remove('is-visible');
+        recentTrip.hidden = true;
+    }
+    if (clearPhotos && recentTripPhotos) recentTripPhotos.replaceChildren();
+}
+
+function revealRecentTrip() {
+    if (!recentTrip) return;
+    if (revealFrame) {
+        cancelUiFrame(revealFrame);
+        revealFrame = null;
+    }
+    // hidden 刚移除时先用基础态占一帧，再挂 is-visible，
+    // 这样首次从 display:none 出现也能可靠触发过渡，而不是直接闪现。
+    recentTrip.classList.remove('is-visible');
+    recentTrip.hidden = false;
+    revealFrame = requestUiFrame(() => {
+        revealFrame = requestUiFrame(() => {
+            revealFrame = null;
+            if (!recentTrip.hidden) recentTrip.classList.add('is-visible');
+        });
+    });
+}
 
 function timestampOf(fp) {
     const time = Date.parse(fp && fp.createTime);
@@ -140,7 +187,7 @@ export function refreshHomeStory() {
         latestFootprint = null;
         latestIndex = -1;
         if (introLatest) introLatest.hidden = true;
-        if (recentTrip) recentTrip.hidden = true;
+        hideRecentTrip(true);
         return;
     }
 
@@ -158,12 +205,13 @@ export function refreshHomeStory() {
     if (introLatestRoute) introLatestRoute.textContent = route;
 
     if (deps.showRecentTripCard() === false) {
-        if (recentTrip) recentTrip.hidden = true;
-        if (recentTripPhotos) recentTripPhotos.replaceChildren();
+        hideRecentTrip(true);
         return;
     }
 
-    if (recentTrip) recentTrip.hidden = false;
+    if (recentTrip && (recentTrip.hidden || !recentTrip.classList.contains('is-visible'))) {
+        revealRecentTrip();
+    }
     if (recentTripDate) recentTripDate.textContent = date;
     if (recentTripTitle) recentTripTitle.textContent = latestFootprint.name || placeOf(latestFootprint);
     if (recentTripRoute) recentTripRoute.textContent = route;

@@ -28,14 +28,13 @@ import {
 import RiMapPinLine from "~icons/ri/map-pin-line";
 import RiEarthLine from "~icons/ri/earth-line";
 import { computed, onMounted, ref } from "vue";
-import { TOTAL_PROVINCES } from "@/utils/province-coverage";
 import { useFootprintList } from "@/composables/useFootprintList";
 import { useFootprintStats } from "@/composables/useFootprintStats";
 import FootprintEditingModal from "../components/FootprintEditingModal.vue";
 import FootprintListItem from "../components/FootprintListItem.vue";
+import FootprintStatsOverview from "../components/FootprintStatsOverview.vue";
 import ManualLocationModal from "../components/ManualLocationModal.vue";
 import ProvinceCityDistribution from "../components/ProvinceCityDistribution.vue";
-import ProvinceCoveragePanel from "../components/ProvinceCoveragePanel.vue";
 import { footprintApiClient } from "@/api";
 import type { Footprint, Option } from "@/api/models";
 
@@ -216,42 +215,12 @@ function handleOpenFrontend() {
   </VPageHeader>
 
   <div class="p-4">
-    <div
+    <FootprintStatsOverview
       v-if="stats"
-      class="mb-4 flex flex-col gap-4 rounded-lg border border-gray-200 bg-white/90 p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between"
-    >
-      <dl class="flex flex-wrap items-center gap-x-6 gap-y-2">
-        <div class="flex items-baseline gap-1.5">
-          <dt class="text-xs text-gray-500">足迹</dt>
-          <dd class="text-sm font-medium tabular-nums text-gray-900">
-            {{ stats.totalFootprints }}
-          </dd>
-        </div>
-        <div class="flex items-baseline gap-1.5">
-          <dt class="text-xs text-gray-500">省级行政区</dt>
-          <dd class="text-sm font-medium tabular-nums text-gray-900">
-            {{ stats.totalProvinces }}
-            <span class="font-normal text-gray-400">/ {{ TOTAL_PROVINCES }}</span>
-          </dd>
-        </div>
-        <div class="flex items-baseline gap-1.5">
-          <dt class="text-xs text-gray-500">城市</dt>
-          <dd class="text-sm font-medium tabular-nums text-gray-900">
-            {{ stats.totalCities }}
-          </dd>
-        </div>
-      </dl>
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
-        <ProvinceCoveragePanel
-          class="min-w-0 flex-1 lg:w-96 lg:flex-none"
-          :provinces="stats.provinces"
-          :total-provinces="stats.totalProvinces"
-        />
-        <VButton size="sm" @click="showDistribution = !showDistribution">
-          {{ showDistribution ? "收起分布" : "省 / 市分布" }}
-        </VButton>
-      </div>
-    </div>
+      :stats="stats"
+      :expanded="showDistribution"
+      @toggle-details="showDistribution = !showDistribution"
+    />
 
     <ProvinceCityDistribution
       v-if="stats && showDistribution"

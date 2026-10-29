@@ -74,6 +74,8 @@ public class FootprintConfigServiceImpl implements FootprintConfigService {
                     .highlightVisitedCities(base.path("highlightVisitedCities").asBoolean(true))
                     .photoWallPageSize(base.path("photoWallPageSize").asInt(6))
                     .photoWallStyle(base.path("photoWallStyle").asText("original"))
+                    .enableMessageBoard(base.path("enableMessageBoard").asBoolean(false))
+                    .messageBoardUrl(base.path("messageBoardUrl").asText(""))
 
                     .globeTitle(legacy.path("globeTitle").asText("旅行记忆"))
                     .globeDesc(legacy.path("globeDesc")

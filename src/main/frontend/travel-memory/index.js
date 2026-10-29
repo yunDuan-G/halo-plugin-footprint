@@ -172,6 +172,7 @@ import {
     setupHomeStory,
     refreshHomeStory
 } from './modules/home-story.js';
+import { setupMessageBoard } from './modules/message-board.js';
 import {
     setupCreativeOverlays,
     initCreativeOverlays,
@@ -199,6 +200,7 @@ setTileBatchHandler(refreshStatusText);
 setLightboxDeps({ cityWallImages, formatLightboxDate, setOverlayHidden });
 // 洞察的统计口径同样靠注入拿数据：FOOTPRINTS / cityList 是 let，要取值函数而不是快照
 setInsightDeps({ footprints: () => FOOTPRINTS, cityList: () => cityListSnapshot(), cityViewItems, cityWallImages, ticketImageUrl, cityKeyOf });
+setupMessageBoard(window.FOOTPRINT_CONFIG || {});
     // ================= 初始化 Viewer =================
     const viewer = new Cesium.Viewer('cesiumContainer', {
         baseLayer: false,          // 不用 Cesium 默认底图，全部换成国内服务

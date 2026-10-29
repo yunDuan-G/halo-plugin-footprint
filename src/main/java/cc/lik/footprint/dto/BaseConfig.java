@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
  * <p>插件前台运行所需的全部配置，由 {@code FootprintConfigService#getConfigByGroupName()}
  * 从多个 Setting 分组汇总而成。</p>
  *
- * <p>这里使用 {@code @Builder} 而非位置参数构造：本类字段多达 38 个且大量为
+ * <p>这里使用 {@code @Builder} 而非位置参数构造：本类字段多达 40 个且大量为
  * String / Boolean，用位置参数装配时相邻的同类型字段一旦错位，编译期不会报错，
  * 只会在前台表现为「配置串了」，排查成本极高。</p>
  */
@@ -32,6 +32,10 @@ public class BaseConfig {
     private Boolean highlightVisitedCities;
     private Integer photoWallPageSize;
     private String photoWallStyle;
+    /** 是否显示 2D 地图底部工具栏的留言板入口 */
+    private Boolean enableMessageBoard;
+    /** 留言板链接，支持站内相对路径或完整 HTTP(S) 地址 */
+    private String messageBoardUrl;
 
     // 3D 地球（group: globe3d）
     private String globeTitle;
